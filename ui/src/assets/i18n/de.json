@@ -14,6 +14,10 @@
         "INFO_FOR_EMERGENCY_RESERVE_SLIDER": "Durch Aktivieren kann eine Notstromreserve zwischen 5 % und 100 % der Batteriekapazität eingestellt werden.",
         "EMERGENCY_RESERVE": "Notstromreserve"
       },
+      "ChargeDischargeLimiter": {
+        "INFO_FOR_CHARGE_DISCHARGE_LIMITER_SLIDER": "Durch Aktivieren wird der Batteriespeicher zwischen eine Minimum und Maximum gehalten",
+        "CHARGE_DISCHARGE_LIMITER": "Arbeitsbereich"
+      },
       "Energymonitor": {
         "activePower": "Ausgabeleistung",
         "consumptionWarning": "Verbrauch & unbekannte Erzeuger",
@@ -29,7 +33,6 @@
       },
       "Widgets": {
         "autarchyInfo": "Die Autarkie gibt an zu wie viel Prozent die aktuell genutzte Leistung durch Erzeugung und Speicherentladung gedeckt wird.",
-        "savedemissionsInfo": "Gibt die, durch Eigenverbrauch eingesparten, CO2-Mangen an.",
         "phasesInfo": "Die Summe der einzelnen Phasen kann aus technischen Gründen geringfügig von der Gesamtsumme abweichen.",
         "selfconsumptionInfo": "Der Eigenverbrauch gibt an zu wie viel Prozent die aktuell erzeugte Leistung durch direkten Verbrauch und durch Speicherbeladung selbst genutzt wird.",
         "twoWayInfoGrid": "Negative Werte entsprechen Netzeinspeisung, Positive Werte entsprechen Netzbezug",
@@ -462,7 +465,6 @@
     "ALL": "Alle",
     "apply": "Übernehmen",
     "autarchy": "Autarkie",
-    "savedEmissions": "Eingesparte Emmissionen",
     "automatic": "Automatisch",
     "cancel": "abbrechen",
     "capacity": "Kapazität",
@@ -474,7 +476,6 @@
     "componentInactive": "Komponente ist inaktiv!",
     "connectionLost": "Verbindung unterbrochen. Versuche die Verbindung wiederherzustellen.",
     "consumption": "Verbrauch",
-    "co2EmissionsSaved": "CO2 gespart",
     "cumulative": "Kumulierte Werte",
     "currentName": "Aktueller Name",
     "currentValue": "Aktueller Wert",
@@ -525,7 +526,7 @@
     "SYSTEM_STATE": "Systemstatus",
     "TOTAL": "Gesamt",
     "totalState": "Gesamtstatus",
-    "TreesPlanted": "Bäume gepflanzt",
+    "VISIBLE_FOR_ADMINS_ONLY": "Sichtbar nur für Service & Administration",
     "warning": "Warnung",
     "Week": {
       "monday": "Montag",
@@ -614,6 +615,34 @@
       "VALUE": "Wert [%]",
       "EMERGENCY_RESERVE_LABEL": "Notstrom{{ symbol }}",
       "COUPLER_TITLE": "Welcher Feldbuskoppler ist in Ihrer Netztrennstelle verbaut?"
+    },
+    "CONFIGURATION_CHARGE_DISCHARGE_LIMITER": {
+      "CHARGE_DISCHARGE_LIMITER_NOTE": "Wenn diese Funktion aktiviert ist, bewegt sich der Ladezusatnd der Batterie zwischen der oberen und unteren Grenze. Nach der eingestellten Energiemenge versucht die Batterie sich zu kalibrieren",
+      "FORCE_SOC_VALUE": "kal. SoC",
+      "FORCE_SOC": "ToDo {{ symbol }}",
+      "MIN_SOC_VALUE": "min. SoC",
+      "MIN_SOC": "ToDo {{ symbol }}",
+      "MAX_SOC_VALUE": "max. SoC",
+      "MAX_SOC": "ToDo {{ symbol }}",
+      "IS_ACTIVATED": "Controller aktiviert?",
+      "IS_ENABLED": "Soll die Lade-/Entladebegrenzung aktiviert werden?",
+      "RECENT": "Aktuell",
+      "TITLE": "Angaben zum Laden / Entladen Limiter",
+      "VALUE": "Wert [%]",
+      "EMERGENCY_RESERVE_LABEL": "Lade / Entladen Limiter{{ symbol }}",
+      "COUPLER_TITLE": "ToDo"
+    },
+    "CHARGE_DISCHARGE_STATE": {
+      "UNDEFINED": "Unbestimmt / Initialzustand",
+      "NORMAL": "Normalbetrieb",
+      "ERROR": "Fehler",
+      "BELOW_MIN_SOC": "Unterhalb des konfigurierten Minimum-SoC",
+      "ABOVE_MAX_SOC": "Oberhalb des konfigurierten Maximum-SoC",
+      "FORCE_CHARGE_ACTIVE": "Batterie lädt bis zum konfigurierten Ausgleichspunkt",
+      "BALANCING_WANTED": "Kalibrierung erwünscht",
+      "BALANCING_ACTIVE": "Kalibrierung aktiv",
+      "BALANCING_REMAINING_SECONDS": "Restzeit: ",
+      "CHARGED_ENERGY_SINCE_LAST_BALANCING": "Geladene Energie seit der letzten Kalibrierung: "
     },
     "CONFIGURATION_EXECUTE": {
       "BATTERY_INVERTER": "Batterie-Wechselrichter",

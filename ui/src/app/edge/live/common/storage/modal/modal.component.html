@@ -878,49 +878,11 @@
                                                     </div>
                                                 </div>
                                             </ion-item-divider>
-                                            <!----
-                                            <ion-range formControlName="maxSoc" pin color="primary" min="80" max="100">
-                                                <ion-label slot="start">
-                                                    {{ 80 | unitvalue:'%' }}
-                                                </ion-label>
-                                                <ion-label slot="end">
-                                                    {{ 100 | unitvalue:'%' }}
-                                                </ion-label>
-                                            </ion-range>
-                                            <ion-range formControlName="forceChargeSoc" pin color="primary" min="90" max="100">
-                                                <ion-label slot="start">
-                                                    {{ 90 | unitvalue:'%' }}
-                                                </ion-label>
-                                                <ion-label slot="end">
-                                                    {{ 100 | unitvalue:'%' }}
-                                                </ion-label>
-                                            </ion-range>
-        /-->
+
                                         </ng-container>
 
                                     </ng-container>
                                 </ng-container>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
                                 <ng-container [formGroupName]="'prepareBatteryExtensionController'"
                                     *ngIf="formGroup.value[component.id]?.['prepareBatteryExtensionController']?.hasOwnProperty('isRunning') && isAtLeastInstaller">

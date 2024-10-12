@@ -14,7 +14,7 @@ import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.controller.api.Controller;
 
-public interface ControllerChargeDischargeLimiter extends Controller, OpenemsComponent {
+public interface ControllerEssChargeDischargeLimiter extends Controller, OpenemsComponent {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 
@@ -74,24 +74,6 @@ public interface ControllerChargeDischargeLimiter extends Controller, OpenemsCom
 	}
 
 	/**
-	 * Gets the Channel for {@link ChannelId#MIN_SOC}.
-	 *
-	 * @return the Channel
-	 */
-	public default IntegerReadChannel getMinSocChannel() {
-		return this.channel(ChannelId.MIN_SOC);
-	}
-
-	/**
-	 * Gets the Channel for {@link ChannelId#MAX_SOC}.
-	 *
-	 * @return the Channel
-	 */
-	public default IntegerReadChannel getMaxSocChannel() {
-		return this.channel(ChannelId.MAX_SOC);
-	}
-
-	/**
 	 * Gets the Channel for {@link ChannelId#CHARGED_ENERGY}.
 	 *
 	 * @return the Channel
@@ -119,6 +101,15 @@ public interface ControllerChargeDischargeLimiter extends Controller, OpenemsCom
 	}
 
 	/**
+	 * Gets the Channel for {@link ChannelId#MIN_SOC}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getMinSocChannel() {
+		return this.channel(ChannelId.MIN_SOC);
+	}
+
+	/**
 	 * Internal method to set the 'nextValue' on {@link ChannelId#MIN_SOC} Channel.
 	 *
 	 * @param value the next value
@@ -134,6 +125,15 @@ public interface ControllerChargeDischargeLimiter extends Controller, OpenemsCom
 	 */
 	public default Value<Integer> getMinSoc() {
 		return this.getMinSocChannel().value();
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#MAX_SOC}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getMaxSocChannel() {
+		return this.channel(ChannelId.MAX_SOC);
 	}
 
 	/**

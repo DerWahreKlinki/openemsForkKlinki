@@ -195,7 +195,7 @@
 	bnd.identity;id='io.openems.edge.io.opendtu.inverter',\
 	bnd.identity;id='io.openems.edge.io.siemenslogo',\
 	bnd.identity;id='io.openems.edge.meter.emh',\
-	bnd.identity;id='info.faljse:SDNotify'
+	bnd.identity;id='io.openems.edge.controller.ess.chargedischargelimiter'
 -runbundles: \
 	Java-WebSocket;version='[1.5.4,1.5.5)',\
 	bcpkix;version='[1.70.0,1.70.1)',\
@@ -440,4 +440,4 @@
 	io.openems.edge.io.opendtu.inverter;version=snapshot,\
 	io.openems.edge.io.siemenslogo;version=snapshot,\
 	io.openems.edge.meter.emh;version=snapshot,\
-	info.faljse:SDNotify
+	io.openems.edge.controller.ess.chargedischargelimiter;version=latest

@@ -3,7 +3,7 @@
 	io.openems.common,\
 	io.openems.edge.bridge.modbus,\
 	io.openems.edge.common,\
-		io.openems.edge.controller.api,\
+	io.openems.edge.controller.api,\
 	io.openems.edge.meter.api,\
 	io.openems.edge.meter.sunspec,\
 	io.openems.edge.pvinverter.api,\
@@ -12,8 +12,10 @@
 	io.openems.edge.timedata.api,\
 	com.ghgande.j2mod,\
 	io.openems.edge.batteryinverter.sunspec,\
-		io.openems.edge.controller.ess.emergencycapacityreserve,\
-	io.openems.edge.controller.ess.limittotaldischarge
+	io.openems.edge.controller.ess.emergencycapacityreserve,\
+	io.openems.edge.controller.ess.limittotaldischarge,\
+	io.openems.edge.controller.ess.chargedischargelimiter,\
+	io.openems.edge.energy
 	
 	
 

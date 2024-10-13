@@ -238,10 +238,17 @@ public final class Utils {
 	 * @return the value in [Wh]
 	 */
 	protected static int getEssMinSocEnergy(TimeOfUseTariffControllerImpl.Context context, int essCapacity) {
-		return essCapacity /* [Wh] */ / 100 //
-				* getEssUsableSocRange(//
-						context.ctrlChargeDischargeLimiters(), context.ctrlLimitTotalDischarges(), //
-						context.ctrlEmergencyCapacityReserves());
+	    // Get the minimum and maximum SoC values from the helper method
+	    int[] socRange = getEssUsableSocRange(
+	        context.ctrlChargeDischargeLimiters(),
+	        context.ctrlLimitTotalDischarges(),
+	        context.ctrlEmergencyCapacityReserves()
+	    );
+
+	    int minSoc = socRange[0];  // Access the minimum SoC from the range array
+
+	    // Calculate the minimum SoC energy using the min SoC percentage
+	    return (essCapacity * minSoc) / 100;  // Properly compute the value based on the minimum SoC
 	}
 
 	/**
@@ -278,7 +285,7 @@ public final class Utils {
 	 *                                      {@link ControllerEssEmergencyCapacityReserve}
 	 * @return the value in [%]
 	 */
-	public static int getEssUsableSocRange(List<ControllerEssChargeDischargeLimiter> ctrlChargeDischargeLimiters,
+	public static int[] getEssUsableSocRange(List<ControllerEssChargeDischargeLimiter> ctrlChargeDischargeLimiters,
 			List<ControllerEssLimitTotalDischarge> ctrlLimitTotalDischarges,
 			List<ControllerEssEmergencyCapacityReserve> ctrlEmergencyCapacityReserves) {
 
@@ -300,7 +307,7 @@ public final class Utils {
 				.min().orElse(100); //
 
 		// compute useable SoC range
-		return max(0, maxSoc - minSoc); //
+	    return new int[] {minSoc, maxSoc};
 	}
 
 	/**

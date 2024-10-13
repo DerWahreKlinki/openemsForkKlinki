@@ -41,6 +41,8 @@ import io.openems.edge.common.startstop.StartStoppable;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.controller.ess.emergencycapacityreserve.ControllerEssEmergencyCapacityReserve;
 import io.openems.edge.controller.ess.limittotaldischarge.ControllerEssLimitTotalDischarge;
+import io.openems.edge.energy.optimizer.Utils;
+import io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter;
 
 //import io.openems.edge.core.appmanager.ComponentUtil;
 
@@ -96,6 +98,12 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 			target = "(enabled=true)")
 	private volatile List<ControllerEssLimitTotalDischarge> ctrlLimitTotalDischarges = new CopyOnWriteArrayList<>();
 
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
+			cardinality = ReferenceCardinality.MULTIPLE, //
+			target = "(enabled=true)")
+	private volatile List<ControllerEssChargeDischargeLimiter> ctrlChargeDischargeLimiters = new CopyOnWriteArrayList<>();
+	private int maxSocPercentage;
+
 	@Activate
 	protected void activate(ComponentContext context, Config config) throws OpenemsNamedException {
 		this.config = config;
@@ -135,83 +143,119 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 		this._setStartStop(value);
 	}
 
-	private void checkSocControllers() {
-
-		int minSocTotalDischarge = 0;
-		int actualReserveSoc = 0;
-
-		if (this.ess == null || this.ctrlEmergencyCapacityReserves == null || this.ctrlLimitTotalDischarges == null) {
-			return;
-		}
-
-		for (ControllerEssEmergencyCapacityReserve ctrlEmergencyCapacityReserve : this.ctrlEmergencyCapacityReserves) {
-
-			if (ctrlEmergencyCapacityReserve.channel("_PropertyEssId").value().asString().equals(this.ess.id())) {
-				actualReserveSoc = ctrlEmergencyCapacityReserve.getActualReserveSoc().orElse(0);
-			}
-		}
-
-		for (ControllerEssLimitTotalDischarge ctrlLimitTotalDischarge : this.ctrlLimitTotalDischarges) {
-
-			if (ctrlLimitTotalDischarge.channel("_PropertyEssId").value().asString() == this.ess.id()) {
-				minSocTotalDischarge = ctrlLimitTotalDischarge.getMinSoc().orElse(0);
-			}
-		}
-		// take highest value and return
-		this.setMinSocPercentage(Math.max(minSocTotalDischarge, actualReserveSoc));
-	}
-
-	/**
-	 * Registers 309 hold the actual capacity and not battery´s total. So we
+	/*
+	 * private void checkSocControllers() {
+	 * 
+	 * int minSocTotalDischarge = 0; int actualReserveSoc = 0;
+	 * 
+	 * if (this.ess == null || this.ctrlEmergencyCapacityReserves == null ||
+	 * this.ctrlLimitTotalDischarges == null) { return; }
+	 * 
+	 * for (ControllerEssEmergencyCapacityReserve ctrlEmergencyCapacityReserve :
+	 * this.ctrlEmergencyCapacityReserves) {
+	 * 
+	 * if
+	 * (ctrlEmergencyCapacityReserve.channel("_PropertyEssId").value().asString().
+	 * equals(this.ess.id())) { actualReserveSoc =
+	 * ctrlEmergencyCapacityReserve.getActualReserveSoc().orElse(0); } }
+	 * 
+	 * for (ControllerEssLimitTotalDischarge ctrlLimitTotalDischarge :
+	 * this.ctrlLimitTotalDischarges) {
+	 * 
+	 * if (ctrlLimitTotalDischarge.channel("_PropertyEssId").value().asString() ==
+	 * this.ess.id()) { minSocTotalDischarge =
+	 * ctrlLimitTotalDischarge.getMinSoc().orElse(0); } } // take highest value and
+	 * return this.setMinSocPercentage(Math.max(minSocTotalDischarge,
+	 * actualReserveSoc)); }
+	 * 
+	 * /** Registers 309 hold the actual capacity and not battery´s total. So we
 	 * calculate total out of current SoC and battery voltage
 	 * 
 	 * ToDo: Create Channel "useableCapacity" which calculate Capacity out ou
 	 * EmergencyLimit and the following:
 	 * 
+	 * 
+	 * private void installListener() {
+	 * 
+	 * this.getCapacityInAmphoursChannel().onUpdate(value -> { var soc =
+	 * this.getSoc().get();
+	 * 
+	 * // Check if there are SoC-limiting controllers this.checkSocControllers();
+	 * 
+	 * if (soc == null || soc <= 0) { return; } if (soc > 0) {
+	 * 
+	 * int useableSoc = 0; int minSocPercentage = (int) this.minSocPercentage;
+	 * 
+	 * // Calculate total capacity in Ah int totalCapacityAh = (int) (value.get() /
+	 * (soc / 100.0));
+	 * 
+	 * // Calculate reserve capacity in Ah double reserveCapacityAh =
+	 * totalCapacityAh * minSocPercentage / 100.0;
+	 * 
+	 * // Calculate useable capacity in Wh. For that we need nominal battery
+	 * voltage. // Can´t use max or min voltage int useableCapacityWh = (int)
+	 * (value.get() - reserveCapacityAh) * BATTERY_VOLTAGE;
+	 * 
+	 * if (soc > minSocPercentage && minSocPercentage != 100) { useableSoc = (int)
+	 * (((double) (soc - minSocPercentage) / (double) (100 - minSocPercentage)) *
+	 * 100);
+	 * 
+	 * }
+	 * 
+	 * this._setCapacity(totalCapacityAh * BATTERY_VOLTAGE); if (this.ess == null) {
+	 * this.logError(this.log, "No reference for ESS"); return; }
+	 * this.ess._setUseableSoc(useableSoc);
+	 * this.ess._setUseableCapacity(useableCapacityWh);
+	 * 
+	 * }
+	 * 
+	 * });
+	 * 
+	 * }
 	 */
+	private void checkSocControllers() {
+		if (this.ess == null || this.ctrlEmergencyCapacityReserves == null || this.ctrlLimitTotalDischarges == null) {
+			this.logDebug(this.log, "checkSocControllers: Essential component missing, exiting.");
+			return;
+		}
+
+		int[] socRange = Utils.getEssUsableSocRange(this.ctrlChargeDischargeLimiters, this.ctrlLimitTotalDischarges,
+				this.ctrlEmergencyCapacityReserves);
+
+		this.minSocPercentage = socRange[0];
+		this.maxSocPercentage = socRange[1];
+		this.logDebug(this.log, "checkSocControllers: MinSoC set to " + this.minSocPercentage + ", MaxSoC set to "
+				+ this.maxSocPercentage);
+	}
+
 	private void installListener() {
-
 		this.getCapacityInAmphoursChannel().onUpdate(value -> {
-			var soc = this.getSoc().get();
-
-			// Check if there are SoC-limiting controllers
-			this.checkSocControllers();
-
-			if (soc == null || soc <= 0) {
+			if (this.ess == null) {
+				this.logError(this.log, "No ESS reference available.");
 				return;
 			}
-			if (soc > 0) {
 
-				int useableSoc = 0;
-				int minSocPercentage = (int) this.minSocPercentage;
+			Integer soc = this.getSoc().get();
+			this.checkSocControllers(); // Update SoC limits
 
-				// Calculate total capacity in Ah
-				int totalCapacityAh = (int) (value.get() / (soc / 100.0));
-
-				// Calculate reserve capacity in Ah
-				double reserveCapacityAh = totalCapacityAh * minSocPercentage / 100.0;
-
-				// Calculate useable capacity in Wh. For that we need nominal battery voltage.
-				// Can´t use max or min voltage
-				int useableCapacityWh = (int) (value.get() - reserveCapacityAh) * BATTERY_VOLTAGE;
-
-				if (soc > minSocPercentage && minSocPercentage != 100) {
-					useableSoc = (int) (((double) (soc - minSocPercentage) / (double) (100 - minSocPercentage)) * 100);
-
-				}
-
-				this._setCapacity(totalCapacityAh * BATTERY_VOLTAGE);
-				if (this.ess == null) {
-					this.logError(this.log, "No reference for ESS");
-					return;
-				}
-				this.ess._setUseableSoc(useableSoc);
-				this.ess._setUseableCapacity(useableCapacityWh);
-
+			if (soc == null || soc <= 0) {
+				this.logDebug(this.log, "installListener: Invalid SoC, exiting.");
+				return;
 			}
 
-		});
+			int totalCapacityAh = (int) (value.get() / (soc / 100.0));
+			double reserveCapacityAh = totalCapacityAh * this.minSocPercentage / 100.0;
+			int useableCapacityWh = (int) (value.get() - reserveCapacityAh) * BATTERY_VOLTAGE;
+			int useableSoc = soc > this.maxSocPercentage ? 100
+					: (int) (((double) (soc - this.minSocPercentage)
+							/ (double) (this.maxSocPercentage - this.minSocPercentage)) * 100);
 
+			this._setCapacity(totalCapacityAh * BATTERY_VOLTAGE);
+			this.ess._setUseableSoc(useableSoc);
+			this.ess._setUseableCapacity(useableCapacityWh);
+			this.logDebug(this.log, "installListener: Updated useableSoc to " + useableSoc
+					+ " and useableCapacityWh to " + useableCapacityWh);
+		});
 	}
 
 	@Override

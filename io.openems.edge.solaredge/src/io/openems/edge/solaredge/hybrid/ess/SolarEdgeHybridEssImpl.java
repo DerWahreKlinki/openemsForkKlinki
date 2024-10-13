@@ -54,6 +54,8 @@ import io.openems.edge.common.type.TypeUtils;
 
 import io.openems.edge.controller.ess.limittotaldischarge.ControllerEssLimitTotalDischarge;
 import io.openems.edge.controller.ess.emergencycapacityreserve.ControllerEssEmergencyCapacityReserve;
+
+import io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter;
 import io.openems.edge.ess.api.HybridEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
@@ -72,6 +74,7 @@ import io.openems.edge.solaredge.enums.AcChargePolicy;
 import io.openems.edge.solaredge.enums.ChargeDischargeMode;
 import io.openems.edge.solaredge.charger.SolaredgeDcCharger;
 import io.openems.edge.solaredge.common.AverageCalculator;
+import io.openems.edge.energy.optimizer.Utils;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -162,9 +165,17 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 			cardinality = ReferenceCardinality.MULTIPLE, //
 			target = "(enabled=true)")
 	private volatile List<ControllerEssLimitTotalDischarge> ctrlLimitTotalDischarges = new CopyOnWriteArrayList<>();
+	
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
+			cardinality = ReferenceCardinality.MULTIPLE, //
+			target = "(enabled=true)")
+	private volatile List<ControllerEssChargeDischargeLimiter> ctrlChargeDischargeLimiters = new CopyOnWriteArrayList<>();
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
 	private ElectricityMeter meter;
+	
+	
+	private int maxSocPercentage;
 
 	public SolarEdgeHybridEssImpl() throws OpenemsException {
 		super(//
@@ -595,11 +606,11 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 			this.logError(this.log, "Cannot fall back to automatic mode " + e.getMessage());
 		}
 	}
-
+	
 	/**
 	 * SolarEdge provides max. usable Capacity. So we can calculate current useable
 	 * capacity
-	 */
+	 
 	private void installListener() {
 		this.getCapacityChannel().onUpdate(value -> {
 			this.checkSocControllers();
@@ -629,6 +640,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		});
 	}
 
+
 	private void checkSocControllers() {
 
 		int minSocTotalDischarge = 0;
@@ -656,7 +668,71 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		// take highest value and return
 		this.minSocPercentage = (Math.max(minSocTotalDischarge, actualReserveSoc));
 	}
+   */
+	
+	private void checkSocControllers() {
+	    if (this.ctrlChargeDischargeLimiters == null || this.ctrlLimitTotalDischarges == null || this.ctrlEmergencyCapacityReserves == null) {
+	        return; // Return if any list is not initialized
+	    }
 
+	    // Calculate the usable SoC range using the helper method
+	    int[] socRange = Utils.getEssUsableSocRange(this.ctrlChargeDischargeLimiters, this.ctrlLimitTotalDischarges, this.ctrlEmergencyCapacityReserves);
+
+	    // Assuming you have separate attributes to store min and max SoC, or a structure to store the range
+	    this.minSocPercentage = socRange[0]; // Update the minimum SoC attribute
+	    this.maxSocPercentage = socRange[1]; // Update the maximum SoC attribute
+
+	    // If you need to store it as a single range attribute, consider how you would like that represented
+	    // For example, as a string or a custom object
+	    // This example simply stores them as separate attributes
+	}
+
+	
+	private void installListener() {
+	    this.getCapacityChannel().onUpdate(value -> {
+	        this.logDebug(this.log, "Listener triggered with capacity value: " + value);
+
+	        // Update minSocPercentage and maxSocPercentage based on current controller settings
+	        this.checkSocControllers();
+	        this.logDebug(this.log, "Updated SoC ranges -> MinSoC: " + this.minSocPercentage + " / MaxSoC: " + this.maxSocPercentage);
+
+	        Integer soc = this.getSoc().get();
+	        if (soc == null || value == null) {
+	            this.logDebug(this.log, "SoC or capacity value is null, exiting listener.");
+	            return;
+	        }
+
+	        // Check SoC against boundaries and calculate usable capacity
+	        if (soc < this.minSocPercentage) {
+	            this.logDebug(this.log, "SoC below minimum threshold: " + soc + " < " + this.minSocPercentage);
+	            this.setUseableCapacity(0);
+	            this.setUseableSoc(0);
+	        } else if (soc > this.maxSocPercentage) {
+	            this.logDebug(this.log, "SoC above maximum threshold: " + soc + " > " + this.maxSocPercentage);
+	            this.setUseableCapacity(0);
+	            this.setUseableSoc(100);
+	        } else {
+	            // Calculate usable capacity and SoC within the defined min and max range
+	            int range = this.maxSocPercentage - this.minSocPercentage;
+	            float normalizedSoc = ((float) (soc - this.minSocPercentage) / range) * 100;
+	            int useableCapacity = (int) Math.round((float) value.get() * (normalizedSoc / 100f));
+
+	            this.logDebug(this.log, "Normalized SoC: " + normalizedSoc + "%, Usable Capacity: " + useableCapacity + " Wh");
+	            this.setUseableCapacity(useableCapacity);
+	            this.setUseableSoc((int) normalizedSoc);
+	        }
+
+	        if (soc <= 0) {
+	            this.logDebug(this.log, "SoC is zero or negative, setting usable capacity and SoC to zero.");
+	            this.setUseableCapacity(0);
+	            this.setUseableSoc(0);
+	        }
+	    });
+	}
+
+
+	
+	
 	public void _setMyActivePower() {
 
 		// ActivePower is the actual AC output including battery discharging

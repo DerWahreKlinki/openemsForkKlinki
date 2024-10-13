@@ -18,7 +18,10 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.edge.pvinverter.api,\
 	io.openems.edge.timedata.api,\
 	io.openems.edge.controller.ess.emergencycapacityreserve,\
-	io.openems.edge.controller.ess.limittotaldischarge
+	io.openems.edge.controller.ess.limittotaldischarge,\
+	io.openems.edge.controller.ess.chargedischargelimiter,\
+	io.openems.edge.controller.ess.timeofusetariff,\
+	io.openems.edge.energy
 
 -testpath: \
 	${testpath}

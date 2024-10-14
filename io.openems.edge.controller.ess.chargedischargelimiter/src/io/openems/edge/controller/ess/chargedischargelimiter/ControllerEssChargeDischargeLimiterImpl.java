@@ -10,11 +10,16 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import io.openems.common.types.ChannelAddress;
+import io.openems.common.types.OpenemsType;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
@@ -24,6 +29,9 @@ import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.power.api.Phase;
 import io.openems.edge.ess.power.api.Pwr;
 
+import io.openems.edge.common.type.TypeUtils;
+
+import io.openems.edge.timedata.api.Timedata;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -48,7 +56,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private long balancingTime = 0; // Time used for balancing so far
 	private int balancingRemainingTime = 0; // Remaining time for balancing. Used in UI
 	private Long lastEssActiveChargeEnergy = null;
-	private Integer chargedEnergy = 0;
+	private Integer cumulatedchargedEnergy = 0;
 	private boolean resetChargedEnergy = false;
 
 	private int minSoc = 0;
@@ -66,11 +74,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 	@Reference
 	private ComponentManager componentManager;
-	
+
 	@Reference
 	private ConfigurationAdmin cm;
 
-
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
+	private volatile Timedata timedata = null;
 
 	private ManagedSymmetricEss ess;
 
@@ -97,19 +106,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.balancingHysteresisTime = this.config.balancingHysteresis();
 			this.debugMode = this.config.debugMode();
 
-	        // 
-	        this.chargedEnergy = this.getChargedEnergy().get();
 
-	        // Fallback: set default value if channel´s not available
-	        if (this.chargedEnergy == null) {
-	            this.chargedEnergy = 0;
-	            this._setChargedEnergy(this.chargedEnergy); // save value to channel
-	        }			
-			
+
 			if (config.energyBetweenBalancingCycles() > 0) {
 				this.balancingWanted = true;
 			}
-			
+
 			if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
 				return;
 			}
@@ -126,9 +128,43 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		super.deactivate();
 	}
 
+	/**
+	 * Initialize cumulated energy value from Timedata service.
+	 */
+	private void initializeChargedEnergyFromTimedata() {
+
+		// ControllerEssChargeDischargeLimiter.ChannelId.STATE_MACHINE;
+		var timedata = this.getTimedata();
+
+		if (timedata == null) {
+			this.logDebug(this.log, "Timedata service is not available.");
+			return; // Exit if timedata service is not available
+		}
+
+		this.logDebug(this.log, "Querying Timedata service for the latest energy value...");
+
+		this.timedata.getLatestValue(new ChannelAddress(this.id(), ControllerEssChargeDischargeLimiter.ChannelId.CHARGED_ENERGY.id()))
+				.thenAccept(chargedEnergy -> {
+					if (chargedEnergy.isPresent()) {
+						Integer value = TypeUtils.getAsType(OpenemsType.INTEGER, chargedEnergy.get());
+						this.logDebug(this.log, "Fetched latest ChargedEnergy value: " + value);
+						this._setChargedEnergy(value);
+					} else {
+						this.logDebug(this.log, "No current energy value found for ChargedEnergy channel");
+						this._setChargedEnergy(0);
+					}
+				});
+	}
+
+	private Object getTimedata() {
+		return this.timedata;
+	}
+
 	@Override
 	public void run() throws OpenemsNamedException {
 
+		// this._setChargedEnergy(123);
+		// this.initializeChargedEnergyFromTimedata();
 		// Remember: Negative values for Charge; positive for Discharge
 		this.logDebug(this.log,
 				"\nCurrent State " + this.state.getName() + "\n" + "Current SoC " + this.ess.getSoc().get() + "% \n"
@@ -258,12 +294,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// Set the actual reserve Soc. This channel is used mainly for visualization in
 		// UI.
 		this._setActualReserveSoc(this.minSoc);
-		
+
 		this._setMaxSoc(this.maxSoc);
 		this._setMinSoc(this.minSoc);
 
 		// save current state
 		this._setStateMachine(this.state);
+
 	}
 
 	/**
@@ -355,10 +392,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// Ess Active Charge Energy directly from ESS (cumulative)
 		Long currentEssActiveChargeEnergy = this.ess.getActiveChargeEnergy().get(); // Cumulative ESS charge energy
 		Integer storedChargedEnergy = this.getChargedEnergy().get(); // Stored charged energy from this controller's
-																		// channel
+																	// channel
 
 		// Early exit if any data is not available
 		if (currentEssActiveChargeEnergy == null || storedChargedEnergy == null) {
+			this.initializeChargedEnergyFromTimedata();
 			return;
 		}
 
@@ -373,19 +411,19 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		int energyDifference = (int) (currentEssActiveChargeEnergy - this.lastEssActiveChargeEnergy);
 
 		// Update charged energy by adding the difference
-		this.chargedEnergy = storedChargedEnergy + energyDifference;
+		this.cumulatedchargedEnergy = storedChargedEnergy + energyDifference;
 
 		// Update the last known cumulative energy
 		this.lastEssActiveChargeEnergy = currentEssActiveChargeEnergy;
 
 		// If reset is flagged (e.g., calibration completed), reset the charged energy
 		if (this.resetChargedEnergy) {
-			this.chargedEnergy = 0;
+			this.cumulatedchargedEnergy = 0;
 			this.resetChargedEnergy = false;
 		}
-
+		this.logDebug(this.log, "Writing charged energy");
 		// Set the updated charged energy in the controller's channel
-		this._setChargedEnergy(this.chargedEnergy);
+		this._setChargedEnergy(this.cumulatedchargedEnergy);
 
 	}
 

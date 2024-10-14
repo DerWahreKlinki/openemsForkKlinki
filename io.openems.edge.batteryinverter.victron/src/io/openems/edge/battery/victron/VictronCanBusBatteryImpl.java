@@ -235,26 +235,40 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 				return;
 			}
 
+			this.logDebug(this.log, "Listener triggered with incoming capacity: " + value);
+
 			Integer soc = this.getSoc().get();
+			this.logDebug(this.log, "Current State of Charge (SoC): " + soc);
+
 			this.checkSocControllers(); // Update SoC limits
+			this.logDebug(this.log,
+					"SoC limits updated - MinSoC: " + this.minSocPercentage + ", MaxSoC: " + this.maxSocPercentage);
 
 			if (soc == null || soc <= 0) {
-				this.logDebug(this.log, "installListener: Invalid SoC, exiting.");
+				this.logDebug(this.log, "installListener: Invalid SoC (" + soc + "), exiting.");
 				return;
 			}
 
 			int totalCapacityAh = (int) (value.get() / (soc / 100.0));
-			double reserveCapacityAh = totalCapacityAh * this.minSocPercentage / 100.0;
-			int useableCapacityWh = (int) (value.get() - reserveCapacityAh) * BATTERY_VOLTAGE;
+			this.logDebug(this.log, "Calculated total capacity (Ah): " + totalCapacityAh);
+
 			int useableSoc = soc > this.maxSocPercentage ? 100
 					: (int) (((double) (soc - this.minSocPercentage)
 							/ (double) (this.maxSocPercentage - this.minSocPercentage)) * 100);
+			useableSoc = Math.min(useableSoc, 100); // Ensure that usable SoC does not exceed 100%
+
+			this.logDebug(this.log, "Normalized usable SoC: " + useableSoc + "% based on current SoC: " + soc);
+
+			double useableCapacityAh = totalCapacityAh * (useableSoc / 100.0); // Calculate usable capacity based on
+																				// usable SoC
+			int useableCapacityWh = (int) (useableCapacityAh * BATTERY_VOLTAGE); // Convert to watt-hours
 
 			this._setCapacity(totalCapacityAh * BATTERY_VOLTAGE);
 			this.ess._setUseableSoc(useableSoc);
 			this.ess._setUseableCapacity(useableCapacityWh);
-			this.logDebug(this.log, "installListener: Updated useableSoc to " + useableSoc
-					+ " and useableCapacityWh to " + useableCapacityWh);
+
+			this.logDebug(this.log, "installListener: Updated usable capacity to " + useableCapacityWh
+					+ " Wh, and total system capacity set to " + (totalCapacityAh * BATTERY_VOLTAGE) + " Wh");
 		});
 	}
 

@@ -258,6 +258,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// Set the actual reserve Soc. This channel is used mainly for visualization in
 		// UI.
 		this._setActualReserveSoc(this.minSoc);
+		
+		this._setMaxSoc(this.maxSoc);
+		this._setMinSoc(this.minSoc);
 
 		// save current state
 		this._setStateMachine(this.state);

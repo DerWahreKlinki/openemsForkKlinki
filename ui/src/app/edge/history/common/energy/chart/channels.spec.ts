@@ -19,7 +19,7 @@ export namespace History {
         "legend": {
           "display": true, "position": "bottom", "labels": { "color": "" },
         }, "tooltip": {
-          "intersect": false, "mode": "index", "callbacks": {}, "enabled": true,
+          "intersect": false, "mode": "index", "callbacks": {},
         },
         "annotation": {
           annotations: {},
@@ -56,7 +56,7 @@ export namespace History {
         "legend": {
           "display": true, "position": "bottom", "labels": { "color": "" },
         }, "tooltip": {
-          "intersect": false, "mode": "x", "callbacks": {}, "enabled": true,
+          "intersect": false, "mode": "x", "callbacks": {},
         },
         "annotation": {
           annotations: {},

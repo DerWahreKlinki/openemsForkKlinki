@@ -57,6 +57,9 @@ export abstract class AbstractHistoryChart {
         borderColor: "rgba(128,128,0,1)",
     };
 
+    private activeQueryData: string;
+    private debounceTimeout: any | null = null;
+
     constructor(
         public readonly spinnerId: string,
         protected service: Service,
@@ -268,33 +271,48 @@ export abstract class AbstractHistoryChart {
         const resolution = res ?? calculateResolution(this.service, fromDate, toDate).resolution;
 
         this.errorResponse = null;
-        const result: Promise<QueryHistoricTimeseriesDataResponse> = new Promise<QueryHistoricTimeseriesDataResponse>((resolve, reject) => {
-            this.service.getCurrentEdge().then(edge => {
-                this.service.getConfig().then(config => {
-                    this.setLabel(config);
-                    this.getChannelAddresses(edge, config).then(channelAddresses => {
-                        const request = new QueryHistoricTimeseriesDataRequest(DateUtils.maxDate(fromDate, this.edge?.firstSetupProtocol), toDate, channelAddresses, resolution);
-                        edge.sendRequest(this.service.websocket, request).then(response => {
-                            resolve(response as QueryHistoricTimeseriesDataResponse);
-                        }).catch(error => {
-                            this.errorResponse = error;
-                            resolve(new QueryHistoricTimeseriesDataResponse(error.id, {
-                                timestamps: [null], data: { null: null },
-                            }));
+
+        if (this.debounceTimeout) {
+            clearTimeout(this.debounceTimeout);
+        }
+
+        this.debounceTimeout = setTimeout(() => {
+            const result: Promise<QueryHistoricTimeseriesDataResponse> = new Promise<QueryHistoricTimeseriesDataResponse>((resolve, reject) => {
+                this.service.getCurrentEdge().then(edge => {
+                    this.service.getConfig().then(config => {
+                        this.setLabel(config);
+                        this.getChannelAddresses(edge, config).then(channelAddresses => {
+                            const request = new QueryHistoricTimeseriesDataRequest(DateUtils.maxDate(fromDate, this.edge?.firstSetupProtocol), toDate, channelAddresses, resolution);
+                            edge.sendRequest(this.service.websocket, request).then(response => {
+                                resolve(response as QueryHistoricTimeseriesDataResponse);
+                                this.activeQueryData = request.id;
+                            }).catch(error => {
+                                this.errorResponse = error;
+                                resolve(new QueryHistoricTimeseriesDataResponse(error.id, {
+                                    timestamps: [null], data: { null: null },
+                                }));
+                            });
                         });
                     });
                 });
+            }).then((response) => {
+                if (this.activeQueryData !== response.id) {
+                    return;
+                }
+                if (Utils.isDataEmpty(response)) {
+                    this.loading = false;
+                    this.service.stopSpinner(this.spinnerId);
+                    this.initializeChart();
+                }
+                return DateTimeUtils.normalizeTimestamps(resolution.unit, response);
             });
-        }).then((response) => {
-            if (Utils.isDataEmpty(response)) {
-                this.loading = false;
-                this.service.stopSpinner(this.spinnerId);
-                this.initializeChart();
-            }
-            return DateTimeUtils.normalizeTimestamps(resolution.unit, response);
-        });
 
-        return result;
+            return result;
+        }, ChartConstants.REQUEST_TIMEOUT);
+
+        return new Promise((resolve) => {
+            resolve(new QueryHistoricTimeseriesDataResponse("", { timestamps: [], data: {} }));
+        });
     }
 
     /**

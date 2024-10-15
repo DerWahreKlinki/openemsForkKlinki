@@ -111,7 +111,7 @@ export class StorageModalComponent implements OnInit, OnDestroy {
 
                             const isChargeDischargeLimiterEnabled = currentData.channel[controller.id + "/_PropertyIsChargeDischargeLimiterEnabled"] == 1;
                             const state = ChargeDischargeControllerState[stateNumber] ?? ChargeDischargeControllerState.UNDEFINED;
-
+                            //console.log("Current Data:", currentData);
 
                             controllerFrmGrp.addControl("chargeDischargeLimiterController",
                                 this.formBuilder.group({
@@ -127,7 +127,6 @@ export class StorageModalComponent implements OnInit, OnDestroy {
                                     chargedEnergy: new FormControl(chargedEnergy),
                                 }),
                             );
-                            console.log("Current Data:", currentData);
                         } else if (controller.factoryId == "Controller.Ess.PrepareBatteryExtension") {
 
                             const isRunning = currentData.channel[controller.id + "/_PropertyIsRunning"] == 1;

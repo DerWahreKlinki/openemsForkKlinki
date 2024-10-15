@@ -34,7 +34,7 @@ export class CurrentVoltageAsymmetricChartComponent extends AbstractHistoryChart
           },
           hideShadow: true,
           color: currentPhasesColors[index],
-          yAxisId: ChartAxis.LEFT,
+          yAxisId: ChartAxis.RIGHT,
         })),
         ...Phase.THREE_PHASE.map((phase, index) => ({
           name: this.translate.instant("Edge.History.VOLTAGE") + " " + phase,
@@ -43,7 +43,6 @@ export class CurrentVoltageAsymmetricChartComponent extends AbstractHistoryChart
           },
           hideShadow: true,
           color: voltagePhasesColors[index],
-          yAxisId: ChartAxis.RIGHT,
         })),
       ],
       tooltip: {
@@ -52,14 +51,13 @@ export class CurrentVoltageAsymmetricChartComponent extends AbstractHistoryChart
       },
       yAxes: [{
         unit: YAxisType.VOLTAGE,
-        position: "right",
-        yAxisId: ChartAxis.RIGHT,
-        displayGrid: false,
+        position: "left",
+        yAxisId: ChartAxis.LEFT,
       },
       {
         unit: YAxisType.CURRENT,
-        position: "left",
-        yAxisId: ChartAxis.LEFT,
+        position: "right",
+        yAxisId: ChartAxis.RIGHT,
       },
       ],
     };

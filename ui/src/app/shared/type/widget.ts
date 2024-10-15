@@ -6,7 +6,6 @@ import { EdgePermission } from "../shared";
 export enum WidgetClass {
     "Energymonitor",
     "Common_Autarchy",
-    'Common_SavedEmissions',
     "Common_Selfconsumption",
     "Storage",
     "Grid",
@@ -88,9 +87,8 @@ export class Widgets {
                     return true;
                 }
                 switch (clazz) {
-                    case 'Common_Autarchy':
-                    case 'Common_SavedEmissions':
-                    case 'Grid':
+                    case "Common_Autarchy":
+                    case "Grid":
                         return config.hasMeter();
                     case "Energymonitor":
                     case "Consumption":

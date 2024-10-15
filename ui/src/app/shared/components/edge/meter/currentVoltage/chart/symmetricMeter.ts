@@ -35,7 +35,7 @@ export class CurrentVoltageSymmetricChartComponent extends AbstractHistoryChart 
           hiddenOnInit: false,
           stack: 1,
 
-          yAxisId: ChartAxis.LEFT,
+          yAxisId: ChartAxis.RIGHT,
         },
         {
           name: this.translate.instant("Edge.History.VOLTAGE"),
@@ -45,7 +45,7 @@ export class CurrentVoltageSymmetricChartComponent extends AbstractHistoryChart 
           color: "rgb(255,0,0)",
           hiddenOnInit: false,
           stack: 1,
-          yAxisId: ChartAxis.RIGHT,
+          yAxisId: ChartAxis.LEFT,
         },
       ],
       tooltip: {
@@ -54,14 +54,13 @@ export class CurrentVoltageSymmetricChartComponent extends AbstractHistoryChart 
       },
       yAxes: [{
         unit: YAxisType.VOLTAGE,
-        position: "right",
-        yAxisId: ChartAxis.RIGHT,
-        displayGrid: false,
+        position: "left",
+        yAxisId: ChartAxis.LEFT,
       },
       {
         unit: YAxisType.CURRENT,
-        position: "left",
-        yAxisId: ChartAxis.LEFT,
+        position: "right",
+        yAxisId: ChartAxis.RIGHT,
       },
       ],
     };

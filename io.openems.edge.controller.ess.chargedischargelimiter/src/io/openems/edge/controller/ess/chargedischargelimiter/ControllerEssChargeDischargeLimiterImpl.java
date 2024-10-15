@@ -290,11 +290,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		this.applyActivePower(calculatedPower);
 		this.calculateChargedEnergy();
 
-		// Copied from Emergency Capacity Reserve Controller
-		// Set the actual reserve Soc. This channel is used mainly for visualization in
-		// UI.
-		this._setActualReserveSoc(this.minSoc);
-
 		this._setMaxSoc(this.maxSoc);
 		this._setMinSoc(this.minSoc);
 
@@ -335,6 +330,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			return;
 		}
 
+		if (this.ess == null) {
+			this.logDebug(this.log, "ERROR. No Ess to apply constraints to");
+			return;
+		}
 		try {
 			// adjust value so that it fits into Min/MaxActivePower
 			if (this.state == State.BELOW_MIN_SOC) { // block further discharging

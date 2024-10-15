@@ -136,6 +136,16 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 	public String debugLog() {
 		return "SoC: " + this.getSoc();
 	}
+	
+	/**
+	 * Uses Info Log for further debug features.
+	 */
+	@Override
+	protected void logDebug(Logger log, String message) {
+		if (this.config.debugMode()) {
+			this.logInfo(this.log, message);
+		}
+	}	
 
 	@Override
 	public void setStartStop(StartStop value) throws OpenemsNamedException {
@@ -214,8 +224,11 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 	 * }
 	 */
 	private void checkSocControllers() {
-		if (this.ess == null || this.ctrlEmergencyCapacityReserves == null || this.ctrlLimitTotalDischarges == null) {
-			this.logDebug(this.log, "checkSocControllers: Essential component missing, exiting.");
+
+		if (this.ess == null) {
+			this.logDebug(this.log, "No Controller active on ESS, exiting.");
+			this.minSocPercentage = 0;
+			this.maxSocPercentage = 100;
 			return;
 		}
 
@@ -227,7 +240,7 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 		this.logDebug(this.log, "checkSocControllers: MinSoC set to " + this.minSocPercentage + ", MaxSoC set to "
 				+ this.maxSocPercentage);
 	}
-
+/*
 	private void installListener() {
 		this.getCapacityInAmphoursChannel().onUpdate(value -> {
 			if (this.ess == null) {
@@ -255,23 +268,84 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 			int useableSoc = soc > this.maxSocPercentage ? 100
 					: (int) (((double) (soc - this.minSocPercentage)
 							/ (double) (this.maxSocPercentage - this.minSocPercentage)) * 100);
-			useableSoc = Math.min(useableSoc, 100); // Ensure that usable SoC does not exceed 100%
+			useableSoc = Math.max(Math.min(useableSoc, 100), 0); // Ensure that usable SoC does not exceed 100%
 
 			this.logDebug(this.log, "Normalized usable SoC: " + useableSoc + "% based on current SoC: " + soc);
 
-			double useableCapacityAh = totalCapacityAh * (useableSoc / 100.0); // Calculate usable capacity based on
-																				// usable SoC
-			int useableCapacityWh = (int) (useableCapacityAh * BATTERY_VOLTAGE); // Convert to watt-hours
+			Integer totalCapacityWh = totalCapacityAh * BATTERY_VOLTAGE; 
+			int useableCapacityWh =  (int) (totalCapacityWh * (useableSoc / 100.0));
+			
 
-			this._setCapacity(totalCapacityAh * BATTERY_VOLTAGE);
+			this._setCapacity(totalCapacityWh);
 			this.ess._setUseableSoc(useableSoc);
 			this.ess._setUseableCapacity(useableCapacityWh);
 
-			this.logDebug(this.log, "installListener: Updated usable capacity to " + useableCapacityWh
-					+ " Wh, and total system capacity set to " + (totalCapacityAh * BATTERY_VOLTAGE) + " Wh");
+			this.logDebug(this.log, "\ninstallListener: SoC: real|useable " + soc + "|" + useableSoc + "[%] Capacity real|useable " + totalCapacityWh +"|" + useableCapacityWh + "[%]\n");
+
 		});
 	}
+*/
+	private void installListener() {
+	    this.getCapacityInAmphoursChannel().onUpdate(value -> {
+	        if (this.ess == null) {
+	            this.logError(this.log, "No ESS reference available.");
+	            return;
+	        }
 
+	        // Check if value is null or invalid
+	        if (value == null ) {
+	            this.logError(this.log, "Invalid capacity value received.");
+	            return;
+	        }
+
+	        this.logDebug(this.log, "Listener triggered with incoming capacity: " + value);
+
+	        // Safely get SoC, checking for null
+	        Integer soc = this.getSoc().orElse(null);
+	        if (soc == null || soc <= 0) {
+	            this.logDebug(this.log, "installListener: Invalid SoC (" + soc + "), exiting.");
+	            return;
+	        }
+
+	        this.logDebug(this.log, "Current State of Charge (SoC): " + soc);
+
+	        // Update SoC limits
+	        this.checkSocControllers();
+	        this.logDebug(this.log,
+	                "SoC limits updated - MinSoC: " + this.minSocPercentage + ", MaxSoC: " + this.maxSocPercentage);
+
+	        // Calculate total capacity Ah, handling division by zero
+	        double socPercentage = soc / 100.0;
+	        if (socPercentage == 0) {
+	            this.logError(this.log, "Cannot calculate total capacity because SoC is 0.");
+	            return;
+	        }
+	        int totalCapacityAh = (int) (value.get() / socPercentage);
+	        this.logDebug(this.log, "Calculated total capacity (Ah): " + totalCapacityAh);
+
+	        // Calculate usable SoC
+	        int useableSoc = soc > this.maxSocPercentage ? 100
+	                : (int) (((double) (soc - this.minSocPercentage)
+	                        / (double) (this.maxSocPercentage - this.minSocPercentage)) * 100);
+	        useableSoc = Math.max(Math.min(useableSoc, 100), 0); // Ensure that usable SoC does not exceed 100%
+	        this.logDebug(this.log, "Normalized usable SoC: " + useableSoc + "% based on current SoC: " + soc);
+
+	        // Calculate usable capacity in watt-hours
+	        Integer totalCapacityWh = totalCapacityAh * BATTERY_VOLTAGE; 
+	        int useableCapacityWh = (int) (totalCapacityWh * (useableSoc / 100.0));
+
+	        // Set the capacities in ESS
+	        this._setCapacity(totalCapacityWh);
+	        this.ess._setUseableSoc(useableSoc);
+	        this.ess._setUseableCapacity(useableCapacityWh);
+
+	        this.logDebug(this.log, "installListener: SoC: real|usable " + soc + "|" + useableSoc + 
+	                    "[%] Capacity real|usable " + totalCapacityWh + "|" + useableCapacityWh + " [Wh]");
+	    });
+	}
+	
+	
+	
 	@Override
 	public void setMinSocPercentage(int minSocPercentage) {
 		this.minSocPercentage = minSocPercentage;

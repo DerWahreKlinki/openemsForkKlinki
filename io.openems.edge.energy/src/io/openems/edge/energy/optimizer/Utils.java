@@ -238,17 +238,14 @@ public final class Utils {
 	 * @return the value in [Wh]
 	 */
 	protected static int getEssMinSocEnergy(TimeOfUseTariffControllerImpl.Context context, int essCapacity) {
-	    // Get the minimum and maximum SoC values from the helper method
-	    int[] socRange = getEssUsableSocRange(
-	        context.ctrlChargeDischargeLimiters(),
-	        context.ctrlLimitTotalDischarges(),
-	        context.ctrlEmergencyCapacityReserves()
-	    );
+		// Get the minimum and maximum SoC values from the helper method
+		int[] socRange = getEssUsableSocRange(context.ctrlChargeDischargeLimiters(), context.ctrlLimitTotalDischarges(),
+				context.ctrlEmergencyCapacityReserves());
 
-	    int minSoc = socRange[0];  // Access the minimum SoC from the range array
+		int minSoc = socRange[0]; // Access the minimum SoC from the range array
 
-	    // Calculate the minimum SoC energy using the min SoC percentage
-	    return (essCapacity * minSoc) / 100;  // Properly compute the value based on the minimum SoC
+		// Calculate the minimum SoC energy using the min SoC percentage
+		return (essCapacity * minSoc) / 100; // Properly compute the value based on the minimum SoC
 	}
 
 	/**
@@ -288,26 +285,40 @@ public final class Utils {
 	public static int[] getEssUsableSocRange(List<ControllerEssChargeDischargeLimiter> ctrlChargeDischargeLimiters,
 			List<ControllerEssLimitTotalDischarge> ctrlLimitTotalDischarges,
 			List<ControllerEssEmergencyCapacityReserve> ctrlEmergencyCapacityReserves) {
+		// Null checks for lists before processing streams
+		int minDischargeSoc = (ctrlLimitTotalDischarges != null)
+				? ctrlLimitTotalDischarges.stream().map(ctrl -> ctrl.getMinSoc().orElse(null)) // Defensive null
+																								// handling
+						.filter(Objects::nonNull).mapToInt(v -> max(0, v)).max().orElse(0)
+				: 0; // defaults to 0 if list is null or empty
 
-		int minDischargeSoc = ctrlLimitTotalDischarges.stream().map(ctrl -> ctrl.getMinSoc().get())
-				.filter(Objects::nonNull).mapToInt(v -> max(0, v)).max().orElse(0); // defaults to 0
+		int minReserveSoc = (ctrlEmergencyCapacityReserves != null)
+				? ctrlEmergencyCapacityReserves.stream().map(ctrl -> ctrl.getActualReserveSoc().orElse(null)) // Defensive
+																												// null
+																												// handling
+						.filter(Objects::nonNull).mapToInt(v -> max(0, v)).max().orElse(0)
+				: 0; // defaults to 0 if list is null or empty
 
-		int minReserveSoc = ctrlEmergencyCapacityReserves.stream().map(ctrl -> ctrl.getActualReserveSoc().get())
-				.filter(Objects::nonNull).mapToInt(v -> max(0, v)).max().orElse(0); //
-
-		int minLimiterSoc = ctrlChargeDischargeLimiters.stream().map(ctrl -> ctrl.getMinSoc().get())
-				.filter(Objects::nonNull).mapToInt(v -> max(0, v)).max().orElse(0); //
+		int minLimiterSoc = (ctrlChargeDischargeLimiters != null)
+				? ctrlChargeDischargeLimiters.stream().map(ctrl -> ctrl.getMinSoc().orElse(null)) // Defensive null
+																									// handling
+						.filter(Objects::nonNull).mapToInt(v -> max(0, v)).max().orElse(0)
+				: 0; // defaults to 0 if list is null or empty
 
 		// take the max value for min Soc out of three controllers
 		int minSoc = max(minDischargeSoc, max(minReserveSoc, minLimiterSoc));
 
 		// get the max. SoC
-		int maxSoc = ctrlChargeDischargeLimiters.stream().map(ctrl -> ctrl.getMaxSoc().get()).filter(Objects::nonNull)
-				.mapToInt(v -> min(100, v)) // no values above 100%
-				.min().orElse(100); //
+		int maxSoc = (ctrlChargeDischargeLimiters != null)
+				? ctrlChargeDischargeLimiters.stream().map(ctrl -> ctrl.getMaxSoc().orElse(null)) // Defensive null
+																									// handling
+						.filter(Objects::nonNull).mapToInt(v -> min(100, v)) // no values above 100%
+						.min().orElse(100)
+				: 100; // defaults to 100 if list is null or empty
+
 
 		// compute useable SoC range
-	    return new int[] {minSoc, maxSoc};
+		return new int[] { minSoc, maxSoc };
 	}
 
 	/**

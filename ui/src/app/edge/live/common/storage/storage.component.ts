@@ -2,10 +2,9 @@
 import { formatNumber } from "@angular/common";
 import { Component } from "@angular/core";
 import { AbstractFlatWidget } from "src/app/shared/components/flat/abstract-flat-widget";
-import { CurrentData } from "src/app/shared/shared";
+import { CurrentData , ChannelAddress, EdgeConfig, Utils } from "src/app/shared/shared";
 import { DateUtils } from "src/app/shared/utils/date/dateutils";
 
-import { ChannelAddress, EdgeConfig, Utils } from "../../../../shared/shared";
 import { StorageModalComponent } from "./modal/modal.component";
 
 @Component({
@@ -237,7 +236,7 @@ export class StorageComponent extends AbstractFlatWidget {
         }
 
         for (const essId in this.chargeDischargeLimiterComponents) {
-            //console.log("Current Data for chargeDischargeLimiter:", currentData);
+            console.log("Current Data for chargeDischargeLimiter:", currentData);
             const controller = this.chargeDischargeLimiterComponents[essId];
             controller["debugMode"] = currentData.allComponents[controller.id + "/_PropertyDebugMode"];
             controller["minSoc"] = currentData.allComponents[controller.id + "/_PropertyMinSoc"];

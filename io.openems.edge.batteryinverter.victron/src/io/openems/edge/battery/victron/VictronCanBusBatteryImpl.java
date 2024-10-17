@@ -293,6 +293,77 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 	        }
 
 	        // Check if value is null or invalid
+	        if (value == null) {
+	            this.logError(this.log, "Invalid capacity value received.");
+	            return;
+	        }
+
+	        this.logDebug(this.log, "Listener triggered with incoming capacity: " + value);
+
+	        // Safely get SoC, checking for null
+	        Integer soc = this.getSoc().orElse(null);
+	        if (soc == null || soc <= 0) {
+	            this.logDebug(this.log, "installListener: Invalid SoC (" + soc + "), exiting.");
+	            return;
+	        }
+
+	        this.logDebug(this.log, "Current State of Charge (SoC): " + soc);
+
+	        // Update SoC limits
+	        this.checkSocControllers();
+	        this.logDebug(this.log,
+	                "SoC limits updated - MinSoC: " + this.minSocPercentage + ", MaxSoC: " + this.maxSocPercentage);
+
+	        // Calculate total capacity Ah, handling division by zero
+	        double socPercentage = soc / 100.0;
+	        if (socPercentage == 0) {
+	            this.logError(this.log, "Cannot calculate total capacity because SoC is 0.");
+	            return;
+	        }
+	        int totalCapacityAh = (int) (value.get() / socPercentage);
+	        this.logDebug(this.log, "Calculated total capacity (Ah): " + totalCapacityAh);
+
+	        // Calculate total capacity in watt-hours
+	        int totalCapacityWh = totalCapacityAh * BATTERY_VOLTAGE;
+
+	        // Calculate the usable SoC within the MinSoC and MaxSoC limits
+	        int useableSoc = soc > this.maxSocPercentage ? 100
+	                : soc < this.minSocPercentage ? 0
+	                : (int) (((double) (soc - this.minSocPercentage)
+	                        / (this.maxSocPercentage - this.minSocPercentage)) * 100);
+	        this.logDebug(this.log, "Normalized usable SoC: " + useableSoc + "% based on current SoC: " + soc);
+
+	        // Calculate the usable capacity based on MinSoC and MaxSoC limits
+	        // First, calculate the percentage of capacity that can be used between MinSoC and MaxSoC
+	        double usableCapacityRange = ((double) (this.maxSocPercentage - this.minSocPercentage)) / 100.0;
+	        int totalUsableCapacityWh = (int) (totalCapacityWh * usableCapacityRange); // Usable capacity within min and max SoC range
+
+	        // Now calculate the current usable capacity based on the usable SoC
+	        int useableCapacityWh = (int) (totalUsableCapacityWh * (useableSoc / 100.0));
+
+	        // Ensure useableCapacityWh is within valid bounds (0 to totalUsableCapacityWh)
+	        useableCapacityWh = Math.max(Math.min(useableCapacityWh, totalUsableCapacityWh), 0);
+
+	        // Set the capacities in ESS
+	        this._setCapacity(totalCapacityWh);
+	        this.ess._setUseableSoc(useableSoc);
+	        this.ess._setUseableCapacity(useableCapacityWh);
+
+	        this.logDebug(this.log, "installListener: SoC: real|usable " + soc + "|" + useableSoc + 
+	                    "[%] Capacity real|usable " + totalCapacityWh + "|" + useableCapacityWh + " [Wh]");
+	    });
+	}
+
+
+	/*
+	private void installListener() {
+	    this.getCapacityInAmphoursChannel().onUpdate(value -> {
+	        if (this.ess == null) {
+	            this.logError(this.log, "No ESS reference available.");
+	            return;
+	        }
+
+	        // Check if value is null or invalid
 	        if (value == null ) {
 	            this.logError(this.log, "Invalid capacity value received.");
 	            return;
@@ -343,7 +414,7 @@ public class VictronCanBusBatteryImpl extends AbstractOpenemsModbusComponent
 	                    "[%] Capacity real|usable " + totalCapacityWh + "|" + useableCapacityWh + " [Wh]");
 	    });
 	}
-	
+	*/
 	
 	
 	@Override

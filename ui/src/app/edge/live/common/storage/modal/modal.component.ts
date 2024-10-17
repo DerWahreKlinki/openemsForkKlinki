@@ -188,16 +188,16 @@ export class StorageModalComponent implements OnInit, OnDestroy {
         switch (state) {
             case -1: // UNDEFINED
             case 1:  // ERROR
-                return "danger"; // Rot fÃ¼r Fehler und undefined
+                return "danger"; // Rot für Fehler und undefined
             case 0:  // NORMAL
-                return "success"; // GrÃ¼n fÃ¼r normal
+                return "success"; // Grün für normal
             case 2:  // BELOW_MIN_SOC
             case 3:  // ABOVE_MAX_SOC
             case 4:  // FORCE_CHARGE_ACTIVE
             case 5:  // BALANCING_WANTED
-                return "warning"; // Leichtes Orange fÃ¼r SOC-Warnungen
+                return "warning"; // Leichtes Orange für SOC-Warnungen
             case 6:  // BALANCING_ACTIVE
-                return "primary"; // Blinkendes Orange fÃ¼r aktives Balancing
+                return "primary"; // Blinkendes Orange für aktives Balancing
             default:
                 return ""; // Keine Farbe
         }
@@ -268,6 +268,7 @@ export class StorageModalComponent implements OnInit, OnDestroy {
             });
         }
     }
+
     ngOnDestroy() {
         this.edge.unsubscribeChannels(this.websocket, "storage");
     }

@@ -661,7 +661,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 	/**
 	 * value is the total capacity of the battery in Watt Hours
-	 */
+	 
 	private void installListener() {
 	    this.getCapacityChannel().onUpdate(value -> {
 	        this.logDebug(this.log, "Listener triggered with capacity value: " + value);
@@ -700,6 +700,63 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 	        // Use the normalized SoC to calculate the usable capacity
 	        int useableCapacity = (int) Math.round(totalCapacity * (useableSoc / 100f));
+
+	        this.logDebug(this.log, "installListener: SoC: real|usable " + soc + "|" + useableSoc + 
+	                    "[%] Capacity real|usable " + totalCapacity + "|" + useableCapacity + " [Wh]");
+
+	        // Set usable capacity and SoC
+	        this.setUseableCapacity(useableCapacity);
+	        this.setUseableSoc(useableSoc);
+	    });
+	}
+	*/
+	
+	
+	/**
+	 * value is the total capacity of the battery in Watt Hours
+	 */
+	private void installListener() {
+	    this.getCapacityChannel().onUpdate(value -> {
+	        this.logDebug(this.log, "Listener triggered with capacity value: " + value);
+
+	        // Get the current SoC value and check for null or invalid values
+	        Integer soc = this.getSoc().orElse(null);
+	        if (soc == null || soc <= 0 || value == null || value.get() <= 0) {
+	            this.logDebug(this.log, "SoC is null, zero, or negative, or capacity value is null/invalid; exiting listener.");
+	            this.setUseableCapacity(0);
+	            this.setUseableSoc(0);
+	            return;
+	        }
+
+	        // Update minSocPercentage and maxSocPercentage based on current controller settings
+	        this.checkSocControllers();
+	        this.logDebug(this.log, "Updated SoC ranges -> MinSoC: " + this.minSocPercentage + " / MaxSoC: " + this.maxSocPercentage);
+
+	        // Calculate the SoC range and check that it's valid (non-zero and positive)
+	        int socRange = this.maxSocPercentage - this.minSocPercentage;
+	        if (socRange <= 0) {
+	            this.logError(this.log, "Invalid SoC range: MinSoC is greater than or equal to MaxSoC. Exiting listener.");
+	            this.setUseableCapacity(0);
+	            this.setUseableSoc(0);
+	            return;
+	        }
+
+	        // Calculate total capacity in watt-hours
+	        int totalCapacity = value.get();
+
+	        // Calculate the usable SoC within the MinSoC and MaxSoC limits
+	        int useableSoc = soc > this.maxSocPercentage ? 100  // If SoC exceeds maxSoc, set to 100%
+	                : soc < this.minSocPercentage ? 0            // If SoC is below minSoc, set to 0%
+	                : (int) (((double) (soc - this.minSocPercentage) / socRange) * 100);  // Normalize SoC to a 0-100 range
+
+	        useableSoc = Math.max(0, Math.min(useableSoc, 100));  // Ensure usable SoC is between 0 and 100%
+
+	        // Calculate the usable capacity in watt-hours based on the usable SoC
+	        // First, calculate the percentage of capacity that can be used between MinSoC and MaxSoC
+	        int useableCapacityRange = (int) Math.round(totalCapacity * (socRange / 100.0)); // Usable capacity within min and max SoC range
+
+	        // Now calculate the current usable capacity based on the usable SoC
+	        int useableCapacity = (int) Math.round(useableCapacityRange * (useableSoc / 100.0));
 
 	        this.logDebug(this.log, "installListener: SoC: real|usable " + soc + "|" + useableSoc + 
 	                    "[%] Capacity real|usable " + totalCapacity + "|" + useableCapacity + " [Wh]");

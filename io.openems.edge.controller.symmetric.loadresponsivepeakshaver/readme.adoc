@@ -1,0 +1,3 @@
+= io.openems.edge.controller.symmetric.loadresponsivepeakshaver
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.symmetric.loadresponsivepeakshaver[Source Code icon:github[]]

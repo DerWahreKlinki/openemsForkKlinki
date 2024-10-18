@@ -2,6 +2,8 @@ package io.openems.edge.controller.ess.chargedischargelimiter;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -24,6 +26,8 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.controller.api.Controller;
+import io.openems.edge.controller.ess.emergencycapacityreserve.ControllerEssEmergencyCapacityReserve;
+import io.openems.edge.controller.symmetric.loadresponsivepeakshaver.ControllerEssLoadresponsivePeakshaver;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.power.api.Phase;
 import io.openems.edge.ess.power.api.Pwr;
@@ -32,9 +36,6 @@ import io.openems.edge.common.type.TypeUtils;
 
 import io.openems.edge.timedata.api.Timedata;
 
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import io.openems.edge.controller.timeslotpeakshaving.ControllerEssTimeslotPeakshaving;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -61,6 +62,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private Long lastEssActiveChargeEnergy = null;
 	private Integer cumulatedchargedEnergy = 0;
 	private boolean resetChargedEnergy = false;
+	private boolean peakShavingActive = false;
 
 	private int minSoc = 0;
 
@@ -86,11 +88,18 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 
 
+	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	private ManagedSymmetricEss ess;
 
-	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
-			cardinality = ReferenceCardinality.MULTIPLE)
-	private volatile List<ControllerEssTimeslotPeakshaving> ctrlPeakshavers = new CopyOnWriteArrayList<>();
+//	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
+	//           cardinality = ReferenceCardinality.OPTIONAL)
+
+	//private volatile ControllerEssLoadresponsivePeakshaver ctrlArsch;
+
+	@Reference(policyOption = ReferencePolicyOption.GREEDY, //
+			cardinality = ReferenceCardinality.MULTIPLE, //
+			 target = "(enabled=true)")
+	private List<ControllerEssLoadresponsivePeakshaver> ctrlEssLoadresponsivePeakshavers = new CopyOnWriteArrayList<>();
 
 	public ControllerEssChargeDischargeLimiterImpl() {
 		super(//
@@ -105,8 +114,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		super.activate(context, config.id(), config.alias(), config.enabled());
 
 		this.config = config;
-		try {
-			this.ess = this.componentManager.getComponent(config.ess_id());
+
+			//this.ess = this.componentManager.getComponent(config.ess_id());
 			this.minSoc = this.config.minSoc(); // min SoC
 			this.maxSoc = this.config.maxSoc();
 			this.forceChargeSoc = this.config.forceChargeSoc(); // if battery need balancing we charge to this value
@@ -115,7 +124,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.balancingHysteresisTime = this.config.balancingHysteresis();
 			this.debugMode = this.config.debugMode();
 
-			this.log.info("Number of Peakshaving controllers found: " + this.ctrlPeakshavers.size());
+			this.log.info("Number of Peakshaving controllers found: " );
 
 			if (config.energyBetweenBalancingCycles() > 0) {
 				this.balancingWanted = true;
@@ -124,15 +133,14 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
 				return;
 			}
+			
+			if (this.ess != null) {
+				this.log.info("Number of Peakshaving controllers found: ");
+			}
 
 
+			this.log.info("Number of Peakshaving controllers found: ");
 
-			this.log.info("Number of Peakshaving controllers found: " + this.ctrlPeakshavers.size());
-
-		} catch (OpenemsNamedException e) {
-
-			e.printStackTrace();
-		}
 	}
 
 	@Override
@@ -181,6 +189,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// this._setChargedEnergy(123);
 		// this.initializeChargedEnergyFromTimedata();
 		// Remember: Negative values for Charge; positive for Discharge
+		this.log.info("Number of Peakshaving controllers found: " );
+		
 		this.logDebug(this.log,
 				"\nCurrent State " + this.state.getName() + "\n" + "Current SoC " + this.ess.getSoc().get() + "% \n"
 						+ "Current ActivePower " + this.ess.getActivePower().get() + "W \n"
@@ -453,7 +463,14 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 	private boolean isPeakshavingActive() {
 
-		return true;
+	    // Gehe durch alle Peakshaver-Controller
+	    for (ControllerEssLoadresponsivePeakshaver peakshaver : this.ctrlEssLoadresponsivePeakshavers) {
+	    	if(peakshaver.getStateMachine().getValue() == 2 ) {
+	    		return true;
+	    	}
+	    }
+
+		return false;
 	}
 
 }

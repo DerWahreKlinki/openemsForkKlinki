@@ -12,7 +12,5 @@
 			<attribute name="test" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="src" path="/io.openems.edge.controller.symmetric.timeslotpeakshaving"/>
-	<classpathentry kind="src" path="/io.openems.edge.controller.symmetric.loadresponsivepeakshaver"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

@@ -26,8 +26,7 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.controller.api.Controller;
-import io.openems.edge.controller.ess.emergencycapacityreserve.ControllerEssEmergencyCapacityReserve;
-import io.openems.edge.controller.symmetric.loadresponsivepeakshaver.ControllerEssLoadresponsivePeakshaver;
+
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.power.api.Phase;
 import io.openems.edge.ess.power.api.Pwr;
@@ -35,7 +34,7 @@ import io.openems.edge.ess.power.api.Pwr;
 import io.openems.edge.common.type.TypeUtils;
 
 import io.openems.edge.timedata.api.Timedata;
-
+import io.openems.edge.controller.symmetric.thresholdpeakshaver.ControllerEssThresholdPeakshaver;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -62,7 +61,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private Long lastEssActiveChargeEnergy = null;
 	private Integer cumulatedchargedEnergy = 0;
 	private boolean resetChargedEnergy = false;
-	private boolean peakShavingActive = false;
 
 	private int minSoc = 0;
 
@@ -73,7 +71,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private int balancingHysteresisTime = 0;
 	private State state = State.UNDEFINED;
 	private Integer calculatedPower = null;
-	private boolean balancingWanted = false;
+
 
 	private boolean debugMode = false;
 
@@ -86,20 +84,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
 	private volatile Timedata timedata = null;
 
-
-
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	private ManagedSymmetricEss ess;
 
-//	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
-	//           cardinality = ReferenceCardinality.OPTIONAL)
-
-	//private volatile ControllerEssLoadresponsivePeakshaver ctrlArsch;
-
 	@Reference(policyOption = ReferencePolicyOption.GREEDY, //
 			cardinality = ReferenceCardinality.MULTIPLE, //
-			 target = "(enabled=true)")
-	private List<ControllerEssLoadresponsivePeakshaver> ctrlEssLoadresponsivePeakshavers = new CopyOnWriteArrayList<>();
+			target = "(enabled=true)")
+	private List<ControllerEssThresholdPeakshaver> ctrlEssThresholdPeakshavers = new CopyOnWriteArrayList<>();
 
 	public ControllerEssChargeDischargeLimiterImpl() {
 		super(//
@@ -115,31 +106,22 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		this.config = config;
 
-			//this.ess = this.componentManager.getComponent(config.ess_id());
-			this.minSoc = this.config.minSoc(); // min SoC
-			this.maxSoc = this.config.maxSoc();
-			this.forceChargeSoc = this.config.forceChargeSoc(); // if battery need balancing we charge to this value
-			this.forceChargePower = this.config.forceChargePower(); // if battery need balancing we charge to this value
-			this.energyBetweenBalancingCycles = this.config.energyBetweenBalancingCycles() * 1000; // convert kWh to Wh
-			this.balancingHysteresisTime = this.config.balancingHysteresis();
-			this.debugMode = this.config.debugMode();
+		// this.ess = this.componentManager.getComponent(config.ess_id());
+		this.minSoc = this.config.minSoc(); // min SoC
+		this.maxSoc = this.config.maxSoc();
+		this.forceChargeSoc = this.config.forceChargeSoc(); // if battery need balancing we charge to this value
+		this.forceChargePower = this.config.forceChargePower(); // if battery need balancing we charge to this value
+		this.energyBetweenBalancingCycles = this.config.energyBetweenBalancingCycles() * 1000; // convert kWh to Wh
+		this.balancingHysteresisTime = this.config.balancingHysteresis();
+		this.debugMode = this.config.debugMode();
 
-			this.log.info("Number of Peakshaving controllers found: " );
-
-			if (config.energyBetweenBalancingCycles() > 0) {
-				this.balancingWanted = true;
-			}
-
-			if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
-				return;
-			}
-			
-			if (this.ess != null) {
-				this.log.info("Number of Peakshaving controllers found: ");
-			}
+		this.log.info("Number of Peakshaving controllers found: ");
 
 
-			this.log.info("Number of Peakshaving controllers found: ");
+
+		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
+			return;
+		}
 
 	}
 
@@ -150,7 +132,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	}
 
 	/**
-	 * Initialize cumulated energy value from Timedata service.
+	 * The channel for cumulated chargedEnergy is not available at startup or even
+	 * 0. So we have to get the latest value from timedata.
 	 */
 	private void initializeChargedEnergyFromTimedata() {
 
@@ -189,8 +172,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// this._setChargedEnergy(123);
 		// this.initializeChargedEnergyFromTimedata();
 		// Remember: Negative values for Charge; positive for Discharge
-		this.log.info("Number of Peakshaving controllers found: " );
-		
+		this.logDebug(this.log,
+				"Number of Peakshaving controllers found: " + this.ctrlEssThresholdPeakshavers.size());
+
 		this.logDebug(this.log,
 				"\nCurrent State " + this.state.getName() + "\n" + "Current SoC " + this.ess.getSoc().get() + "% \n"
 						+ "Current ActivePower " + this.ess.getActivePower().get() + "W \n"
@@ -213,8 +197,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this._setBalancingRemainingSeconds(0); // no remaining time in normal operation
 			// check if charge energy is below the next balancing cycle. Only balance if
 			// this is desired
-			if (shouldBalance() && this.balancingWanted) {
+			if (shouldBalance()) {
 				this.changeState(State.BALANCING_WANTED);
+				break;
+			}
+			if (this.ess.getSoc().get() < this.minSoc) {
+				this.changeState(State.BELOW_MIN_SOC);
 				break;
 			}
 			// check if SOC is in normal limits
@@ -222,10 +210,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				this.changeState(State.ABOVE_MAX_SOC);
 				break;
 			}
-			if (this.ess.getSoc().get() <= this.minSoc) {
-				this.changeState(State.BELOW_MIN_SOC);
-				break;
-			}
+
 			break;
 		case ERROR:
 			// log errors
@@ -251,6 +236,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			// Charge battery with desired power
 			// Check wether it has reached desired SOC
 
+			if (shouldBalance() == false) {
+				this.changeState(State.NORMAL);
+			}
+			
 			if (ess.getSoc() != null && ess.getSoc().get() > this.forceChargeSoc) { // desired SOC reached, stop
 																					// charging
 				this.changeState(State.BALANCING_ACTIVE);
@@ -326,16 +315,36 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	/**
 	 * Calculates if the battery needs too be balanced. This depends on charged
 	 * energy since the last balancing procedure. If charged energy exceeds
-	 * configured energy method returns true
+	 * configured energy method returns true.
+	 * 
+	 * Balancing is blocked if a Peakshaver is active. "Active" means that it is in
+	 * operating state - not neccessaryly active discharging the battery
 	 * 
 	 * @return if battery should be balanced
 	 */
 	private boolean shouldBalance() {
 		// this.logDebug(this.log, "\nCharged " + this.getActiveChargeEnergy().get() + "
 		// since last balancing cycle");
-		if (this.state == State.BALANCING_ACTIVE || this.getChargedEnergy().get() == null) {
-			return false; // early return
+		if (this.getChargedEnergy().get() == null) {
+			return false;
 		}
+
+		// are there any peakshavers active
+		if (this.isPeakshavingActive() == true) {
+			this.logDebug(this.log, "Balancing is deactivated due to active peakshaving");
+			return false;
+		}
+		
+		// balancing is not desired
+		if(config.energyBetweenBalancingCycles() == 0) {
+			return false;
+		}
+
+		if (this.state == State.BALANCING_ACTIVE) {
+			return false;
+		}
+		
+	
 		if (this.getChargedEnergy().get() > this.energyBetweenBalancingCycles) {
 			return true;
 		}
@@ -462,13 +471,15 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	}
 
 	private boolean isPeakshavingActive() {
+		// ToDo: Checkk other peakshaving controller
+		// check all ess' connected peakshavers if any of them is active
+		for (ControllerEssThresholdPeakshaver peakshaver : this.ctrlEssThresholdPeakshavers) {
 
-	    // Gehe durch alle Peakshaver-Controller
-	    for (ControllerEssLoadresponsivePeakshaver peakshaver : this.ctrlEssLoadresponsivePeakshavers) {
-	    	if(peakshaver.getStateMachine().getValue() == 2 ) {
-	    		return true;
-	    	}
-	    }
+			if (peakshaver.getStateMachine().toString()  == "PEAKSHAVING_ACTIVE" ) {
+				this.logDebug(this.log, "Peakshaving Controller " + peakshaver.alias() + " is active");
+				return true;
+			}
+		}
 
 		return false;
 	}

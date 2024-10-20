@@ -1,4 +1,4 @@
-package io.openems.edge.controller.symmetric.loadresponsivepeakshaver;
+package io.openems.edge.controller.symmetric.thresholdpeakshaver;
 import io.openems.common.types.OptionsEnum;
 
 public enum State implements OptionsEnum {
@@ -7,7 +7,7 @@ public enum State implements OptionsEnum {
 	ERROR(1, "Error State"), //
 	PEAKSHAVING_ACTIVE(2, "Active Peak Shaving"), //
 	CHARGING_ACTIVE(3, "No Active Peak Shaving Since Hysteresis Start"),
-	HYSTERESIS_ACTIVE(4, "No Active Peak Shaving Since Hysteresis Start"),
+	HYSTERESIS_ACTIVE(4, "Waiting. No Active Peak Shaving Since Hysteresis Start"),
 	GRID_POWER_ABOVE_LIMIT(5, "No Active Peak Shaving Since Hysteresis Start");
 
 

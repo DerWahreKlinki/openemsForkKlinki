@@ -116,6 +116,11 @@
                 </Controller_Symmetric_TimeSlot_PeakShaving>
               </ion-col>
 
+              <ion-col *ngSwitchCase="'Controller.ThresholdPeakshaving'" size="12" size-lg="6" class="ion-no-padding">
+                <Controller_Symmetric_Threshold_PeakShaving [componentId]="widget.componentId">
+                </Controller_Symmetric_Threshold_PeakShaving>
+              </ion-col>
+
               <ion-col *ngSwitchCase="'Controller.Ess.DelayedSellToGrid'" size="12" size-lg="6" class="ion-no-padding">
                 <delayedselltogrid [componentId]="widget.componentId"></delayedselltogrid>
               </ion-col>

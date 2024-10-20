@@ -1,8 +1,9 @@
-package io.openems.edge.controller.symmetric.loadresponsivepeakshaver;
+package io.openems.edge.controller.symmetric.thresholdpeakshaver;
 
 import org.junit.Test;
 
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
+
 import io.openems.edge.controller.test.ControllerTest;
 
 public class MyControllerTest {
@@ -11,7 +12,7 @@ public class MyControllerTest {
 
 	@Test
 	public void test() throws Exception {
-		new ControllerTest(new ControllerEssLoadresponsivePeakshaverImpl()) //
+		new ControllerTest(new ControllerEssThresholdPeakshaverImpl()) //
 				.activate(MyConfig.create() //
 						.setId(CTRL_ID) //
 						.build())

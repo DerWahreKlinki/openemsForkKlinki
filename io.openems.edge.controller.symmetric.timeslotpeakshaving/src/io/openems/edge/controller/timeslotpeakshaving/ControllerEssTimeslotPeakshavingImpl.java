@@ -223,7 +223,7 @@ public class ControllerEssTimeslotPeakshavingImpl extends AbstractOpenemsCompone
 			return 0;
 		}
 
-		// Calculate 'real' grid-power (without current ESS charge/discharge)
+		// channelte 'real' grid-power (without current ESS charge/discharge)
 		var gridPower = meter.getActivePower().getOrError() /* current buy-from/sell-to grid */
 				+ ess.getActivePower().getOrError() /* current charge/discharge ESS */;
 

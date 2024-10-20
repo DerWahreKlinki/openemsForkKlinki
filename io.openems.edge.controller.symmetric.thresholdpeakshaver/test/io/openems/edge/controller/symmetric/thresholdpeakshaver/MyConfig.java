@@ -1,6 +1,7 @@
-package io.openems.edge.controller.symmetric.loadresponsivepeakshaver;
+package io.openems.edge.controller.symmetric.thresholdpeakshaver;
 
 import io.openems.common.test.AbstractComponentConfig;
+import io.openems.edge.controller.symmetric.thresholdpeakshaver.Config;
 
 
 @SuppressWarnings("all")
@@ -84,6 +85,12 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	public int hysteresisTime() {
 		// TODO Auto-generated method stub
 		return 0;
+	}
+
+	@Override
+	public boolean debugMode() {
+		// TODO Auto-generated method stub
+		return false;
 	}
 
 //	@Override

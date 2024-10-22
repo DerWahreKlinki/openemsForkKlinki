@@ -74,7 +74,7 @@ import io.openems.edge.solaredge.enums.AcChargePolicy;
 import io.openems.edge.solaredge.enums.ChargeDischargeMode;
 import io.openems.edge.solaredge.charger.SolaredgeDcCharger;
 import io.openems.edge.solaredge.common.AverageCalculator;
-import io.openems.edge.energy.optimizer.Utils;
+
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//

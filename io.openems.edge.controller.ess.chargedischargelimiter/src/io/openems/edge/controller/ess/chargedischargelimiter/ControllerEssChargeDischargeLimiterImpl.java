@@ -72,7 +72,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private State state = State.UNDEFINED;
 	private Integer calculatedPower = null;
 
-
 	private boolean debugMode = false;
 
 	@Reference
@@ -91,6 +90,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			cardinality = ReferenceCardinality.MULTIPLE, //
 			target = "(enabled=true)")
 	private List<ControllerEssThresholdPeakshaver> ctrlEssThresholdPeakshavers = new CopyOnWriteArrayList<>();
+
+	private boolean hybridEss;
 
 	public ControllerEssChargeDischargeLimiterImpl() {
 		super(//
@@ -117,10 +118,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		this.log.info("Number of Peakshaving controllers found: ");
 
-
-
 		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
 			return;
+		}
+
+		if (this.ess != null) {
+			this.isHybridEss(); // Check if controller´s connected to a hybrid system
 		}
 
 	}
@@ -172,8 +175,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// this._setChargedEnergy(123);
 		// this.initializeChargedEnergyFromTimedata();
 		// Remember: Negative values for Charge; positive for Discharge
-		this.logDebug(this.log,
-				"Number of Peakshaving controllers found: " + this.ctrlEssThresholdPeakshavers.size());
+		this.logDebug(this.log, "Number of Peakshaving controllers found: " + this.ctrlEssThresholdPeakshavers.size());
 
 		this.logDebug(this.log,
 				"\nCurrent State " + this.state.getName() + "\n" + "Current SoC " + this.ess.getSoc().get() + "% \n"
@@ -239,7 +241,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			if (shouldBalance() == false) {
 				this.changeState(State.NORMAL);
 			}
-			
+
 			if (ess.getSoc() != null && ess.getSoc().get() > this.forceChargeSoc) { // desired SOC reached, stop
 																					// charging
 				this.changeState(State.BALANCING_ACTIVE);
@@ -334,17 +336,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.logDebug(this.log, "Balancing is deactivated due to active peakshaving");
 			return false;
 		}
-		
+
 		// balancing is not desired
-		if(config.energyBetweenBalancingCycles() == 0) {
+		if (config.energyBetweenBalancingCycles() == 0) {
 			return false;
 		}
 
 		if (this.state == State.BALANCING_ACTIVE) {
 			return false;
 		}
-		
-	
+
 		if (this.getChargedEnergy().get() > this.energyBetweenBalancingCycles) {
 			return true;
 		}
@@ -415,6 +416,37 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 	}
 
+	private void isHybridEss() {
+		try {
+			// Komponente basierend auf der ess_id abrufen
+			var component = this.componentManager.getComponent(config.ess_id().toString());
+
+			// Über die Vererbungskette iterieren, um zu prüfen, ob die Komponente
+			// ess.api.HybridEss implementiert
+			Class<?> clazz = component.getClass();
+			while (clazz != null) {
+				// Alle Interfaces der aktuellen Klasse durchsuchen
+				for (Class<?> iface : clazz.getInterfaces()) {
+					// Überprüfen, ob eines der Interfaces ess.api.HybridEss ist
+					if (iface.getName().equals("ess.api.HybridEss")) {
+						this.hybridEss = true;
+					}
+				}
+				// Zur Superklasse wechseln und weiter prüfen
+				clazz = clazz.getSuperclass();
+			}
+
+		} catch (OpenemsNamedException e) {
+			// Fehlerbehandlung: wenn die Komponente nicht gefunden wird oder eine Ausnahme
+			// auftritt
+			e.printStackTrace();
+		}
+
+		// Wenn die Schnittstelle nicht gefunden wurde, handelt es sich nicht um ein
+		// Hybrid ESS
+
+	}
+
 	/**
 	 * Positive values (discharging) are ignored.
 	 *
@@ -422,6 +454,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * @return whether the state was changed
 	 */
 	private void calculateChargedEnergy() {
+		// We have to check if there is an DC charge energy channel (hybrid ESS)
+
 		// Ess Active Charge Energy directly from ESS (cumulative)
 		Long currentEssActiveChargeEnergy = this.ess.getActiveChargeEnergy().get(); // Cumulative ESS charge energy
 		Integer storedChargedEnergy = this.getChargedEnergy().get(); // Stored charged energy from this controller's
@@ -475,7 +509,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// check all ess' connected peakshavers if any of them is active
 		for (ControllerEssThresholdPeakshaver peakshaver : this.ctrlEssThresholdPeakshavers) {
 
-			if (peakshaver.getStateMachine().toString()  == "PEAKSHAVING_ACTIVE" ) {
+			if (peakshaver.getStateMachine().toString() == "PEAKSHAVING_ACTIVE") {
 				this.logDebug(this.log, "Peakshaving Controller " + peakshaver.alias() + " is active");
 				return true;
 			}

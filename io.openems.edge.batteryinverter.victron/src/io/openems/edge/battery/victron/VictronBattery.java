@@ -1,7 +1,7 @@
 package io.openems.edge.battery.victron;
 
 import io.openems.common.channel.AccessMode;
-
+import io.openems.common.channel.PersistencePriority;
 import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.battery.api.Battery;
@@ -48,7 +48,6 @@ public interface VictronBattery extends Battery, OpenemsComponent {
 		ALARM(Doc.of(Alarm.values()) //
 				.accessMode(AccessMode.READ_ONLY) //
 		), //
-
 
 		LOW_VOLTAGE_ALARM(Doc.of(Alarm.values()) //
 				.accessMode(AccessMode.READ_ONLY) //
@@ -171,10 +170,10 @@ public interface VictronBattery extends Battery, OpenemsComponent {
 		), //
 		DISCHARGED_ENERGY(Doc.of(OpenemsType.INTEGER) //
 				.accessMode(AccessMode.READ_ONLY) //
-				.unit(Unit.KILOWATT_HOURS) //
+				.unit(Unit.KILOWATT_HOURS).persistencePriority(PersistencePriority.HIGH) // ) //
 		), CHARGED_ENERGY(Doc.of(OpenemsType.INTEGER) //
 				.accessMode(AccessMode.READ_ONLY) //
-				.unit(Unit.KILOWATT_HOURS) //
+				.unit(Unit.KILOWATT_HOURS).persistencePriority(PersistencePriority.HIGH) // ) //
 		), TIME_TO_GO(Doc.of(OpenemsType.INTEGER) //
 				.accessMode(AccessMode.READ_ONLY) //
 				.unit(Unit.SECONDS) //
@@ -283,21 +282,17 @@ public interface VictronBattery extends Battery, OpenemsComponent {
 		), //
 		HISTORY_MAX_CELL_VOLTAGE(Doc.of(OpenemsType.INTEGER) //
 				.accessMode(AccessMode.READ_ONLY) //
-				.unit(Unit.VOLT)
-		),
-		
+				.unit(Unit.VOLT)),
+
 		HAS_EMERGENCY_RESERVE(Doc.of(OpenemsType.BOOLEAN) //
-				.accessMode(AccessMode.READ_ONLY)
-		),
+				.accessMode(AccessMode.READ_ONLY)),
 		EMERGENCY_RESERVE_ENABLED(Doc.of(OpenemsType.BOOLEAN) //
-				.accessMode(AccessMode.READ_ONLY)
-		),
+				.accessMode(AccessMode.READ_ONLY)),
 		EMERGENCY_RESERVE_SOC(Doc.of(OpenemsType.INTEGER) //
 				.accessMode(AccessMode.READ_ONLY) //
 				.unit(Unit.PERCENT) //
 		)
-		
-	
+
 		;
 
 		private final Doc doc;
@@ -319,8 +314,7 @@ public interface VictronBattery extends Battery, OpenemsComponent {
 	public default Value<Integer> getCapacityInAmphours() {
 		return this.getCapacityInAmphoursChannel().value();
 	}
-	
-	
+
 	/**
 	 * PLACEHOLDER JAVADOC_COMMENT.
 	 *
@@ -331,7 +325,7 @@ public interface VictronBattery extends Battery, OpenemsComponent {
 	}
 
 	public void setMinSocPercentage(int minSocPercentage);
-	
+
 	/**
 	 * Used for Modbus/TCP Api Controller. Provides a Modbus table for the Channels
 	 * of this Component.

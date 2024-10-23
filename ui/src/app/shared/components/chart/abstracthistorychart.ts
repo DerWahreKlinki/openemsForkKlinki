@@ -314,7 +314,7 @@ export abstract class AbstractHistoryChart implements OnInit, OnDestroy {
       case YAxisType.TIME:
         return translate.instant("Edge.Index.Widgets.Channeltreshold.ACTIVE_TIME_OVER_PERIOD");
       case YAxisType.PERCENTAGE:
-        return translate.instant("General.percentage");
+        return "%";
       case YAxisType.REACTIVE:
         return "var";
       case YAxisType.ENERGY:
@@ -324,9 +324,9 @@ export abstract class AbstractHistoryChart implements OnInit, OnDestroy {
           return "kW";
         }
       case YAxisType.VOLTAGE:
-        return translate.instant("Edge.History.VOLTAGE");
+        return "V";
       case YAxisType.CURRENT:
-        return translate.instant("Edge.History.CURRENT");
+        return "A";
       case YAxisType.NONE:
         return "";
       default:

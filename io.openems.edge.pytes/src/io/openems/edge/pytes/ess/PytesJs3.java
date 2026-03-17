@@ -128,12 +128,12 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		FCAS_MODE_RUNNING_STATUS(Doc.of(INTEGER)
 		// .accessMode(READ_ONLY)
 		),
-		
+/*		
 		SET_PV_SHUTDOWN_SWITCH(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("PV shutdown mode")),
 		SET_GRID_CHARGE_ALLOWED(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("Battery grid charge allowed")),
 		SET_DO_CONTROL(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("DO Control enabled")),
 		SET_OFF_GRID_BATTERY_STANDBY(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("Off-grid battery standby")),
-		
+*/
 		PV_SHUTDOWN_SWITCH(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("PV shutdown mode")),
 		GRID_CHARGE_ALLOWED(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Battery grid charge allowed")),
 		DO_CONTROL(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("DO Control enabled")),
@@ -468,13 +468,13 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				// discharge/export
 				.accessMode(AccessMode.READ_ONLY)),
 
-		SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH(Doc.of(RemoteDispatchRealtimeControlSwitch.values()) // Bitfield: PV shutdown, DO
+		SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH(Doc.of(OpenemsType.INTEGER) // Bitfield: PV shutdown, DO
 																							// control, allow grid
 																							// charge, off-grid battery
 																							// standby
 				.accessMode(AccessMode.WRITE_ONLY)),
 
-		REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH(Doc.of(RemoteDispatchRealtimeControlSwitch.values()) // Bitfield: PV shutdown, DO
+		REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH(Doc.of(OpenemsType.INTEGER) // Bitfield: PV shutdown, DO
 				// control, allow grid
 				// charge, off-grid battery
 				// standby
@@ -582,7 +582,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteDispatchRealtimeControlPowerChannel() {
 		return this.channel(ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER);
 	}
-/*
+
 	// Get realtime control function switch
 	public default Integer getRemoteDispatchRealtimeControlFunctionSwitch() {
 		return this.getRemoteDispatchRealtimeControlFunctionSwitchChannel().value().get();
@@ -591,7 +591,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default Channel<Integer> getRemoteDispatchRealtimeControlFunctionSwitchChannel() {
 		return this.channel(ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
 	}
-*/
+
 	
 	/**
 	 * Sets the remote dispatch realtime control function switch.
@@ -629,6 +629,84 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteDispatchRealtimeControlFunctionSwitchChannel() {
 		return this.channel(ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
 	}	
+	
+	
+	/**
+	 * Gets the Channel for {@link ChannelId#PV_SHUTDOWN_SWITCH}.
+	 *
+	 * @return the Channel
+	 */
+	public default Channel<EnableDisable> getPvShutdownSwitchChannel() {
+		return this.channel(ChannelId.PV_SHUTDOWN_SWITCH);
+	}
+
+	/**
+	 * Gets the PV shutdown switch.
+	 *
+	 * @return the {@link EnableDisable} value
+	 */
+	public default EnableDisable getPvShutdownSwitch() {
+		return this.getPvShutdownSwitchChannel().value().asEnum();
+	}
+
+
+	/**
+	 * Gets the Channel for {@link ChannelId#GRID_CHARGE_ALLOWED}.
+	 *
+	 * @return the Channel
+	 */
+	public default Channel<EnableDisable> getGridChargeAllowedChannel() {
+		return this.channel(ChannelId.GRID_CHARGE_ALLOWED);
+	}
+
+	/**
+	 * Gets if grid charging is allowed.
+	 *
+	 * @return the {@link EnableDisable} value
+	 */
+	public default EnableDisable getGridChargeAllowed() {
+		return this.getGridChargeAllowedChannel().value().asEnum();
+	}
+
+
+	/**
+	 * Gets the Channel for {@link ChannelId#DO_CONTROL}.
+	 *
+	 * @return the Channel
+	 */
+	public default Channel<EnableDisable> getDoControlChannel() {
+		return this.channel(ChannelId.DO_CONTROL);
+	}
+
+	/**
+	 * Gets the DO control state.
+	 *
+	 * @return the {@link EnableDisable} value
+	 */
+	public default EnableDisable getDoControl() {
+		return this.getDoControlChannel().value().asEnum();
+	}
+
+
+	/**
+	 * Gets the Channel for {@link ChannelId#OFF_GRID_BATTERY_STANDBY}.
+	 *
+	 * @return the Channel
+	 */
+	public default Channel<EnableDisable> getOffGridBatteryStandbyChannel() {
+		return this.channel(ChannelId.OFF_GRID_BATTERY_STANDBY);
+	}
+
+	/**
+	 * Gets the off-grid battery standby state.
+	 *
+	 * @return the {@link EnableDisable} value
+	 */
+	public default EnableDisable getOffGridBatteryStandby() {
+		return this.getOffGridBatteryStandbyChannel().value().asEnum();
+	}	
+	
+	
 	
 	/**
 	 * Sets the remote dispatch realtime control switch.

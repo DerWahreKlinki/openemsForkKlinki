@@ -15,7 +15,9 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
         // ---------------------------------------------------------------------
         // PV energy counters (from 33029..33039)
         // ---------------------------------------------------------------------
+        
 
+        // a comment
         PV_ENERGY_TOTAL_KWH(Doc.of(OpenemsType.LONG)
                 .unit(Unit.KILOWATT_HOURS)
                 .accessMode(AccessMode.READ_ONLY)),

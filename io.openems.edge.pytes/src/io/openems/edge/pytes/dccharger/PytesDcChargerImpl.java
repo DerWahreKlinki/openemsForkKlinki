@@ -178,6 +178,7 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 
 						// DC Input Type (number of MPPT strings connected)
 						// decoded to DcInputType enum
+						// DC input string is simply one group of solar panels connected in series
 						m(PytesDcCharger.ChannelId.DC_INPUT_TYPE, new UnsignedWordElement(33048))
 				),
 
@@ -200,7 +201,7 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_2, new UnsignedWordElement(33051),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33052 – DC string 2 current [mA]
+						// DC string 2 current [mA], resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_2, new UnsignedWordElement(33052),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
@@ -208,7 +209,7 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_3, new UnsignedWordElement(33053),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33054 – DC string 3 current [mA]
+						// DC string 3 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_3, new UnsignedWordElement(33054),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
@@ -216,11 +217,11 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_4, new UnsignedWordElement(33055),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33056 – DC string 4 current [mA]
+						// DC string 4 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_4, new UnsignedWordElement(33056),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33057–33058 – Total DC output power / Total PV Power [W]
+						// Total DC output power / Total PV Power [W]
 						// U32 (2 registers), 1 W resolution → no converter needed
 						m(EssDcCharger.ChannelId.ACTUAL_POWER, new UnsignedDoublewordElement(33057))
 				),
@@ -231,35 +232,35 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 				// ---------------------------------------------------------------
 				new FC4ReadInputRegistersTask(33059, Priority.HIGH,
  
-						// reg 33059 – DC string 5 voltage [mV]
+						// DC string 5 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_5, new UnsignedWordElement(33059),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33060 – DC string 5 current [mA]
+						// DC string 5 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_5, new UnsignedWordElement(33060),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33061 – DC string 6 voltage [mV]
+						// DC string 6 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_6, new UnsignedWordElement(33061),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33062 – DC string 6 current [mA]
+						// DC string 6 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_6, new UnsignedWordElement(33062),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33063 – DC string 7 voltage [mV]
+						// DC string 7 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_7, new UnsignedWordElement(33063),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33064 – DC string 7 current [mA]
+						// DC string 7 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_7, new UnsignedWordElement(33064),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33065 – DC string 8 voltage [mV]
+						// DC string 8 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_8, new UnsignedWordElement(33065),
 								ElementToChannelConverter.SCALE_FACTOR_2),
  
-						// reg 33066 – DC string 8 current [mA]
+						// DC string 8 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_8, new UnsignedWordElement(33066),
 								ElementToChannelConverter.SCALE_FACTOR_2)
 				)

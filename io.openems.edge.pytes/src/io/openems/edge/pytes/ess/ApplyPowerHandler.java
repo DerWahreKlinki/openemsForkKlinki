@@ -135,14 +135,12 @@ public class ApplyPowerHandler {
 
 		batteryPowerTarget = batteryPowerTarget * -1;
 
-
-		//batteryPowerTarget = 0;
 		
 		this.ess.debugLog("[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget + " [*10W]. PV Power 1/2 " + pvPower + "/" + pvPower2);
 		
 		ess.setRemoteDispatchRealtimeControlPower(batteryPowerTarget);
 		
-		ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false);
+		
 	}
 
 	// ========================= Helper =========================
@@ -172,6 +170,8 @@ public class ApplyPowerHandler {
 		 */
 		ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL); // Battery Charge/Discharge Control
 
+		ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby
+		
 	}
 
 }

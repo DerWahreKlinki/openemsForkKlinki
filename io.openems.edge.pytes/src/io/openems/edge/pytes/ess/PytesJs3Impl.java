@@ -322,31 +322,32 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 			// BIT00-01: PV shutdown switch
 			if (pvShutdownBits == 1) {
-				this.channel(PytesJs3.ChannelId.PV_SHUTDOWN_SWITCH).setNextValue(EnableDisable.DISABLE);
+				this._setPvShutdownSwitch(EnableDisable.DISABLE);
+
 			} else if (pvShutdownBits == 2) {
-				this.channel(PytesJs3.ChannelId.PV_SHUTDOWN_SWITCH).setNextValue(EnableDisable.ENABLE);
+				this._setPvShutdownSwitch(EnableDisable.ENABLE);
 			}
 
 			// BIT02-03: DO control
 			if (doControlBits == 1) {
-				this.channel(PytesJs3.ChannelId.DO_CONTROL).setNextValue(EnableDisable.DISABLE);
+				this._setDoControl(EnableDisable.DISABLE);
 			} else if (doControlBits == 2) {
-				this.channel(PytesJs3.ChannelId.DO_CONTROL).setNextValue(EnableDisable.ENABLE);
+				this._setDoControl(EnableDisable.ENABLE);
 			}
 
 			// BIT04-05: Allow grid charge
 			// 1 = Allow, 2 = Not allow
 			if (gridChargeBits == 1) {
-				this.channel(PytesJs3.ChannelId.GRID_CHARGE_ALLOWED).setNextValue(EnableDisable.ENABLE);
+				this._setGridChargeAllowed(EnableDisable.ENABLE);
 			} else if (gridChargeBits == 2) {
-				this.channel(PytesJs3.ChannelId.GRID_CHARGE_ALLOWED).setNextValue(EnableDisable.DISABLE);
+				this._setGridChargeAllowed(EnableDisable.DISABLE);
 			}
 
 			// BIT06-07: Off-grid battery standby
 			if (offGridBatteryStandbyBits == 1) {
-				this.channel(PytesJs3.ChannelId.OFF_GRID_BATTERY_STANDBY).setNextValue(EnableDisable.DISABLE);
+				this._setOffGridBatteryStandby(EnableDisable.DISABLE);
 			} else if (offGridBatteryStandbyBits == 2) {
-				this.channel(PytesJs3.ChannelId.OFF_GRID_BATTERY_STANDBY).setNextValue(EnableDisable.ENABLE);
+				this._setOffGridBatteryStandby(EnableDisable.ENABLE);				
 			}
 		});
 
@@ -416,6 +417,17 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 					+ this.channel(PytesJs3.ChannelId.FAULT_CODE_07).value().asString()
 					+ "\nStorageControlSwitchingValue="
 					+ this.channel(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE).value().asString()
+					
+					
+					+ "\nPvShutdownSwitch="
+					+ this.getPvShutdownSwitch().toString()
+					+ "\nGrid charge Allowed="
+					+ this.getGridChargeAllowed().toString()
+					+ "\nDO Control="
+					+ this.getDoControl().toString()
+					+ "\nOffGrid Battery Standby="
+					+ this.getOffGridBatteryStandby().toString()
+					
 
 					// Appendix 4 decoded fault bits REG1 (33116)
 					+ "\nFaultReg1_NoGrid=" + this.channel(PytesJs3.ChannelId.FAULT_REG1_NO_GRID).value().asString()

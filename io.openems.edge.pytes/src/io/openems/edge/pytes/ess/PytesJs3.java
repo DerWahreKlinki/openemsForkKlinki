@@ -134,10 +134,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		SET_DO_CONTROL(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("DO Control enabled")),
 		SET_OFF_GRID_BATTERY_STANDBY(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("Off-grid battery standby")),
 */
-		PV_SHUTDOWN_SWITCH(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("PV shutdown mode")),
-		GRID_CHARGE_ALLOWED(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Battery grid charge allowed")),
-		DO_CONTROL(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("DO Control enabled")),
-		OFF_GRID_BATTERY_STANDBY(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Off-grid battery standby")),		
+		PV_SHUTDOWN_SWITCH(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("PV shutdown mode")),
+		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Battery grid charge allowed")),
+		DO_CONTROL(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("DO Control enabled")),
+		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Off-grid battery standby")),		
 
 		SETTING_FLAG_BIT(Doc.of(INTEGER).accessMode(READ_ONLY)),
 
@@ -648,6 +648,15 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default EnableDisable getPvShutdownSwitch() {
 		return this.getPvShutdownSwitchChannel().value().asEnum();
 	}
+	
+	/**
+	 * Internal method to set the PV shutdown switch.
+	 *
+	 * @param value the {@link EnableDisable} value
+	 */
+	public default void _setPvShutdownSwitch(EnableDisable value) {
+		this.getPvShutdownSwitchChannel().setNextValue(value);
+	}	
 
 
 	/**
@@ -668,6 +677,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.getGridChargeAllowedChannel().value().asEnum();
 	}
 
+	/**
+	 * Internal method to set the grid charging allowed channel
+	 *
+	 * @param value the {@link EnableDisable} value
+	 */
+	public default void _setGridChargeAllowed(EnableDisable value) {
+		this.getGridChargeAllowedChannel().setNextValue(value);
+	}	
 
 	/**
 	 * Gets the Channel for {@link ChannelId#DO_CONTROL}.
@@ -686,6 +703,16 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default EnableDisable getDoControl() {
 		return this.getDoControlChannel().value().asEnum();
 	}
+	
+	/**
+	 * Internal method to set the DO control state channel.
+	 *
+	 * @param value the {@link EnableDisable} value
+	 */
+	public default void _setDoControl(EnableDisable value) {
+		this.getDoControlChannel().setNextValue(value);
+	}
+	
 
 
 	/**
@@ -706,7 +733,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.getOffGridBatteryStandbyChannel().value().asEnum();
 	}	
 	
-	
+	/**
+	 * Internal method to set the off-grid battery standby state.
+	 *
+	 * @param value the {@link EnableDisable} value
+	 */
+	public default void _setOffGridBatteryStandby(EnableDisable value) {
+		this.getOffGridBatteryStandbyChannel().setNextValue(value);
+	}	
 	
 	/**
 	 * Sets the remote dispatch realtime control switch.

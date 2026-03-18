@@ -170,6 +170,7 @@ public class ApplyPowerHandler {
 		 */
 		ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL); // Battery Charge/Discharge Control
 
+		// ToDo: make configurable
 		ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby
 		
 	}

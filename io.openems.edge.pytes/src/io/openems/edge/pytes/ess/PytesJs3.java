@@ -1,14 +1,9 @@
 package io.openems.edge.pytes.ess;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
-import static io.openems.common.channel.AccessMode.READ_WRITE;
-import static io.openems.common.channel.AccessMode.WRITE_ONLY;
 import static io.openems.common.types.OpenemsType.INTEGER;
-import static io.openems.common.channel.PersistencePriority.HIGH;
 import static io.openems.common.channel.PersistencePriority.LOW;
-
 import org.osgi.service.event.EventHandler;
-
 import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.Unit;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
@@ -18,6 +13,7 @@ import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.WriteChannel;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.pytes.enums.WorkState;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.Appendix2;
@@ -31,6 +27,9 @@ import io.openems.common.channel.Level;
 public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
+		
+		// Internal Statemachine
+		WORK_STATE(Doc.of(WorkState.values()).accessMode(AccessMode.READ_WRITE)),		
 
 		STARTER_BATTERY_VOLTAGE(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
@@ -495,6 +494,35 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 			return this.doc;
 		}
 	}
+	
+	
+
+	// -----------------------------------------------------------------------------
+	// Helpers: WorkState (internal state)
+	// -----------------------------------------------------------------------------
+
+	public default Channel<WorkState> getWorkStateChannel() {
+		return this.channel(ChannelId.WORK_STATE);
+	}
+
+	public default WorkState getWorkState() {
+		return this.getWorkStateChannel().value().asEnum();
+	}
+
+	/**
+	 * Internal method to set {@link WorkState} of this component.
+	 *
+	 * <p>
+	 * The value is written to the corresponding Channel using
+	 * {@link io.openems.edge.common.channel.Channel#setNextValue(Object)} and will
+	 * be applied in the next processing cycle.
+	 * </p>
+	 *
+	 * @param value the new {@link WorkState} to set
+	 */
+	public default void _setWorkState(WorkState value) {
+		this.getWorkStateChannel().setNextValue(value);
+	}	
 
 	// Set remote dispatch switch
 	/**

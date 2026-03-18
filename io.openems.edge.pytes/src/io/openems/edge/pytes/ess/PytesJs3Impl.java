@@ -5,6 +5,8 @@ import static org.osgi.service.component.annotations.ReferenceCardinality.MANDAT
 import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
 import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
+import java.time.LocalDateTime;
+
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -28,7 +30,6 @@ import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
-import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.SignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
@@ -41,6 +42,7 @@ import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
+import io.openems.edge.pytes.enums.WorkState;
 import io.openems.edge.ess.api.AsymmetricEss;
 import io.openems.edge.ess.api.HybridEss;
 import io.openems.edge.ess.api.ManagedAsymmetricEss;
@@ -90,6 +92,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	private volatile ApplyPowerHandler applyPowerHandler = null;
 	private volatile AllowedChargeDischargeHandler allowedChargeDischargeHandler = null;
+	
+	private LocalDateTime lastDefinedWorkStateTime = LocalDateTime.now();	
 
 	private final Logger log = LoggerFactory.getLogger(PytesJs3Impl.class);
 	private Config config = null;
@@ -139,6 +143,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				this.allowedChargeDischargeHandler.accept(this.componentManager);
 			}
 			this.decodeFaultBits();
+			this.defineWorkState();
 			break;
 		}
 	}
@@ -299,6 +304,46 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				));
 
 	}
+	
+	private void defineWorkState() {
+		if (this.getWorkState() != WorkState.NORMAL || this.lastDefinedWorkStateTime == null) {
+			
+			if (this.getState().getValue() != 0 || this.battery == null || this.charger == null || this.battery.getState().getValue() != 0 || this.charger.getState().getValue() != 0 ) {
+				this.changeState(WorkState.WARNING);
+				this.logWarn(log, "ESS not ready yet. Either battery or Charger missing or not fully initialized");
+				return;
+			}
+			
+			// ToDo: Error handling, emergency states etc.
+			
+			this._setWorkState(WorkState.NORMAL);
+				
+			
+		}
+	}
+	
+	/**
+	 * Changes the state if hysteresis time passed, to avoid too quick changes.
+	 *
+	 * @param nextState the target state
+	 * @return whether the state was changed
+	 */
+	private boolean changeState(WorkState nextState) {
+		var now = LocalDateTime.now();
+
+		// avoid early transistions
+		if (!now.minusSeconds(20).isAfter(this.lastDefinedWorkStateTime)) {
+			return false;
+		}
+		this.lastDefinedWorkStateTime = now;
+
+		if (this.getWorkState() == nextState) {
+			return false;
+		}
+
+		this._setWorkState(nextState);
+		return true;
+	}	
 
 	private void installListener() {
 

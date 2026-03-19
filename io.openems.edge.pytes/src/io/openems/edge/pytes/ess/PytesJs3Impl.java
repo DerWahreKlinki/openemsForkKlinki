@@ -54,6 +54,7 @@ import io.openems.edge.ess.power.api.Power;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
+import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.timedata.api.Timedata;
 
 @Designate(ocd = Config.class, factory = true)
@@ -996,7 +997,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	private void setPowerHandlers() {
 		if (this.battery != null && this.charger != null) {
 			this.applyPowerHandler = new ApplyPowerHandler(this, this.battery, this.charger);
-			this.allowedChargeDischargeHandler = new AllowedChargeDischargeHandler(this, this.battery, this.charger);
+			this.allowedChargeDischargeHandler = new AllowedChargeDischargeHandler(this, this.battery, this.charger, this.config.essSetpoint());
 		} else {
 			this.applyPowerHandler = null;
 			this.allowedChargeDischargeHandler = null;

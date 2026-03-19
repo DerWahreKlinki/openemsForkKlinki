@@ -88,9 +88,7 @@ public class ApplyPowerHandler {
 			return;
 		}		
 
-		int pvPower2 = essActivePower - essDcDischargePower;
-		 pvPower2 = pvPower;
-		
+	
 		// guards for AC
 		maxApparentPower = Math.min(maxApparentPower, configuredMaxApparentPower);
 		if (activePowerTarget > 0) { // discharging
@@ -102,7 +100,7 @@ public class ApplyPowerHandler {
 		if (essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL) {
 			// guards for DC
 			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);			
-			batteryPowerTarget = activePowerTarget - pvPower2;	
+			batteryPowerTarget = activePowerTarget - pvPower;	
 			sign = -1; // negative setpoint at batteryControl setpoint
 		} else {
 			batteryPowerTarget = activePowerTarget; // Testing
@@ -120,7 +118,9 @@ public class ApplyPowerHandler {
 
 		this.targetBatteryPowerAvg.addValue(batteryPowerTarget);
 
-		int averageBatteryTargetPower = this.targetBatteryPowerAvg.getAverage();
+		// int averageBatteryTargetPower = this.targetBatteryPowerAvg.getAverage();
+		
+		int averageBatteryTargetPower = batteryPowerTarget; // Testing
 
 		batteryPowerTarget = (int) Math.round(averageBatteryTargetPower / 10.0); // Applied value has to be diveded by
 																					// 10
@@ -146,7 +146,7 @@ public class ApplyPowerHandler {
 		batteryPowerTarget = batteryPowerTarget * sign; // Testing
 
 		
-		this.ess.debugLog("[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget + " [*10W]. PV Power 1/2 " + pvPower + "/" + pvPower2);
+		this.ess.debugLog("[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget + " [*10W]. PV Power 1/2 " + pvPower );
 		
 		//ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.GRID_POINT_CONTROL); // Battery Charge/Discharge Control
 		ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); // Battery Charge/Discharge Control		

@@ -9,13 +9,14 @@ import io.openems.edge.common.type.TypeUtils;
 import io.openems.edge.ess.generic.common.AbstractAllowedChargeDischargeHandler;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
+import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 
 public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischargeHandler<PytesJs3Impl> {
 
 	private PytesBattery battery;
 	private final Logger log;
 
-	public AllowedChargeDischargeHandler(PytesJs3Impl parent, PytesBattery battery, PytesDcCharger dcCharger) {
+	public AllowedChargeDischargeHandler(PytesJs3Impl parent, PytesBattery battery, PytesDcCharger dcCharger, RemoteDispatchRealtimeControlSwitch essSetpoint) {
 		super(parent);
 		this.battery = battery;
 		this.log = this.parent.getLogger();

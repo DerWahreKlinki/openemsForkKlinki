@@ -230,7 +230,7 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 				// DC String Voltages and Currents – strings 5–8 (reg 33059..33066)
 				// Priority HIGH – real-time PV monitoring
 				// ---------------------------------------------------------------
-				new FC4ReadInputRegistersTask(33059, Priority.HIGH,
+				new FC4ReadInputRegistersTask(33059, Priority.LOW,
  
 						// DC string 5 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_5, new UnsignedWordElement(33059),

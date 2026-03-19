@@ -3,6 +3,8 @@ package io.openems.edge.pytes.ess;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
+import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
+
 @ObjectClassDefinition(//
 		name = "Pytes Hybrid Inverter", //
 		description = "Pytes Hybrid Inverter")
@@ -17,6 +19,8 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
 	boolean enabled() default true;
 
+	@AttributeDefinition(name = "ESS SetPoint", description = "SetPoint")
+	RemoteDispatchRealtimeControlSwitch essSetpoint() default RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
 	@AttributeDefinition(name = "Max. Apparent Power", description = "Inverter´s apparent power limit")
 	int maxApparentPower() default 10000;	

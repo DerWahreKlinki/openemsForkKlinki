@@ -1,6 +1,7 @@
 package io.openems.edge.pytes.ess;
 
 import io.openems.common.test.AbstractComponentConfig;
+import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.ess.Config;
 
 @SuppressWarnings("all")
@@ -72,6 +73,12 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	public boolean readOnlyMode() {
 		// TODO Auto-generated method stub
 		return false;
+	}
+
+	@Override
+	public RemoteDispatchRealtimeControlSwitch essSetpoint() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 

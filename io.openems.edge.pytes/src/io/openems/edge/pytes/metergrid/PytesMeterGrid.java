@@ -1,21 +1,12 @@
 package io.openems.edge.pytes.metergrid;
 
 import io.openems.common.channel.AccessMode;
-import io.openems.common.channel.PersistencePriority;
 import io.openems.common.channel.Unit;
-
-import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.Doc;
-import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
-import io.openems.edge.common.channel.IntegerWriteChannel;
-import io.openems.edge.common.channel.LongReadChannel;
 import io.openems.edge.common.channel.value.Value;
-
-
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
-
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.meter.api.ElectricityMeter;
 import io.openems.edge.pytes.enums.AlarmCode;
@@ -84,8 +75,8 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		
 		METER1_TYPE_CODE(Doc.of(MeterTypeCode.values())), // e.g. Eastron, generic, etc
 
-		// Register 43073 – METER/CT Position (Appendix 12 bitmask, R/W)
-		// Raw U16 word – kept for diagnostics / write-back
+		// Register 43073 ï¿½ METER/CT Position (Appendix 12 bitmask, R/W)
+		// Raw U16 word ï¿½ kept for diagnostics / write-back
 		METER_CT_POSITION_RAW(Doc.of(OpenemsType.INTEGER) //
 				.accessMode(AccessMode.READ_WRITE)),
  

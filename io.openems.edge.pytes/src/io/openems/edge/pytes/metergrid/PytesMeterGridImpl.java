@@ -1,8 +1,6 @@
 package io.openems.edge.pytes.metergrid;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -45,7 +43,6 @@ import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.meter.api.ElectricityMeter;
-import io.openems.edge.pytes.enums.MeterDeviceType;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
@@ -189,7 +186,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 		} else {
 */		
 			// External meter / EPM Grid Electrical (33250..33282 / 33286)
-			modbusProtocol.addTask(new FC4ReadInputRegistersTask(33251, Priority.LOW,
+			modbusProtocol.addTask(new FC4ReadInputRegistersTask(33251, Priority.HIGH,
 
 					m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33251),
 							ElementToChannelConverter.SCALE_FACTOR_2),

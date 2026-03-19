@@ -950,7 +950,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		logDebug(this.log, "ApplyPower: ActivePowerTarget = " + targetActivePower);
 
 		if (this.applyPowerHandler != null) {
-			this.applyPowerHandler.apply(targetActivePower, reactivePower, this.config.maxApparentPower());
+			this.applyPowerHandler.apply(targetActivePower, reactivePower, this.config.maxApparentPower(),this.config.essSetpoint());
 		}
 
 	}

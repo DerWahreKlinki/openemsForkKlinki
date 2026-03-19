@@ -28,7 +28,7 @@ public class ApplyPowerHandler {
 		this.log = ess.getLogger();
 	}
 
-	public void apply(int activePowerTarget, int reactivePower, int configuredMaxApparentPower)
+	public void apply(int activePowerTarget, int reactivePower, int configuredMaxApparentPower, RemoteDispatchRealtimeControlSwitch essSetpoint)
 			throws OpenemsNamedException {
 
 		// --- Guards ---
@@ -43,6 +43,8 @@ public class ApplyPowerHandler {
 		 */
 		Integer maxAllowedChargePower = this.ess.getAllowedChargePower().get();
 		Integer maxAllowedDischargePower = this.ess.getAllowedDischargePower().get(); // includes PV
+		int maxAllowedBatteryDischargePower = 0;
+		int sign = 1;
 
 		Integer maxApparentPower = this.ess.getMaxApparentPower().get();
 
@@ -87,6 +89,7 @@ public class ApplyPowerHandler {
 		}		
 
 		int pvPower2 = essActivePower - essDcDischargePower;
+		 pvPower2 = pvPower;
 		
 		// guards for AC
 		maxApparentPower = Math.min(maxApparentPower, configuredMaxApparentPower);
@@ -96,10 +99,16 @@ public class ApplyPowerHandler {
 			activePowerTarget = Math.max(activePowerTarget, -maxApparentPower);
 		}		
 		
-		batteryPowerTarget = activePowerTarget - pvPower2;
+		if (essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL) {
+			// guards for DC
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);			
+			batteryPowerTarget = activePowerTarget - pvPower2;	
+			sign = -1; // negative setpoint at batteryControl setpoint
+		} else {
+			batteryPowerTarget = activePowerTarget; // Testing
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);		// Testing		
+		}
 
-		// guards for DC
-		int maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);		
 		
 
 		// DC-side clamp
@@ -133,11 +142,14 @@ public class ApplyPowerHandler {
 		 * 
 		 */
 
-		batteryPowerTarget = batteryPowerTarget * -1;
+		//batteryPowerTarget = batteryPowerTarget * -1;
+		batteryPowerTarget = batteryPowerTarget * sign; // Testing
 
 		
 		this.ess.debugLog("[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget + " [*10W]. PV Power 1/2 " + pvPower + "/" + pvPower2);
 		
+		//ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.GRID_POINT_CONTROL); // Battery Charge/Discharge Control
+		ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); // Battery Charge/Discharge Control		
 		ess.setRemoteDispatchRealtimeControlPower(batteryPowerTarget);
 		
 		
@@ -152,23 +164,6 @@ public class ApplyPowerHandler {
 		ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);
 		ess.setRemoteDispatchTimeout(5); // in Minutes
 		ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0
-													// -> No
-													// import
-													// /
-													// export
-													// limitation
-
-		// 44103 - not effective if 44102 == 0
-		// ess.setRemoteDispatchSystemImportLimit(150);
-		// 44104 - not effective if 44102 == 0
-		// ess.setRemoteDispatchSystemExportLimit(150);
-
-		/*
-		 * 1: Battery Standby Control(No Charge/No Discharge at all) 2: Battery
-		 * Charge/Discharge Control 3: Grid Connection Point Import/Export Control 4. AC
-		 * Grid Port Import/Export Control Default :1 , others invalid
-		 */
-		ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL); // Battery Charge/Discharge Control
 
 		// ToDo: make configurable
 		ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby

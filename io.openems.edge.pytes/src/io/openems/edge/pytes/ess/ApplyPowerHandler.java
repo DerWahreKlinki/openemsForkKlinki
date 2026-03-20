@@ -146,7 +146,12 @@ public class ApplyPowerHandler {
 		batteryPowerTarget = batteryPowerTarget * sign; // Testing
 
 		
-		this.ess.debugLog("[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget + " [*10W]. PV Power 1/2 " + pvPower );
+		this.ess.debugLog(""
+				+ "\n[ApplyPower] TargetPower: " + activePowerTarget
+				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower 
+				+ "\n[ApplyPower] ESS DischargePower: " + essDcDischargePower
+				+ "\n[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget
+				+ "\n[ApplyPower]   PV Power 1/2 " + pvPower );
 		
 		//ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.GRID_POINT_CONTROL); // Battery Charge/Discharge Control
 		ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); // Battery Charge/Discharge Control		

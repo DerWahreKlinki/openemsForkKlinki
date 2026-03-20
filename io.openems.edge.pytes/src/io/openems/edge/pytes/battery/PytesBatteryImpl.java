@@ -307,7 +307,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
  
 						// Battery Power [W], resolution: 1 W
 						// Positive = charging, negative = discharging
-						m(PytesBattery.ChannelId.DC_DISCHARGE_POWER, new SignedDoublewordElement(33149))
+						m(PytesBattery.ChannelId.DC_DISCHARGE_POWER_UNSIGNED, new SignedDoublewordElement(33149))
 				)								
 				
 		);

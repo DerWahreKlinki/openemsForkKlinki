@@ -222,6 +222,16 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		DC_DISCHARGE_POWER(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.unit(Unit.WATT)),
+		
+		/**
+		 * Battery Power / DC Discharge Power. Attention! Only positive values. 
+		 * Battery power direction needed for calculating DC_DISCHARGE_POWER
+		 * discharging. Datasheet: 1 W resolution. Unit: W
+		 */
+		DC_DISCHARGE_POWER_UNSIGNED(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)),
+		
 
 		;
 
@@ -381,9 +391,11 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	public default void _setBmsBatteryFaultStatus02(Integer value) {
 		this.getBmsBatteryFaultStatus02Channel().setNextValue(value);
 	}
+	
 
 	/**
 	 * Gets the Channel for {@link ChannelId#DC_DISCHARGE_POWER}.
+	 * Internal channel!
 	 *
 	 * @return the Channel
 	 */
@@ -408,6 +420,35 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	 */
 	public default void _setDcDischargePower(Integer value) {
 		this.getDcDischargePowerChannel().setNextValue(value);
+	}	
+
+	/**
+	 * Gets the Channel for {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED}.
+	 * Attention! Values from modbus registers come unsigned
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getDcDischargePowerUnsignedChannel() {
+		return this.channel(ChannelId.DC_DISCHARGE_POWER_UNSIGNED);
+	}
+
+	/**
+	 * Gets the DC Discharge Power in [W]. See {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Integer> getDcDischargePowerUnsigned() {
+		return this.getDcDischargePowerUnsignedChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED} Channel.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setDcDischargePowerUnsigned(Integer value) {
+		this.getDcDischargePowerUnsignedChannel().setNextValue(value);
 	}
 
 	/**

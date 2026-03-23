@@ -10,12 +10,15 @@ import io.openems.common.channel.Unit;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.common.channel.Doc;
+import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.WriteChannel;
+import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.pytes.enums.WorkState;
 import io.openems.edge.pytes.battery.PytesBattery;
+import io.openems.edge.pytes.battery.PytesBattery.ChannelId;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.Appendix2;
 import io.openems.edge.pytes.enums.Appendix8;
@@ -770,8 +773,6 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default void _setDoControl(EnableDisable value) {
 		this.getDoControlChannel().setNextValue(value);
 	}
-	
-
 
 	/**
 	 * Gets the Channel for {@link ChannelId#OFF_GRID_BATTERY_STANDBY}.
@@ -856,7 +857,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetMaxChargeSocChannel() {
 		return this.channel(ChannelId.SET_MAX_CHARGE_SOC);
 	}
-
+	
+	
+	// Overdischarge SoC
 	/**
 	 * Sets the Overdischarge SoC (reg 43011).
 	 * Valid range: 5–40%. Must be >= Force Charge SoC (reg 43018). Default: 20%.
@@ -871,7 +874,27 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetOverdischargeSocChannel() {
 		return this.channel(ChannelId.SET_OVERDISCHARGE_SOC);
 	}
+	
+	/**
+	 * Gets the Channel for {@link ChannelId#SET_OVERDISCHARGE_SOC}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getOverDischargeSocChannel() {
+		return this.channel(ChannelId.SET_OVERDISCHARGE_SOC);
+	}
 
+	/**
+	 * Gets the DC Discharge Power in [W]. See {@link ChannelId#DC_DISCHARGE_POWER}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Integer> getOverDischargeSoc() {
+		return this.getOverDischargeSocChannel().value();
+	}	
+	
+
+	// FORCE CHARGE SOC
 	/**
 	 * Sets the Force Charge SoC (reg 43018).
 	 * Valid range: 4% up to reg 43011. Must be <= Overdischarge SoC. Default: 10%.
@@ -886,7 +909,26 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetForceChargeSocChannel() {
 		return this.channel(ChannelId.SET_FORCE_CHARGE_SOC);
 	}
+	
+	/**
+	 * Gets the Channel for {@link ChannelId#SET_FORCE_CHARGE_SOC}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getForceChargeSocChannel() {
+		return this.channel(ChannelId.SET_FORCE_CHARGE_SOC);
+	}
 
+	/**
+	 * Gets the DC Discharge Power in [W]. See {@link ChannelId#DC_DISCHARGE_POWER}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Integer> getForceChargeSoc() {
+		return this.getForceChargeSocChannel().value();
+	}	
+
+	// 
 	/**
 	 * Adds Battery to ESS hybrid system.
 	 * 

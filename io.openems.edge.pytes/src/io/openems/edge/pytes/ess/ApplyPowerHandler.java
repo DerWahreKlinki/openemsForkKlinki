@@ -7,6 +7,7 @@ import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
+import io.openems.edge.pytes.enums.WorkState;
 
 import org.slf4j.Logger;
 
@@ -34,6 +35,11 @@ public class ApplyPowerHandler {
 		// --- Guards ---
 		if (!ess.isManaged()) {
 			log.debug("[ApplyPower] ESS not managed – skipping.");
+			return;
+		}
+		
+		if (ess.getWorkState() != WorkState.NORMAL) {
+			log.warn("ESS not in normal mode. Skipping ApplyPower");
 			return;
 		}
 		/*

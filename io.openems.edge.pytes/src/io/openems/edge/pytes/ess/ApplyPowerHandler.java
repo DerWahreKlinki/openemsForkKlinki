@@ -148,6 +148,7 @@ public class ApplyPowerHandler {
 		
 		this.ess.debugLog(""
 				+ "\n[ApplyPower] TargetPower: " + activePowerTarget
+				+ "\n[ApplyPower] EssPower: " + essActivePower
 				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower 
 				+ "\n[ApplyPower] ESS DischargePower: " + essDcDischargePower
 				+ "\n[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget

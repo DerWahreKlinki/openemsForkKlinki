@@ -54,7 +54,6 @@ import io.openems.edge.ess.power.api.Power;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
-import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.timedata.api.Timedata;
 
 @Designate(ocd = Config.class, factory = true)
@@ -185,6 +184,24 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								new SignedDoublewordElement(44106)),
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH,
 								new UnsignedWordElement(44108))),
+				
+				
+				// Write new values to inverter
+				// Each register gets its own task because they are not contiguous
+				new FC16WriteRegistersTask(43010,
+						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC,    new UnsignedWordElement(43010)),
+						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
+						new DummyRegisterElement(43012, 43017),
+						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC,  new UnsignedWordElement(43018))),					
+				
+				// Read current values back from inverter
+				new FC3ReadRegistersTask(43010, Priority.LOW,
+						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC,    new UnsignedWordElement(43010)),
+						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
+				new DummyRegisterElement(43012, 43017),
+						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC,  new UnsignedWordElement(43018))),
+
+			
 
 				new FC4ReadInputRegistersTask(33067, Priority.HIGH, //
 
@@ -300,28 +317,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						new DummyRegisterElement(33126, 33131),
 
-						m(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE, new UnsignedWordElement(33132))
+						m(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE, new UnsignedWordElement(33132)))
 
-				),
 
-				// Read current values back from inverter
-				new FC3ReadRegistersTask(43010, Priority.LOW,
-						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC,    new UnsignedWordElement(43010)),
-						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011))),
-
-				new FC3ReadRegistersTask(43018, Priority.LOW,
-						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC,  new UnsignedWordElement(43018))),
-
-				// Write new values to inverter
-				// Each register gets its own task because they are not contiguous
-				new FC16WriteRegistersTask(43010,
-						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC,    new UnsignedWordElement(43010))),
-
-				new FC16WriteRegistersTask(43011,
-						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011))),
-
-				new FC16WriteRegistersTask(43018,
-						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC,  new UnsignedWordElement(43018)))
 			);
 
 	}

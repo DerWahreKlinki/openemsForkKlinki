@@ -302,7 +302,27 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						m(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE, new UnsignedWordElement(33132))
 
-				));
+				),
+
+				// Read current values back from inverter
+				new FC3ReadRegistersTask(43010, Priority.LOW,
+						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC,    new UnsignedWordElement(43010)),
+						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011))),
+
+				new FC3ReadRegistersTask(43018, Priority.LOW,
+						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC,  new UnsignedWordElement(43018))),
+
+				// Write new values to inverter
+				// Each register gets its own task because they are not contiguous
+				new FC16WriteRegistersTask(43010,
+						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC,    new UnsignedWordElement(43010))),
+
+				new FC16WriteRegistersTask(43011,
+						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011))),
+
+				new FC16WriteRegistersTask(43018,
+						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC,  new UnsignedWordElement(43018)))
+			);
 
 	}
 	

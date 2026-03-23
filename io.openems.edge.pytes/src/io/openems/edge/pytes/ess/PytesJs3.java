@@ -1,6 +1,7 @@
 package io.openems.edge.pytes.ess;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
+import static io.openems.common.channel.AccessMode.READ_WRITE;
 import static io.openems.common.types.OpenemsType.INTEGER;
 import static io.openems.common.channel.PersistencePriority.LOW;
 import org.osgi.service.event.EventHandler;
@@ -28,6 +29,35 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		
+		/**
+		 * Max Charge SoC (reg 43010).
+		 * The inverter stops charging when the battery reaches this level.
+		 * Default: 100%, Range: 80–100%, resolution 1%.
+		 */
+		SET_MAX_CHARGE_SOC(Doc.of(INTEGER)
+				.accessMode(READ_WRITE)
+				.unit(Unit.PERCENT)),
+
+		/**
+		 * Overdischarge SoC (reg 43011).
+		 * The inverter stops discharging when the battery reaches this level.
+		 * Default: 20%, Range: 5–40%, resolution 1%.
+		 * Must always be >= reg 43018 (Force Charge SoC).
+		 */
+		SET_OVERDISCHARGE_SOC(Doc.of(INTEGER)
+				.accessMode(READ_WRITE)
+				.unit(Unit.PERCENT)),
+
+		/**
+		 * Force Charge SoC (reg 43018).
+		 * Emergency floor — inverter forces a charge if battery drops to this level.
+		 * Default: 10%, Range: 4% up to reg 43011, resolution 1%.
+		 * Must always be <= reg 43011 (Overdischarge SoC).
+		 */
+		SET_FORCE_CHARGE_SOC(Doc.of(INTEGER)
+				.accessMode(READ_WRITE)
+				.unit(Unit.PERCENT)),
+
 		// Internal Statemachine
 		WORK_STATE(Doc.of(WorkState.values()).accessMode(AccessMode.READ_WRITE)),		
 
@@ -810,6 +840,51 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 	public default IntegerWriteChannel getSetRemoteControlPowerChannel() {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER);
+	}
+
+	/**
+	 * Sets the Max Charge SoC (reg 43010).
+	 * Valid range: 80–100%. Default: 100%.
+	 *
+	 * @param value the SoC percentage to set
+	 * @throws OpenemsNamedException on error
+	 */
+	public default void setMaxChargeSoc(int value) throws OpenemsNamedException {
+		this.getSetMaxChargeSocChannel().setNextWriteValue(value);
+	}
+
+	public default IntegerWriteChannel getSetMaxChargeSocChannel() {
+		return this.channel(ChannelId.SET_MAX_CHARGE_SOC);
+	}
+
+	/**
+	 * Sets the Overdischarge SoC (reg 43011).
+	 * Valid range: 5–40%. Must be >= Force Charge SoC (reg 43018). Default: 20%.
+	 *
+	 * @param value the SoC percentage to set
+	 * @throws OpenemsNamedException on error
+	 */
+	public default void setOverdischargeSoc(int value) throws OpenemsNamedException {
+		this.getSetOverdischargeSocChannel().setNextWriteValue(value);
+	}
+
+	public default IntegerWriteChannel getSetOverdischargeSocChannel() {
+		return this.channel(ChannelId.SET_OVERDISCHARGE_SOC);
+	}
+
+	/**
+	 * Sets the Force Charge SoC (reg 43018).
+	 * Valid range: 4% up to reg 43011. Must be <= Overdischarge SoC. Default: 10%.
+	 *
+	 * @param value the SoC percentage to set
+	 * @throws OpenemsNamedException on error
+	 */
+	public default void setForceChargeSoc(int value) throws OpenemsNamedException {
+		this.getSetForceChargeSocChannel().setNextWriteValue(value);
+	}
+
+	public default IntegerWriteChannel getSetForceChargeSocChannel() {
+		return this.channel(ChannelId.SET_FORCE_CHARGE_SOC);
 	}
 
 	/**

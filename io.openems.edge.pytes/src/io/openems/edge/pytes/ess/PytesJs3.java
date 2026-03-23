@@ -4,6 +4,7 @@ import static io.openems.common.channel.AccessMode.READ_ONLY;
 import static io.openems.common.channel.AccessMode.READ_WRITE;
 import static io.openems.common.types.OpenemsType.INTEGER;
 import static io.openems.common.channel.PersistencePriority.LOW;
+import static io.openems.common.channel.PersistencePriority.HIGH;
 import org.osgi.service.event.EventHandler;
 import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.Unit;
@@ -62,7 +63,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.unit(Unit.PERCENT)),
 
 		// Internal Statemachine
-		WORK_STATE(Doc.of(WorkState.values()).accessMode(AccessMode.READ_WRITE)),		
+		WORK_STATE(Doc.of(WorkState.values()).accessMode(AccessMode.READ_WRITE).persistencePriority(HIGH)),		
 
 		STARTER_BATTERY_VOLTAGE(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
@@ -99,8 +100,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		DC_BUS_HALF_VOLTAGE(Doc.of(INTEGER).accessMode(READ_ONLY)//
 				.unit(Unit.MILLIVOLT).persistencePriority(LOW)),
 
-		APPARENT_POWER(Doc.of(INTEGER)
-		// .accessMode(READ_ONLY)
+		APPARENT_POWER(Doc.of(INTEGER).accessMode(READ_ONLY)//
+				.unit(Unit.VOLT_AMPERE).persistencePriority(HIGH)
 		),
 
 		INVERTER_CURRENT_STATUS(Doc.of(Appendix2.values()).accessMode(AccessMode.READ_ONLY)),

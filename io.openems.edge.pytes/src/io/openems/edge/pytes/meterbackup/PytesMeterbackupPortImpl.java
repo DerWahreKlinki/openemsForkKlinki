@@ -20,7 +20,6 @@ import org.osgi.service.event.propertytypes.EventTopics;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.MeterType;
@@ -30,10 +29,8 @@ import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
-import io.openems.edge.bridge.modbus.api.element.SignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
-import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
@@ -55,8 +52,8 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 @EventTopics({ //
 		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
 })
-public class PytesMeterbackupPortImpl extends AbstractOpenemsModbusComponent implements PytesMeterBackupPort, ElectricityMeter,
-		ModbusComponent, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
+public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent implements PytesMeterBackupPort,
+		ElectricityMeter, ModbusComponent, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
 
 	private MeterType meterType = MeterType.CONSUMPTION_METERED;
 
@@ -77,11 +74,11 @@ public class PytesMeterbackupPortImpl extends AbstractOpenemsModbusComponent imp
 	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
 	private volatile Timedata timedata = null;
 
-	private final Logger log = LoggerFactory.getLogger(PytesMeterbackupPortImpl.class);
+	private final Logger log = LoggerFactory.getLogger(PytesMeterBackupPortImpl.class);
 
 	private Config config;
 
-	public PytesMeterbackupPortImpl() throws OpenemsException {
+	public PytesMeterBackupPortImpl() throws OpenemsException {
 		super(//
 				OpenemsComponent.ChannelId.values(), //
 				ModbusComponent.ChannelId.values(), //
@@ -115,39 +112,118 @@ public class PytesMeterbackupPortImpl extends AbstractOpenemsModbusComponent imp
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 
-			return new ModbusProtocol(this,
+		return new ModbusProtocol(this,
 
-					new FC4ReadInputRegistersTask(33137, Priority.HIGH,
-							// -----------------------------------------------------------------------------
-							// Inverter Grid Electrical (AC) – direkt am Wechselrichter (FC=0x04)
-							// Register 33073..33083, 33094
-							// -----------------------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33137, Priority.HIGH,
+						// reg 33137 - Backup AC voltage Phase A [mV]
+						// For split-phase: L1 voltage.
+						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
+						m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33137),
+								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V (Backup AC voltage Phase A / split
+																			// phase: L1-N) -> mV
 
-							m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33137),
-							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (Backup AC voltage Phase A / split phase: L1-N) -> mV
+						// reg 33138 - Backup AC current phase A [mA]
+						// For split-phase: L1 current.
+						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
+						m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33138),
+								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A (Backup AC current Phase A / split
+																			// phase: L1-N) -> mA
+						new DummyRegisterElement(33139, 33147), // Reserved
 
-							m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33138),
-							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (Backup AC current Phase A / split phase: L1-N) -> mA
-							new DummyRegisterElement(33139, 33147), // Reserved
-							
-							m(ElectricityMeter.ChannelId.ACTIVE_POWER, new UnsignedWordElement(33148)),
-							// 1W  (Backup load power, total only)							
+						m(ElectricityMeter.ChannelId.ACTIVE_POWER, new UnsignedWordElement(33148)),
+						// 1W (Backup load power, total only)
 
-							new DummyRegisterElement(33149, 33152), // Reserved
-							
-							m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33153),
-							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (Backup AC voltage Phase B / split phase: L2-N) -> mV
+						new DummyRegisterElement(33149, 33152), // Reserved
 
-							m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33154),
-							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (Backup AC current Phase B / split phase: L2-N) -> mA
+						// reg 33153 - Backup AC voltage Phase B [mV]
+						// For split-phase: L2-N voltage. For 3-phase: B phase voltage.
+						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
+						m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33153),
+								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V (Backup AC voltage Phase B / split
+																			// phase: L2-N) -> mV
 
-							m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33155),
-							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (Backup AC voltage Phase C; for split phase model this is 0) -> mV
+						// reg 33154 - Backup AC current Phase B [mA]
+						// For split-phase: L2-N current. For 3-phase: B phase current.
+						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
+						m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33154),
+								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A (Backup AC current Phase B / split
+																			// phase: L2-N) -> mA
 
-							m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33156),
-							        ElementToChannelConverter.SCALE_FACTOR_2))); // 0.1A  (Backup AC current Phase C; for split phase model this is 0) -> mA							
+						// reg 33155 - Backup AC voltage Phase C [mV]
+						// For split-phase: 0. For 3-phase: C phase voltage.
+						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
+						m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33155),
+								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V (Backup AC voltage Phase C; for split
+																			// phase model this is 0) -> mV
 
-		
+						// reg 33156 - Backup AC current Phase C [mA]
+						// For split-phase: 0. For 3-phase: C phase current.
+						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mA
+						m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33156),
+								ElementToChannelConverter.SCALE_FACTOR_2)),
+
+				// ------------------------------------------------------------------------
+				// Backup Side Per-Phase Power (reg 33521..33529)
+				// Priority HIGH - real-time backup load monitoring.
+				// Note: Phase C registers are always 0 for split-phase models
+				// ------------------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33521, Priority.HIGH,
+
+						// reg 33521 - Backup Phase A active power [W]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 W -> SCALE_FACTOR_1 -> W
+						m(ElectricityMeter.ChannelId.ACTIVE_POWER_L1, new SignedWordElement(33521),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33522 - Backup Phase A reactive power [Var]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 Var -> SCALE_FACTOR_1 -> Var
+						m(ElectricityMeter.ChannelId.REACTIVE_POWER_L1, new SignedWordElement(33522),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33523 - Backup Phase A apparent power [VA]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 VA -> SCALE_FACTOR_1 -> VA
+						m(PytesMeterBackupPort.ChannelId.APPARENT_POWER_L1, new SignedWordElement(33523),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33524 - Backup Phase B active power [W]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 W -> SCALE_FACTOR_1 -> W
+						m(ElectricityMeter.ChannelId.ACTIVE_POWER_L2, new SignedWordElement(33524),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33525 - Backup Phase B reactive power [Var]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 Var -> SCALE_FACTOR_1 -> Var
+						m(ElectricityMeter.ChannelId.REACTIVE_POWER_L2, new SignedWordElement(33525),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33526 - Backup Phase B apparent power [VA]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 VA -> SCALE_FACTOR_1 -> VA
+						m(PytesMeterBackupPort.ChannelId.APPARENT_POWER_L2, new SignedWordElement(33526),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33527 - Backup Phase C active power [W]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 W -> SCALE_FACTOR_1 -> W
+						m(ElectricityMeter.ChannelId.ACTIVE_POWER_L3, new SignedWordElement(33527),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33528 - Backup Phase C reactive power [Var]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 Var -> SCALE_FACTOR_1 -> Var
+						m(ElectricityMeter.ChannelId.REACTIVE_POWER_L3, new SignedWordElement(33528),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// reg 33529 - Backup Phase C apparent power [VA]
+						// For split-phase: using L1-N voltage and L1 current.
+						// Datasheet: 10 VA -> SCALE_FACTOR_1 -> VA
+						m(PytesMeterBackupPort.ChannelId.APPARENT_POWER_L3, new SignedWordElement(33529),
+								ElementToChannelConverter.SCALE_FACTOR_1))
+		);
+
 	}
 
 	@Override

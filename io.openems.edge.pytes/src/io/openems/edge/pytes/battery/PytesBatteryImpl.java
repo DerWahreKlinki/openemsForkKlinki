@@ -240,13 +240,9 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 								
 						m(PytesBattery.ChannelId.LLC_BUS_VOLTAGE, new UnsignedWordElement(33136),
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
-								
-						m(PytesBattery.ChannelId.BACKUP_AC_VOLTAGE, new UnsignedWordElement(33137),
-								ElementToChannelConverter.SCALE_FACTOR_2),
-								
-						m(PytesBattery.ChannelId.BACKUP_AC_CURRENT, new UnsignedWordElement(33138),
-								ElementToChannelConverter.SCALE_FACTOR_2),						
 						
+						new DummyRegisterElement(33137, 33138), // 		
+
 						// Battery SOC [%], resolution 1 (100=100%)
 						m(Battery.ChannelId.SOC, new UnsignedWordElement(33139)),
 						

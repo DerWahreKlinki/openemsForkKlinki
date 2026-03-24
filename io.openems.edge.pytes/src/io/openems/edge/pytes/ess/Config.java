@@ -31,6 +31,9 @@ import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 	@AttributeDefinition(name = "Min SoC [5-100%]", description = "Minimum SoC. This value is written to hardware")
 	int minSoc() default 10;	
 	
+	@AttributeDefinition(name = "Enable Backup Port", description = "Activate Backup Port")
+	boolean enableBackupPort() default true;
+	
 	String webconsole_configurationFactory_nameHint() default "io.openems.edge.pytes [{id}]";
 
 	@AttributeDefinition(name = "Debug Mode", description = "Activates the debug mode")

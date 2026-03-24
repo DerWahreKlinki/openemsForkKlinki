@@ -93,5 +93,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		return 0;
 	}
 
+	@Override
+	public boolean enableBackupPort() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 
 }

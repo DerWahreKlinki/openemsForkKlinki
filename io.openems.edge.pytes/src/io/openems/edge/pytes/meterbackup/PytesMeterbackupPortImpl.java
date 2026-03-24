@@ -58,7 +58,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 public class PytesMeterbackupPortImpl extends AbstractOpenemsModbusComponent implements PytesMeterBackupPort, ElectricityMeter,
 		ModbusComponent, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
 
-	private MeterType meterType = MeterType.PRODUCTION;
+	private MeterType meterType = MeterType.CONSUMPTION_METERED;
 
 	private final CalculateEnergyFromPower calculateProductionEnergy = new CalculateEnergyFromPower(this,
 			ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY);
@@ -93,12 +93,12 @@ public class PytesMeterbackupPortImpl extends AbstractOpenemsModbusComponent imp
 
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
-		this.meterType = config.type();
 		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
 				"Modbus", config.modbus_id())) {
 			return;
 		}
 		this.config = config;
+		this.meterType = config.type();
 	}
 
 	@Override
@@ -117,230 +117,35 @@ public class PytesMeterbackupPortImpl extends AbstractOpenemsModbusComponent imp
 
 			return new ModbusProtocol(this,
 
-					new FC4ReadInputRegistersTask(33073, Priority.HIGH,
+					new FC4ReadInputRegistersTask(33137, Priority.HIGH,
 							// -----------------------------------------------------------------------------
 							// Inverter Grid Electrical (AC) – direkt am Wechselrichter (FC=0x04)
 							// Register 33073..33083, 33094
 							// -----------------------------------------------------------------------------
 
-							m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33073),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (A phase voltage / AB line voltage) -> mV
+							m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33137),
+							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (Backup AC voltage Phase A / split phase: L1-N) -> mV
 
-							m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33074),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (B phase voltage / BC line voltage)
-
-							m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33075),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (C phase voltage / CA line voltage)
-
-							m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33076), 
-									ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (A phase current) -> mA
-
-							m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33077),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (B phase current)
-
-							m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33078),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (C phase current)
-
-							m(ElectricityMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(33079)), // 1W   (Active power)
-
-							m(ElectricityMeter.ChannelId.REACTIVE_POWER, new SignedDoublewordElement(33081)), // 1Var (Reactive power)
-
-							m(PytesMeterBackupPort.ChannelId.APPARENT_POWER, new SignedDoublewordElement(33083)), // 1VA  (Apparent power)
+							m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33138),
+							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (Backup AC current Phase A / split phase: L1-N) -> mA
+							new DummyRegisterElement(33139, 33147), // Reserved
 							
-							new DummyRegisterElement(33085, 33093), // Reserved
+							m(ElectricityMeter.ChannelId.ACTIVE_POWER, new UnsignedWordElement(33148)),
+							// 1W  (Backup load power, total only)							
 
-							m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(33094)))); // 0.01Hz (Grid frequency) -> mHz
-/*
-
-							// -----------------------------------------------------------------------------
-							// Inverter AC Grid Port Power/Energy (FC=0x04)
-							// Register 33151, 33169..33176, 33186..33188
-							// -----------------------------------------------------------------------------
-
-							m(PytesMeter.ChannelId.AC_GRID_PORT_ACTIVE_POWER, new SignedDoublewordElement(33151),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1W  (+ to grid, - from grid)
-
-							m(PytesMeter.ChannelId.ENERGY_IMPORTED_FROM_GRID_TOTAL, new UnsignedDoublewordElement(33169),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1kWh (Total energy imported from grid)
-
-							m(PytesMeter.ChannelId.ENERGY_IMPORTED_FROM_GRID_TODAY, new UnsignedWordElement(33171),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1kWh (Today energy imported from grid)
-
-							m(PytesMeter.ChannelId.ENERGY_IMPORTED_FROM_GRID_YESTERDAY, new UnsignedWordElement(33172),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1kWh (Yesterday energy imported from grid)
-
-							m(PytesMeter.ChannelId.ENERGY_FED_INTO_GRID_TOTAL, new UnsignedDoublewordElement(33173),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1kWh (Total energy fed into grid)
-
-							m(PytesMeter.ChannelId.ENERGY_FED_INTO_GRID_TODAY, new UnsignedWordElement(33175),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1kWh (Today energy fed into grid)
-
-							m(PytesMeter.ChannelId.ENERGY_FED_INTO_GRID_YESTERDAY, new UnsignedWordElement(33176),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1kWh (Yesterday energy fed into grid)
-
-							m(PytesMeter.ChannelId.AC_GRID_PORT_EXPORT_ENERGY_TOTAL, new UnsignedDoublewordElement(33186),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1kWh (Inverter AC Grid Port Export Energy)
-
-							m(PytesMeter.ChannelId.AC_GRID_PORT_IMPORT_ENERGY_TOTAL, new UnsignedDoublewordElement(33188),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1kWh (Inverter AC Grid Port Import Energy)
-
-
-							// -----------------------------------------------------------------------------
-							// External Meter / CT (Grid side OR Load side) – Meter block (FC=0x04)
-							// Register 33247..33285
-							// Hinweis im PDF: 33251..33286 sind "meter itself"; bei Meter auf Load-Side siehe 33540..33575.
-							// -----------------------------------------------------------------------------
-
-							m(PytesMeter.ChannelId.EPM_BACKFLOW_POWER, new SignedWordElement(33247),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 100W (+ to grid, - from grid)
-
-							m(PytesMeter.ChannelId.EPM_REALTIME_BACKFLOW_POWER, new SignedWordElement(33249),
-									ElementToChannelConverter.SCALE_FACTOR_2), // 100W
-
-							m(PytesMeter.ChannelId.AC_VOLTAGE_PHASE_A, new UnsignedWordElement(33251),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1V (Meter ac voltage A)
-
-							m(PytesMeter.ChannelId.AC_CURRENT_PHASE_A, new UnsignedWordElement(33252),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01A (Meter ac current A)
-
-							m(PytesMeter.ChannelId.AC_VOLTAGE_PHASE_B, new UnsignedWordElement(33253),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1V (Meter ac voltage B)
-
-							m(PytesMeter.ChannelId.AC_CURRENT_PHASE_B, new UnsignedWordElement(33254),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01A (Meter ac current B)
-
-							m(PytesMeter.ChannelId.AC_VOLTAGE_PHASE_C, new UnsignedWordElement(33255),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1V (Meter ac voltage C)
-
-							m(PytesMeter.ChannelId.AC_CURRENT_PHASE_C, new UnsignedWordElement(33256),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01A (Meter ac current C)
-
+							new DummyRegisterElement(33149, 33152), // Reserved
 							
-							//  Meter Active Power A/B/C + Total sind S32 in 0.001kW.
-							//  -> Wenn Du kW als Channel willst: SCALE_FACTOR_MINUS_3
-							//  -> Wenn Du W als Channel willst: SCALE_FACTOR_0 (weil 0.001kW = 1W) und dann semantisch als W behandeln.
-							// 
-							m(PytesMeter.ChannelId.ACTIVE_POWER_PHASE_A, new SignedDoublewordElement(33257),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_3), // 0.001kW
+							m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33153),
+							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (Backup AC voltage Phase B / split phase: L2-N) -> mV
 
-							m(PytesMeter.ChannelId.ACTIVE_POWER_PHASE_B, new SignedDoublewordElement(33259),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_3), // 0.001kW
+							m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33154),
+							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A  (Backup AC current Phase B / split phase: L2-N) -> mA
 
-							m(PytesMeter.ChannelId.ACTIVE_POWER_PHASE_C, new SignedDoublewordElement(33261),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_3), // 0.001kW
+							m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33155),
+							        ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V  (Backup AC voltage Phase C; for split phase model this is 0) -> mV
 
-							m(PytesMeter.ChannelId.ACTIVE_POWER_TOTAL, new SignedDoublewordElement(33263),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_3), // 0.001kW
-
-							m(PytesMeter.ChannelId.REACTIVE_POWER_PHASE_A, new SignedDoublewordElement(33265),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.REACTIVE_POWER_PHASE_B, new SignedDoublewordElement(33267),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.REACTIVE_POWER_PHASE_C, new SignedDoublewordElement(33269),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.REACTIVE_POWER_TOTAL, new SignedDoublewordElement(33271),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.APPARENT_POWER_PHASE_A, new SignedDoublewordElement(33273),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.APPARENT_POWER_PHASE_B, new SignedDoublewordElement(33275),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.APPARENT_POWER_PHASE_C, new SignedDoublewordElement(33277),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.APPARENT_POWER_TOTAL, new SignedDoublewordElement(33279),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.POWER_FACTOR, new SignedWordElement(33281),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01 (PF)
-
-							m(PytesMeter.ChannelId.GRID_FREQUENCY, new UnsignedWordElement(33282),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01Hz
-
-							m(PytesMeter.ChannelId.ACTIVE_ENERGY_FROM_GRID_TOTAL, new UnsignedDoublewordElement(33283),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01kWh
-
-							m(PytesMeter.ChannelId.ACTIVE_ENERGY_TO_GRID_TOTAL, new UnsignedDoublewordElement(33285),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01kWh
-
-
-							// -----------------------------------------------------------------------------
-							// Meter on LOAD-SIDE: Public Grid Side computed values (FC=0x04)
-							// Register 33540..33575
-							// (Nur relevant, wenn der Zähler "on the load side" installiert ist; siehe Hinweis im PDF.)
-							// -----------------------------------------------------------------------------
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_VOLTAGE_PHASE_A, new UnsignedWordElement(33540),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1V
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_CURRENT_PHASE_A, new UnsignedWordElement(33541),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01A
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_VOLTAGE_PHASE_B, new UnsignedWordElement(33542),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1V
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_CURRENT_PHASE_B, new UnsignedWordElement(33543),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01A
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_VOLTAGE_PHASE_C, new UnsignedWordElement(33544),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0.1V
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_CURRENT_PHASE_C, new UnsignedWordElement(33545),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01A
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_ACTIVE_POWER_PHASE_A, new SignedDoublewordElement(33546),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1W
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_ACTIVE_POWER_PHASE_B, new SignedDoublewordElement(33548),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1W
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_ACTIVE_POWER_PHASE_C, new SignedDoublewordElement(33550),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1W
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_ACTIVE_POWER_TOTAL, new SignedDoublewordElement(33552),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1W
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_REACTIVE_POWER_PHASE_A, new SignedDoublewordElement(33554),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_REACTIVE_POWER_PHASE_B, new SignedDoublewordElement(33556),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_REACTIVE_POWER_PHASE_C, new SignedDoublewordElement(33558),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_REACTIVE_POWER_TOTAL, new SignedDoublewordElement(33560),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1Var
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_APPARENT_POWER_PHASE_A, new SignedDoublewordElement(33562),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_APPARENT_POWER_PHASE_B, new SignedDoublewordElement(33564),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_APPARENT_POWER_PHASE_C, new SignedDoublewordElement(33566),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_APPARENT_POWER_TOTAL, new SignedDoublewordElement(33568),
-									ElementToChannelConverter.SCALE_FACTOR_0), // 1VA
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_POWER_FACTOR, new SignedWordElement(33570),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_FREQUENCY, new UnsignedWordElement(33571),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01Hz
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_ACTIVE_ENERGY_TAKEN_TOTAL, new UnsignedDoublewordElement(33572),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0.01kWh
-
-							m(PytesMeter.ChannelId.PUBLIC_GRID_ACTIVE_ENERGY_DELIVERED_TOTAL, new UnsignedDoublewordElement(33574),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_2); // 0.01kWh
-*/
+							m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33156),
+							        ElementToChannelConverter.SCALE_FACTOR_2))); // 0.1A  (Backup AC current Phase C; for split phase model this is 0) -> mA							
 
 		
 	}

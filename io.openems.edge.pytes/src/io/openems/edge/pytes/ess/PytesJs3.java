@@ -1,6 +1,7 @@
 package io.openems.edge.pytes.ess;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
+import static io.openems.common.channel.AccessMode.WRITE_ONLY;
 import static io.openems.common.channel.AccessMode.READ_WRITE;
 import static io.openems.common.types.OpenemsType.INTEGER;
 import static io.openems.common.channel.PersistencePriority.LOW;
@@ -19,7 +20,7 @@ import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.pytes.enums.WorkState;
 import io.openems.edge.pytes.battery.PytesBattery;
-import io.openems.edge.pytes.battery.PytesBattery.ChannelId;
+
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.Appendix2;
 import io.openems.edge.pytes.enums.Appendix8;
@@ -171,6 +172,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Battery grid charge allowed")),
 		DO_CONTROL(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("DO Control enabled")),
 		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Off-grid battery standby")),		
+		
+		BACKUP_PORT_ENABLED(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Backup Port enabled")),
+		ENABLE_BACKUP_PORT(Doc.of(EnableDisable.values()).accessMode(WRITE_ONLY).text("Backup Port enabled")),
 
 		SETTING_FLAG_BIT(Doc.of(INTEGER).accessMode(READ_ONLY)),
 
@@ -580,6 +584,30 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default WriteChannel<EnableDisable> setRemoteDispatchSwitchChannel() {
 	    return this.channel(ChannelId.SET_REMOTE_DISPATCH_SWITCH);
 	}
+	
+	// Enable / Disable Backup Port
+	/**
+	 * Enables or disables backup AC port.
+	 * Register 43111.
+	 *
+	 * @param value the {@link EnableDisable} value
+	 * @throws OpenemsNamedException on error
+	 */
+	public default void setEnableBackupPort(EnableDisable value) throws OpenemsNamedException {
+	    this.setEnableBackupPortChannel().setNextWriteValue(value);
+	}
+
+	public default EnableDisable getBackupPortEnabled() {
+	    return this.getBackupPortEnabledChannel().value().asEnum();
+	}
+
+	public default Channel<EnableDisable> getBackupPortEnabledChannel() {
+	    return this.channel(ChannelId.BACKUP_PORT_ENABLED);
+	}
+
+	public default WriteChannel<EnableDisable> setEnableBackupPortChannel() {
+	    return this.channel(ChannelId.ENABLE_BACKUP_PORT);
+	}	
 
 	// Set remote dispatch timeout
 	public default void setRemoteDispatchTimeout(int value) throws OpenemsNamedException {

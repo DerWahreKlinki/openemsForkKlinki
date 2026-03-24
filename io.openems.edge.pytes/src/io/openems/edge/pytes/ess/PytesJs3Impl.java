@@ -162,6 +162,12 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				 * m(PytesJs3.ChannelId.SET_REMOTE_CONTROL_MODE, new
 				 * UnsignedWordElement(43132))),
 				 */
+				
+				new FC16WriteRegistersTask(43111,
+						m(PytesJs3.ChannelId.ENABLE_BACKUP_PORT, new UnsignedWordElement(43111))),
+				
+				new FC3ReadRegistersTask(43111, Priority.LOW,
+						m(PytesJs3.ChannelId.BACKUP_PORT_ENABLED, new UnsignedWordElement(43111))),				
 
 				new FC16WriteRegistersTask(44100,
 						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SWITCH, new UnsignedWordElement(44100)),
@@ -378,26 +384,46 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 
 	}
-
+	
+	
 	private boolean setDefaultValues() {
-		Integer forceMinSoc = this.getForceChargeSoc().get();
-		Integer minSoc = this.getOverDischargeSoc().get();
+	    Integer currentForceMinSoc = this.getForceChargeSoc().get();
+	    Integer currentMinSoc = this.getOverDischargeSoc().get();
+	    EnableDisable currentBackupPortState = this.getBackupPortEnabled();
 
-		if (forceMinSoc == null || minSoc == null) {
-			return false;
-		}
-		try {
-			this.setForceChargeSoc(this.config.minSoc() - 1); // always 1% lower than configured min. Soc
-			this.setOverdischargeSoc(this.config.minSoc());
-		} catch (OpenemsNamedException e) {
-			this.log.error("Failed to set default values", e);
-			return false;
-		}
-		if (minSoc != this.config.minSoc()) {
-			return false;
-		}
+	    if (currentForceMinSoc == null || currentMinSoc == null || currentBackupPortState == null) {
+	        return false;
+	    }
 
-		return true;
+	    int targetMinSoc = this.config.minSoc();
+	    int targetForceMinSoc = targetMinSoc - 1;
+	    EnableDisable targetBackupPortState = this.config.enableBackupPort()
+	            ? EnableDisable.ENABLE
+	            : EnableDisable.DISABLE;
+
+	    try {
+
+	        if (currentForceMinSoc != targetForceMinSoc) {
+	            this.setForceChargeSoc(targetForceMinSoc);
+		        return false;
+	        }
+
+	        if (currentMinSoc != targetMinSoc) {
+	            this.setOverdischargeSoc(targetMinSoc);
+		        return false;
+	        }
+
+	        if (currentBackupPortState != targetBackupPortState) {
+	            this.setEnableBackupPort(targetBackupPortState);
+		        return false;
+	        }
+
+	    } catch (OpenemsNamedException e) {
+	        this.log.error("Failed to set default values", e);
+	        return false;
+	    }
+	    
+	    return true;
 	}
 
 	/**
@@ -481,6 +507,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		if (config.debugMode()) {
 			return "SoC:" + this.getSoc().asString() //
 					+ "|L:" + this.getActivePower().asString()
+					
+					/*
 					+ this.channel(SymmetricEss.ChannelId.REACTIVE_POWER).value().asString() + "\nMaxApparentPower="
 					+ this.channel(SymmetricEss.ChannelId.MAX_APPARENT_POWER).value().asString() + "\nSafetyVersion="
 					+ this.channel(PytesJs3.ChannelId.SAFETY_VERSION).value().asString() + "\nHmiSubVersion="
@@ -501,327 +529,334 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 					+ this.channel(PytesJs3.ChannelId.INVERTER_CURRENT_STATUS).value().asString() + "\nOperatingMode="
 					+ this.channel(PytesJs3.ChannelId.OPERATING_MODE).value().asString() + "\nFrequency="
 					+ this.channel(PytesJs3.ChannelId.FREQUENCY).value().asString()
-			/*
-			 * + "\nLeadAcidBatteryTemp=" +
-			 * this.channel(PytesJs3.ChannelId.LEAD_ACID_BATTERY_TEMP).value().asString() +
-			 * "\nFunctionStatus=" +
-			 * this.channel(PytesJs3.ChannelId.FUNCTION_STATUS).value().asString() +
-			 * "\nCurrentDrmCodeStatus=" +
-			 * this.channel(PytesJs3.ChannelId.CURRENT_DRM_CODE_STATUS).value().asString() +
-			 * "\nInverterCabinetTemp=" +
-			 * this.channel(PytesJs3.ChannelId.INVERTER_CABINET_TEMP).value().asString() +
-			 * "\nLimitedPowerActualValue=" +
-			 * this.channel(PytesJs3.ChannelId.LIMITED_POWER_ACTUAL_VALUE).value().asString(
-			 * ) + "\nPfAdjustmentActualValue=" +
-			 * this.channel(PytesJs3.ChannelId.PF_ADJUSTMENT_ACTUAL_VALUE).value().asString(
-			 * ) + "\nLimitedReactivePower=" +
-			 * this.channel(PytesJs3.ChannelId.LIMITED_REACTIVE_POWER).value().asString() +
-			 * "\nInverterModuleTemp2=" +
-			 * this.channel(PytesJs3.ChannelId.INVERTER_MODULE_TEMP2).value().asString() +
-			 * "\nVoltVarVrefRtValues=" +
-			 * this.channel(PytesJs3.ChannelId.VOLT_VAR_VREF_RT_VALUES).value().asString() +
-			 * "\nBmsChargingVoltageLimit=" +
-			 * this.channel(PytesJs3.ChannelId.BMS_CHARGING_VOLTAGE_LIMIT).value().asString(
-			 * ) + "\nBatteryBmsStatus=" +
-			 * this.channel(PytesJs3.ChannelId.BATTERY_BMS_STATUS).value().asString() +
-			 * "\nInverterInitialSettingState=" +
-			 * this.channel(PytesJs3.ChannelId.INVERTER_INITIAL_SETTING_STATE).value().
-			 * asString() + "\nBatchUpgradeBowl=" +
-			 * this.channel(PytesJs3.ChannelId.BATCH_UPGRADE_BOWL).value().asString() +
-			 * "\nFcasModeRunningStatus=" +
-			 * this.channel(PytesJs3.ChannelId.FCAS_MODE_RUNNING_STATUS).value().asString()
-			 * + "\nSettingFlagBit=" +
-			 * this.channel(PytesJs3.ChannelId.SETTING_FLAG_BIT).value().asString() +
-			 * "\nFaultCode01=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_01).value().asString() +
-			 * "\nFaultCode02=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_02).value().asString() +
-			 * "\nFaultCode03=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_03).value().asString() +
-			 * "\nFaultCode04=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_04).value().asString() +
-			 * "\nFaultCode05=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_05).value().asString() +
-			 * "\nOperatingStatus=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STATUS).value().asString()
-			 * 
-			 * + "\nWorkingModeRunningStatus=" +
-			 * this.channel(PytesJs3.ChannelId.WORKING_MODE_RUNNING_STATUS).value().asString
-			 * () + "\nFaultCode06=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_06).value().asString() +
-			 * "\nFaultCode07=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_CODE_07).value().asString() +
-			 * "\nStorageControlSwitchingValue=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE).value().
-			 * asString()
-			 * 
-			 * 
-			 * + "\nPvShutdownSwitch=" + this.getPvShutdownSwitch().toString() +
-			 * "\nGrid charge Allowed=" + this.getGridChargeAllowed().toString() +
-			 * "\nDO Control=" + this.getDoControl().toString() +
-			 * "\nOffGrid Battery Standby=" + this.getOffGridBatteryStandby().toString()
-			 * 
-			 * 
-			 * // Appendix 4 decoded fault bits REG1 (33116) + "\nFaultReg1_NoGrid=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_NO_GRID).value().asString() +
-			 * "\nFaultReg1_GridOvVoltage=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_OVERVOLTAGE).value().asString
-			 * () + "\nFaultReg1_GridUnVoltage=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_UNDERVOLTAGE).value().
-			 * asString() + "\nFaultReg1_GridOverFreq=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_OVERFREQ).value().asString()
-			 * + "\nFaultReg1_GridUnderFreq=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_UNDERFREQ).value().asString()
-			 * + "\nFaultReg1_UnbalancedGrid=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_UNBALANCED_GRID).value().asString(
-			 * ) + "\nFaultReg1_FreqFluctuation=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_FREQ_FLUCTUATION).value().
-			 * asString() + "\nFaultReg1_ReverseCurrent=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_REVERSE_CURRENT).value().
-			 * asString() + "\nFaultReg1_CurrentTrackErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_CURRENT_TRACKING_ERROR).value
-			 * ().asString() + "\nFaultReg1_MeterComFail=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_METER_COM_FAIL).value().asString()
-			 * + "\nFaultReg1_FailSafe=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_FAILSAFE).value().asString() +
-			 * "\nFaultReg1_MeterSelFail=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_METER_SELECT_FAIL).value().
-			 * asString() + "\nFaultReg1_EpmHardLimit=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_EPM_HARD_LIMIT).value().asString()
-			 * + "\nFaultReg1_G100OvrLimit=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_G100_CURRENT_OVER_LIMIT).value().
-			 * asString() + "\nFaultReg1_AbnGridPhase=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY).
-			 * value().asString()
-			 * 
-			 * // REG2 (33117) Backup / Hub faults + "\nFaultReg2_BackupOvVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERVOLTAGE).value().
-			 * asString() + "\nFaultReg2_BackupOverload=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERLOAD).value().asString(
-			 * ) + "\nFaultReg2_GridBackupOverload=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG2_GRID_BACKUP_OVERLOAD).value().
-			 * asString() + "\nFaultReg2_OffgridBackupUnVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE).value
-			 * ().asString() + "\nFaultReg2_HubPanelOvCurrent=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG2_HUB_PANEL_OV_CURRENT).value().
-			 * asString()
-			 * 
-			 * // REG3 (33118) Battery faults + "\nFaultReg3_BattNotConnected=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_NOT_CONNECTED).value().
-			 * asString() + "\nFaultReg3_BattOvVoltCheck=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_OVERVOLTAGE_CHECK).value()
-			 * .asString() + "\nFaultReg3_BattUnVoltCheck=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_UNDERVOLTAGE_CHECK).value(
-			 * ).asString() + "\nFaultReg3_BattBmsAlarm=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_BMS_ALARM).value().
-			 * asString() + "\nFaultReg3_InconsistBattSel=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_INCONSISTENT_BATTERY_SELECTION).
-			 * value().asString() + "\nFaultReg3_LeadAcidTempLow=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_LOW).value().
-			 * asString() + "\nFaultReg3_LeadAcidTempHigh=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_HIGH).value().
-			 * asString() + "\nFaultReg3_2ndBattNotConn=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED).
-			 * value().asString() + "\nFaultReg3_2ndBattSwOvVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE).
-			 * value().asString() + "\nFaultReg3_2ndBattSwUnVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE).
-			 * value().asString() + "\nFaultReg3_ParallelBattComAbn=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL).
-			 * value().asString() + "\nFaultReg3_LowBattOffgrid=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG3_LOW_BATTERY_OFFGRID).value().
-			 * asString()
-			 * 
-			 * // REG4 (33119) DC / IGBT / AFCI faults + "\nFaultReg4_DcOvVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERVOLTAGE).value().asString()
-			 * + "\nFaultReg4_DcBusOvVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_OVERVOLTAGE).value().
-			 * asString() + "\nFaultReg4_DcBusUnbalanced=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE).value()
-			 * .asString() + "\nFaultReg4_DcBusUnVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNDERVOLTAGE).value().
-			 * asString() + "\nFaultReg4_DcBusUnbalanced2=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE_2).value
-			 * ().asString() + "\nFaultReg4_DcOvCurrentA=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERCURRENT_A).value().asString
-			 * () + "\nFaultReg4_DcOvCurrentB=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERCURRENT_B).value().asString
-			 * () + "\nFaultReg4_DcInputInterf=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_INPUT_INTERFERENCE).value().
-			 * asString() + "\nFaultReg4_GridOvCurrent=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_GRID_OVERCURRENT).value().asString
-			 * () + "\nFaultReg4_IgbtOvCurrent=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_IGBT_OVERCURRENT).value().asString
-			 * () + "\nFaultReg4_GridInterf02=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_GRID_INTERFERENCE_02).value().
-			 * asString() + "\nFaultReg4_AfciSelfCheck=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_AFCI_SELF_CHECK).value().asString(
-			 * ) + "\nFaultReg4_GridCurrSampFault=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_GRID_CURRENT_SAMPLING_FAULT).value
-			 * ().asString() + "\nFaultReg4_DspSelfCheckErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_DSP_SELF_CHECK_ERROR).value().
-			 * asString() + "\nFaultReg4_BattDischargeOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT).
-			 * value().asString()
-			 * 
-			 * // REG5 (33120) Protection faults + "\nFaultReg5_GridInterf=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_GRID_INTERFERENCE).value().
-			 * asString() + "\nFaultReg5_OverDcComponents=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_OVER_DC_COMPONENTS).value().
-			 * asString() + "\nFaultReg5_OverTemp=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_OVER_TEMPERATURE).value().asString
-			 * () + "\nFaultReg5_RelayCheck=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_RELAY_CHECK).value().asString() +
-			 * "\nFaultReg5_UnderTemp=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_UNDER_TEMPERATURE).value().
-			 * asString() + "\nFaultReg5_PvInsulFault=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_PV_INSULATION_FAULT).value().
-			 * asString() + "\nFaultReg5_12vUnVolt=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_12V_UNDERVOLTAGE).value().asString
-			 * () + "\nFaultReg5_LeakCurrent=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_LEAK_CURRENT).value().asString() +
-			 * "\nFaultReg5_LeakCurrSelfChk=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_LEAK_CURRENT_SELF_CHECK).value().
-			 * asString() + "\nFaultReg5_DspInitial=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_INITIAL).value().asString() +
-			 * "\nFaultReg5_DspB=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_B).value().asString() +
-			 * "\nFaultReg5_BattOvVoltHw=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_BATTERY_OVERVOLTAGE_HW).value().
-			 * asString() + "\nFaultReg5_LlcHwOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_LLC_HW_OVERCURRENT).value().
-			 * asString() + "\nFaultReg5_GridTransientOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_GRID_TRANSIENT_OVERCURRENT).value(
-			 * ).asString() + "\nFaultReg5_BattComFail=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_BATTERY_COM_FAILURE).value().
-			 * asString() + "\nFaultReg5_DspComFail=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_COM_FAIL).value().asString()
-			 * 
-			 * // REG6 (33124) Parallel / multi-unit faults + "\nFaultReg6_SlaveLoseErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_SLAVE_LOSE_ERR).value().asString()
-			 * + "\nFaultReg6_MasterLoseErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_MASTER_LOSE_ERR).value().asString(
-			 * ) + "\nFaultReg6_SlavePrdErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_SLAVE_PRD_ERR).value().asString()
-			 * + "\nFaultReg6_MasterPrdErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_MASTER_PRD_ERR).value().asString()
-			 * + "\nFaultReg6_AddrConflict=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_ADDR_CONFLICT).value().asString()
-			 * + "\nFaultReg6_HeartbeatLose=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_HEARTBEAT_LOSE).value().asString()
-			 * + "\nFaultReg6_DcanErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_DCAN_ERR).value().asString() +
-			 * "\nFaultReg6_MulMasterErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_MUL_MASTER_ERR).value().asString()
-			 * + "\nFaultReg6_ModeConflict=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_MODE_CONFLICT).value().asString()
-			 * + "\nFaultReg6_SPlugVoltErr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_S_PLUG_VOLT_ERR).value().asString(
-			 * ) + "\nFaultReg6_OthersFault=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_OTHERS_FAULT).value().asString() +
-			 * "\nFaultReg6_CanBusLose=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_CAN_BUS_LOSE).value().asString() +
-			 * "\nFaultReg6_ModelMismatch=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_MODEL_MISMATCH).value().asString()
-			 * + "\nFaultReg6_3pCreateFail=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_3P_CREATE_FAIL).value().asString()
-			 * + "\nFaultReg6_AcbkOpen=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG6_ACBK_OPEN).value().asString()
-			 * 
-			 * // REG7 (33125) Hardware / startup faults + "\nFaultReg7_ReveDc=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_REVE_DC).value().asString() +
-			 * "\nFaultReg7_BattHwOvVolt02=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_BATTERY_HW_OVERVOLTAGE_02).value()
-			 * .asString() + "\nFaultReg7_BattHwOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_BATTERY_HW_OVERCURRENT).value().
-			 * asString() + "\nFaultReg7_BusMidpointHwOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT).value
-			 * ().asString() + "\nFaultReg7_BattStartupFail=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_BATTERY_STARTUP_FAIL).value().
-			 * asString() + "\nFaultReg7_Dc3AvgOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_DC3_AVG_OVERCURRENT).value().
-			 * asString() + "\nFaultReg7_Dc4AvgOvCurr=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_DC4_AVG_OVERCURRENT).value().
-			 * asString() + "\nFaultReg7_SoftrunTimeout=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_SOFTRUN_TIMEOUT).value().asString(
-			 * ) + "\nFaultReg7_OffgridToGridTimeout=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_OFFGRID_TO_GRID_TIMEOUT).value().
-			 * asString() + "\nFaultReg7_DrmNotConnect=" +
-			 * this.channel(PytesJs3.ChannelId.FAULT_REG7_DRM_NOT_CONNECT).value().asString(
-			 * )
-			 * 
-			 * // Appendix 5 Operating Status decoded bits (33121) +
-			 * "\nOperatStat_NormalOp=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_NORMAL_OPERATION).value().
-			 * asString() + "\nOperatStat_Initializing=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_INITIALIZING).value().asString
-			 * () + "\nOperatStat_ControlledOff=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_CONTROLLED_OFF).value().
-			 * asString() + "\nOperatStat_FaultOff=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_FAULT_OFF).value().asString()
-			 * + "\nOperatStat_Standby=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_STANDBY).value().asString() +
-			 * "\nOperatStat_LimitedTempFreq=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_LIMITED_TEMP_FREQ).value().
-			 * asString() + "\nOperatStat_LimitedExternal=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_LIMITED_EXTERNAL).value().
-			 * asString() + "\nOperatStat_BackupOverload=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_BACKUP_OVERLOAD).value().
-			 * asString() + "\nOperatStat_LoadFault=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_LOAD_FAULT).value().asString()
-			 * + "\nOperatStat_GridFault=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_GRID_FAULT).value().asString()
-			 * + "\nOperatStat_BatteryFault=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_BATTERY_FAULT).value().
-			 * asString() + "\nOperatStat_GridSurgeWarn=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_GRID_SURGE_WARN).value().
-			 * asString() + "\nOperatStat_FanFaultWarn=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_FAN_FAULT_WARN).value().
-			 * asString() + "\nOperatStat_ExternalFanFail=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_STAT_EXTERNAL_FAN_FAIL).value().
-			 * asString()
-			 * 
-			 * // Appendix 6 Storage Control decoded bits (33132) + "\nStorageCtrl_SelfUse="
-			 * +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_SELF_USE_MODE).value().asString(
-			 * ) + "\nStorageCtrl_TimeOfUse=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_TIME_OF_USE_MODE).value().
-			 * asString() + "\nStorageCtrl_OffGrid=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_OFFGRID_MODE).value().asString()
-			 * + "\nStorageCtrl_BattWakeup=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_WAKEUP).value().asString()
-			 * + "\nStorageCtrl_ReserveBatt=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_RESERVE_BATT_MODE).value().
-			 * asString() + "\nStorageCtrl_AllowGridChg=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_ALLOW_GRID_CHARGE).value().
-			 * asString() + "\nStorageCtrl_FeedInPriority=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_FEED_IN_PRIORITY).value().
-			 * asString() + "\nStorageCtrl_BattOvc=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_OVC).value().asString() +
-			 * "\nStorageCtrl_ForceChargePeak=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING).value(
-			 * ).asString() + "\nStorageCtrl_BattCurrCorrect=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_CURRENT_CORRECTION).value()
-			 * .asString() + "\nStorageCtrl_BattHealing=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_HEALING_MODE).value().
-			 * asString() + "\nStorageCtrl_PeakShaving=" +
-			 * this.channel(PytesJs3.ChannelId.STORAGE_CTRL_PEAK_SHAVING_MODE).value().
-			 * asString()
-			 * 
-			 * // Appendix 7 Setting Flag Bit decoded bits (33115) +
-			 * "\nSettingFlag_FlashTimeout=" +
-			 * this.channel(PytesJs3.ChannelId.SETTING_FLAG_FLASH_TIMEOUT).value().asString(
-			 * ) + "\nSettingFlag_ClearEnergy=" +
-			 * this.channel(PytesJs3.ChannelId.SETTING_FLAG_CLEAR_ENERGY).value().asString()
-			 * + "\nSettingFlag_ResetDatalogger=" +
-			 * this.channel(PytesJs3.ChannelId.SETTING_FLAG_RESET_DATALOGGER).value().
-			 * asString() + "\nSettingFlag_FactoryRecover=" +
-			 * this.channel(PytesJs3.ChannelId.SETTING_FLAG_FACTORY_RECOVER).value().
-			 * asString()
-			 * 
-			 * + "\nOperatingModeDecoded=" +
-			 * this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).value().asString()
-			 */
+			
+			  + "\nLeadAcidBatteryTemp=" +
+			  this.channel(PytesJs3.ChannelId.LEAD_ACID_BATTERY_TEMP).value().asString() +
+			  "\nFunctionStatus=" +
+			  this.channel(PytesJs3.ChannelId.FUNCTION_STATUS).value().asString() +
+			  "\nCurrentDrmCodeStatus=" +
+			  this.channel(PytesJs3.ChannelId.CURRENT_DRM_CODE_STATUS).value().asString() +
+			  "\nInverterCabinetTemp=" +
+			  this.channel(PytesJs3.ChannelId.INVERTER_CABINET_TEMP).value().asString() +
+			  "\nLimitedPowerActualValue=" +
+			  this.channel(PytesJs3.ChannelId.LIMITED_POWER_ACTUAL_VALUE).value().asString(
+			  ) + "\nPfAdjustmentActualValue=" +
+			  this.channel(PytesJs3.ChannelId.PF_ADJUSTMENT_ACTUAL_VALUE).value().asString(
+			  ) + "\nLimitedReactivePower=" +
+			  this.channel(PytesJs3.ChannelId.LIMITED_REACTIVE_POWER).value().asString() +
+			  "\nInverterModuleTemp2=" +
+			  this.channel(PytesJs3.ChannelId.INVERTER_MODULE_TEMP2).value().asString() +
+			  "\nVoltVarVrefRtValues=" +
+			  this.channel(PytesJs3.ChannelId.VOLT_VAR_VREF_RT_VALUES).value().asString() +
+			  "\nBmsChargingVoltageLimit=" +
+			  this.channel(PytesJs3.ChannelId.BMS_CHARGING_VOLTAGE_LIMIT).value().asString(
+			  ) + "\nBatteryBmsStatus=" +
+			  this.channel(PytesJs3.ChannelId.BATTERY_BMS_STATUS).value().asString() +
+			  "\nInverterInitialSettingState=" +
+			  this.channel(PytesJs3.ChannelId.INVERTER_INITIAL_SETTING_STATE).value().
+			  asString() + "\nBatchUpgradeBowl=" +
+			  this.channel(PytesJs3.ChannelId.BATCH_UPGRADE_BOWL).value().asString() +
+			  "\nFcasModeRunningStatus=" +
+			  this.channel(PytesJs3.ChannelId.FCAS_MODE_RUNNING_STATUS).value().asString()
+			  + "\nSettingFlagBit=" +
+			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_BIT).value().asString() +
+			  "\nFaultCode01=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_01).value().asString() +
+			  "\nFaultCode02=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_02).value().asString() +
+			  "\nFaultCode03=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_03).value().asString() +
+			  "\nFaultCode04=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_04).value().asString() +
+			  "\nFaultCode05=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_05).value().asString() +
+			  "\nOperatingStatus=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STATUS).value().asString()
+			  
+			  + "\nWorkingModeRunningStatus=" +
+			  this.channel(PytesJs3.ChannelId.WORKING_MODE_RUNNING_STATUS).value().asString
+			  () + "\nFaultCode06=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_06).value().asString() +
+			  "\nFaultCode07=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_CODE_07).value().asString() +
+			  "\nStorageControlSwitchingValue=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE).value().
+			  asString()
+			  
+			  
+			  + "\nPvShutdownSwitch=" + this.getPvShutdownSwitch().toString() +
+			  "\nGrid charge Allowed=" + this.getGridChargeAllowed().toString() +
+			  "\nDO Control=" + this.getDoControl().toString() +
+			  "\nOffGrid Battery Standby=" + this.getOffGridBatteryStandby().toString()
+			  
+			  
+			  // Appendix 4 decoded fault bits REG1 (33116) 
+			  + "\nFaultReg1_NoGrid=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_NO_GRID).value().asString() +
+			  "\nFaultReg1_GridOvVoltage=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_OVERVOLTAGE).value().asString
+			  () + "\nFaultReg1_GridUnVoltage=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_UNDERVOLTAGE).value().
+			  asString() + "\nFaultReg1_GridOverFreq=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_OVERFREQ).value().asString()
+			  + "\nFaultReg1_GridUnderFreq=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_UNDERFREQ).value().asString()
+			  + "\nFaultReg1_UnbalancedGrid=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_UNBALANCED_GRID).value().asString(
+			  ) + "\nFaultReg1_FreqFluctuation=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_FREQ_FLUCTUATION).value().
+			  asString() + "\nFaultReg1_ReverseCurrent=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_REVERSE_CURRENT).value().
+			  asString() + "\nFaultReg1_CurrentTrackErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_GRID_CURRENT_TRACKING_ERROR).value
+			  ().asString() + "\nFaultReg1_MeterComFail=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_METER_COM_FAIL).value().asString()
+			  + "\nFaultReg1_FailSafe=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_FAILSAFE).value().asString() +
+			  "\nFaultReg1_MeterSelFail=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_METER_SELECT_FAIL).value().
+			  asString() + "\nFaultReg1_EpmHardLimit=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_EPM_HARD_LIMIT).value().asString()
+			  + "\nFaultReg1_G100OvrLimit=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_G100_CURRENT_OVER_LIMIT).value().
+			  asString() + "\nFaultReg1_AbnGridPhase=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY).
+			  value().asString()
+			  
+			  // REG2 (33117) Backup / Hub faults 
+			  + "\nFaultReg2_BackupOvVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERVOLTAGE).value().
+			  asString() + "\nFaultReg2_BackupOverload=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERLOAD).value().asString(
+			  ) + "\nFaultReg2_GridBackupOverload=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG2_GRID_BACKUP_OVERLOAD).value().
+			  asString() + "\nFaultReg2_OffgridBackupUnVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE).value
+			  ().asString() + "\nFaultReg2_HubPanelOvCurrent=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG2_HUB_PANEL_OV_CURRENT).value().
+			  asString()
+			  
+			  // REG3 (33118) Battery faults 
+			  + "\nFaultReg3_BattNotConnected=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_NOT_CONNECTED).value().
+			  asString() + "\nFaultReg3_BattOvVoltCheck=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_OVERVOLTAGE_CHECK).value()
+			  .asString() + "\nFaultReg3_BattUnVoltCheck=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_UNDERVOLTAGE_CHECK).value(
+			  ).asString() + "\nFaultReg3_BattBmsAlarm=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_BMS_ALARM).value().
+			  asString() + "\nFaultReg3_InconsistBattSel=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_INCONSISTENT_BATTERY_SELECTION).
+			  value().asString() + "\nFaultReg3_LeadAcidTempLow=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_LOW).value().
+			  asString() + "\nFaultReg3_LeadAcidTempHigh=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_HIGH).value().
+			  asString() + "\nFaultReg3_2ndBattNotConn=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED).
+			  value().asString() + "\nFaultReg3_2ndBattSwOvVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE).
+			  value().asString() + "\nFaultReg3_2ndBattSwUnVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE).
+			  value().asString() + "\nFaultReg3_ParallelBattComAbn=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL).
+			  value().asString() + "\nFaultReg3_LowBattOffgrid=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG3_LOW_BATTERY_OFFGRID).value().
+			  asString()
+			  
+			  // REG4 (33119) DC / IGBT / AFCI faults 
+			  + "\nFaultReg4_DcOvVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERVOLTAGE).value().asString()
+			  + "\nFaultReg4_DcBusOvVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_OVERVOLTAGE).value().
+			  asString() + "\nFaultReg4_DcBusUnbalanced=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE).value()
+			  .asString() + "\nFaultReg4_DcBusUnVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNDERVOLTAGE).value().
+			  asString() + "\nFaultReg4_DcBusUnbalanced2=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE_2).value
+			  ().asString() + "\nFaultReg4_DcOvCurrentA=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERCURRENT_A).value().asString
+			  () + "\nFaultReg4_DcOvCurrentB=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERCURRENT_B).value().asString
+			  () + "\nFaultReg4_DcInputInterf=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_INPUT_INTERFERENCE).value().
+			  asString() + "\nFaultReg4_GridOvCurrent=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_GRID_OVERCURRENT).value().asString
+			  () + "\nFaultReg4_IgbtOvCurrent=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_IGBT_OVERCURRENT).value().asString
+			  () + "\nFaultReg4_GridInterf02=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_GRID_INTERFERENCE_02).value().
+			  asString() + "\nFaultReg4_AfciSelfCheck=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_AFCI_SELF_CHECK).value().asString(
+			  ) + "\nFaultReg4_GridCurrSampFault=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_GRID_CURRENT_SAMPLING_FAULT).value
+			  ().asString() + "\nFaultReg4_DspSelfCheckErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DSP_SELF_CHECK_ERROR).value().
+			  asString() + "\nFaultReg4_BattDischargeOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT).
+			  value().asString()
+			  
+			  // REG5 (33120) Protection faults 
+			  + "\nFaultReg5_GridInterf=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_GRID_INTERFERENCE).value().
+			  asString() + "\nFaultReg5_OverDcComponents=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_OVER_DC_COMPONENTS).value().
+			  asString() + "\nFaultReg5_OverTemp=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_OVER_TEMPERATURE).value().asString
+			  () + "\nFaultReg5_RelayCheck=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_RELAY_CHECK).value().asString() +
+			  "\nFaultReg5_UnderTemp=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_UNDER_TEMPERATURE).value().
+			  asString() + "\nFaultReg5_PvInsulFault=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_PV_INSULATION_FAULT).value().
+			  asString() + "\nFaultReg5_12vUnVolt=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_12V_UNDERVOLTAGE).value().asString
+			  () + "\nFaultReg5_LeakCurrent=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_LEAK_CURRENT).value().asString() +
+			  "\nFaultReg5_LeakCurrSelfChk=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_LEAK_CURRENT_SELF_CHECK).value().
+			  asString() + "\nFaultReg5_DspInitial=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_INITIAL).value().asString() +
+			  "\nFaultReg5_DspB=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_B).value().asString() +
+			  "\nFaultReg5_BattOvVoltHw=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_BATTERY_OVERVOLTAGE_HW).value().
+			  asString() + "\nFaultReg5_LlcHwOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_LLC_HW_OVERCURRENT).value().
+			  asString() + "\nFaultReg5_GridTransientOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_GRID_TRANSIENT_OVERCURRENT).value(
+			  ).asString() + "\nFaultReg5_BattComFail=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_BATTERY_COM_FAILURE).value().
+			  asString() + "\nFaultReg5_DspComFail=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_COM_FAIL).value().asString()
+			  
+			  // REG6 (33124) Parallel / multi-unit faults 
+			  + "\nFaultReg6_SlaveLoseErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_SLAVE_LOSE_ERR).value().asString()
+			  + "\nFaultReg6_MasterLoseErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_MASTER_LOSE_ERR).value().asString(
+			  ) + "\nFaultReg6_SlavePrdErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_SLAVE_PRD_ERR).value().asString()
+			  + "\nFaultReg6_MasterPrdErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_MASTER_PRD_ERR).value().asString()
+			  + "\nFaultReg6_AddrConflict=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_ADDR_CONFLICT).value().asString()
+			  + "\nFaultReg6_HeartbeatLose=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_HEARTBEAT_LOSE).value().asString()
+			  + "\nFaultReg6_DcanErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_DCAN_ERR).value().asString() +
+			  "\nFaultReg6_MulMasterErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_MUL_MASTER_ERR).value().asString()
+			  + "\nFaultReg6_ModeConflict=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_MODE_CONFLICT).value().asString()
+			  + "\nFaultReg6_SPlugVoltErr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_S_PLUG_VOLT_ERR).value().asString(
+			  ) + "\nFaultReg6_OthersFault=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_OTHERS_FAULT).value().asString() +
+			  "\nFaultReg6_CanBusLose=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_CAN_BUS_LOSE).value().asString() +
+			  "\nFaultReg6_ModelMismatch=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_MODEL_MISMATCH).value().asString()
+			  + "\nFaultReg6_3pCreateFail=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_3P_CREATE_FAIL).value().asString()
+			  + "\nFaultReg6_AcbkOpen=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG6_ACBK_OPEN).value().asString()
+			  
+			  // REG7 (33125) Hardware / startup faults 
+			  + "\nFaultReg7_ReveDc=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_REVE_DC).value().asString() +
+			  "\nFaultReg7_BattHwOvVolt02=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_BATTERY_HW_OVERVOLTAGE_02).value()
+			  .asString() + "\nFaultReg7_BattHwOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_BATTERY_HW_OVERCURRENT).value().
+			  asString() + "\nFaultReg7_BusMidpointHwOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT).value
+			  ().asString() + "\nFaultReg7_BattStartupFail=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_BATTERY_STARTUP_FAIL).value().
+			  asString() + "\nFaultReg7_Dc3AvgOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_DC3_AVG_OVERCURRENT).value().
+			  asString() + "\nFaultReg7_Dc4AvgOvCurr=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_DC4_AVG_OVERCURRENT).value().
+			  asString() + "\nFaultReg7_SoftrunTimeout=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_SOFTRUN_TIMEOUT).value().asString(
+			  ) + "\nFaultReg7_OffgridToGridTimeout=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_OFFGRID_TO_GRID_TIMEOUT).value().
+			  asString() + "\nFaultReg7_DrmNotConnect=" +
+			  this.channel(PytesJs3.ChannelId.FAULT_REG7_DRM_NOT_CONNECT).value().asString(
+			  )
+			  
+			  // Appendix 5 Operating Status decoded bits (33121) 
+			  + "\nOperatStat_NormalOp=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_NORMAL_OPERATION).value().
+			  asString() + "\nOperatStat_Initializing=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_INITIALIZING).value().asString
+			  () + "\nOperatStat_ControlledOff=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_CONTROLLED_OFF).value().
+			  asString() + "\nOperatStat_FaultOff=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_FAULT_OFF).value().asString()
+			  + "\nOperatStat_Standby=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_STANDBY).value().asString() +
+			  "\nOperatStat_LimitedTempFreq=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_LIMITED_TEMP_FREQ).value().
+			  asString() + "\nOperatStat_LimitedExternal=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_LIMITED_EXTERNAL).value().
+			  asString() + "\nOperatStat_BackupOverload=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_BACKUP_OVERLOAD).value().
+			  asString() + "\nOperatStat_LoadFault=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_LOAD_FAULT).value().asString()
+			  + "\nOperatStat_GridFault=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_GRID_FAULT).value().asString()
+			  + "\nOperatStat_BatteryFault=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_BATTERY_FAULT).value().
+			  asString() + "\nOperatStat_GridSurgeWarn=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_GRID_SURGE_WARN).value().
+			  asString() + "\nOperatStat_FanFaultWarn=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_FAN_FAULT_WARN).value().
+			  asString() + "\nOperatStat_ExternalFanFail=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_EXTERNAL_FAN_FAIL).value().
+			  asString()
+			  
+			  // Appendix 6 Storage Control decoded bits (33132) + "\nStorageCtrl_SelfUse="
+			  +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_SELF_USE_MODE).value().asString(
+			  ) + "\nStorageCtrl_TimeOfUse=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_TIME_OF_USE_MODE).value().
+			  asString() + "\nStorageCtrl_OffGrid=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_OFFGRID_MODE).value().asString()
+			  + "\nStorageCtrl_BattWakeup=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_WAKEUP).value().asString()
+			  + "\nStorageCtrl_ReserveBatt=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_RESERVE_BATT_MODE).value().
+			  asString() + "\nStorageCtrl_AllowGridChg=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_ALLOW_GRID_CHARGE).value().
+			  asString() + "\nStorageCtrl_FeedInPriority=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_FEED_IN_PRIORITY).value().
+			  asString() + "\nStorageCtrl_BattOvc=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_OVC).value().asString() +
+			  "\nStorageCtrl_ForceChargePeak=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING).value(
+			  ).asString() + "\nStorageCtrl_BattCurrCorrect=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_CURRENT_CORRECTION).value()
+			  .asString() + "\nStorageCtrl_BattHealing=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_BATT_HEALING_MODE).value().
+			  asString() + "\nStorageCtrl_PeakShaving=" +
+			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_PEAK_SHAVING_MODE).value().
+			  asString()
+			  
+			  // Appendix 7 Setting Flag Bit decoded bits (33115) 
+			  + "\nSettingFlag_FlashTimeout=" +
+			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_FLASH_TIMEOUT).value().asString(
+			  ) + "\nSettingFlag_ClearEnergy=" +
+			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_CLEAR_ENERGY).value().asString()
+			  + "\nSettingFlag_ResetDatalogger=" +
+			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_RESET_DATALOGGER).value().
+			  asString() + "\nSettingFlag_FactoryRecover=" +
+			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_FACTORY_RECOVER).value().
+			  asString()
+			  */
+			  + "\nOperatingModeDecoded=" +
+			  this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).value().asString()
+			 
 			;
 
 		} else {

@@ -59,7 +59,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implements PytesMeterGrid, ElectricityMeter,
 		ModbusComponent, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
 
-	private MeterType meterType = MeterType.PRODUCTION;
+	private MeterType meterType = MeterType.GRID;
 
 	private final CalculateEnergyFromPower calculateProductionEnergy = new CalculateEnergyFromPower(this,
 			ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY);
@@ -93,13 +93,13 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
-		this.config = config;
+		
 		this.meterType = config.type();
 		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
 				"Modbus", config.modbus_id())) {
 			return;
 		}
-		
+		this.config = config;
 		this.installListeners();
 
 	}

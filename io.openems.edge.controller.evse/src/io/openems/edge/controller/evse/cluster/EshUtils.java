@@ -3,6 +3,9 @@ package io.openems.edge.controller.evse.cluster;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.openems.common.utils.IntUtils.minInt;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 import java.time.ZonedDateTime;
 import java.util.stream.Stream;
@@ -44,32 +47,30 @@ public class EshUtils {
 		protected static EnergyDistribution fromSimulator(Period period, OptimizationContext clusterCoc,
 				ClusterScheduleContext clusterCsc, SingleModes mode) {
 			final var surplusEnergy = period instanceof Period.WithPrediction wp //
-					? wp.production() - wp.consumption() //
+					? wp.prediction().excessProduction() //
 					: 0; // default to zero
 
 			final var entries = clusterCoc.clusterConfig().singleParams().values().stream() //
 					.map(p -> {
 						final var csc = clusterCsc.getCsc(p.componentId());
-						final var singleMode = mode.getMode(p.componentId());
-						final var remainingSessionEnergy = p.sessionEnergyLimit() > 0 //
-								? Math.max(0, p.sessionEnergyLimit() - csc.getSessionEnergy()) //
-								: null;
-
+						final var scheduledMode = mode.getMode(p.componentId());
 						final var abilities = p.combinedAbilities();
-						final int maxEnergy;
-						final int energyInModeMinimum;
-						if (abilities.isReadyForCharging()) {
-							energyInModeMinimum = period.duration()
-									.convertPowerToEnergy(abilities.applySetPoint().min());
-							maxEnergy = TypeUtils.min(remainingSessionEnergy,
-									period.duration().convertPowerToEnergy(abilities.applySetPoint().max()));
-						} else {
-							energyInModeMinimum = 0;
-							maxEnergy = 0;
-						}
 
-						return new EnergyDistribution.Entry(p.componentId(), csc, singleMode, energyInModeMinimum,
-								maxEnergy);
+						// Evaluate Energy limit
+						final var energyLimit = minInt(//
+								p.combinedAbilities().electricVehicleAbilities().capacity(), //
+								p.sessionEnergyLimit());
+						final var remainingSessionEnergy = max(0, energyLimit - csc.getSessionEnergy());
+						final int maxEnergy = min(remainingSessionEnergy,
+								period.duration().convertPowerToEnergy(abilities.applySetPoint().max()));
+
+						final int energyInModeMinimum = period.duration()
+								.convertPowerToEnergy(abilities.applySetPoint().min());
+						final var actualMode = abilities.isReadyForCharging() && !p.appearsToBeFullyCharged() //
+								? scheduledMode //
+								: Mode.ZERO;
+						return new EnergyDistribution.Entry(p.componentId(), csc, scheduledMode, actualMode,
+								energyInModeMinimum, maxEnergy);
 					}) //
 					.collect(toImmutableList());
 
@@ -81,7 +82,8 @@ public class EshUtils {
 		 */
 		public static class Entry {
 			public final String componentId;
-			public final Mode mode;
+			public final Mode scheduledMode;
+			public final Mode actualMode;
 			public final int energyInModeMinimum;
 			public final int maxEnergy;
 
@@ -89,12 +91,13 @@ public class EshUtils {
 
 			protected int actualEnergy;
 
-			public Entry(String componentId, SingleScheduleContext csc, Mode mode, int energyInModeMinimum,
-					int maxEnergy) {
+			public Entry(String componentId, SingleScheduleContext csc, Mode scheduledMode, Mode actualMode,
+					int energyInModeMinimum, int maxEnergy) {
 				this.componentId = componentId;
 				this.csc = csc;
-				this.mode = mode;
-				this.energyInModeMinimum = Math.min(energyInModeMinimum, maxEnergy);
+				this.scheduledMode = scheduledMode;
+				this.actualMode = actualMode;
+				this.energyInModeMinimum = min(energyInModeMinimum, maxEnergy);
 				this.maxEnergy = maxEnergy;
 			}
 		}
@@ -109,7 +112,7 @@ public class EshUtils {
 
 		protected void initializeSetPoints() {
 			this.entries.stream().forEach(e -> {
-				e.actualEnergy = switch (e.mode) {
+				e.actualEnergy = switch (e.actualMode) {
 				case MINIMUM -> e.energyInModeMinimum;
 				case FORCE -> e.maxEnergy;
 				case SURPLUS, ZERO -> 0;
@@ -118,7 +121,7 @@ public class EshUtils {
 		}
 
 		protected void distributeSurplusEnergy(DistributionStrategy distributionStrategy) {
-			var totalExcessEnergy = Math.max(0, this.surplusEnergy - this.sumActualEnergies());
+			var totalExcessEnergy = max(0, this.surplusEnergy - this.sumActualEnergies());
 
 			// TODO consider distributionStrategy
 			this.distributeEnergyEqual(totalExcessEnergy);
@@ -132,7 +135,7 @@ public class EshUtils {
 
 		private void distributeEnergyEqual(int initialDistributableEnergy) {
 			var entries = this.entries.stream() //
-					.filter(e -> e.mode == Mode.SURPLUS) //
+					.filter(e -> e.actualMode == Mode.SURPLUS) //
 					// Only entries that do not already apply max set-point
 					.filter(e -> e.actualEnergy < e.maxEnergy) //
 					.toList();
@@ -144,7 +147,7 @@ public class EshUtils {
 			var remaining = initialDistributableEnergy;
 			for (var e : entries) {
 				var before = e.actualEnergy;
-				var after = TypeUtils.fitWithin(0, e.maxEnergy, before + Math.min(remaining, equalEnergy));
+				var after = TypeUtils.fitWithin(0, e.maxEnergy, before + min(remaining, equalEnergy));
 				remaining -= after - before;
 
 				e.actualEnergy = after;
@@ -216,8 +219,11 @@ public class EshUtils {
 				.stream() //
 				.map(l -> {
 					var addToOptimizer = l.stream().anyMatch(sm -> addToOptimizers.contains(sm.componentId()));
-					return new Modes.Mode<SingleModes>(new SingleModes(l.stream() //
-							.collect(toImmutableMap(SingleMode::componentId, SingleMode::mode))), addToOptimizer);
+					return new Modes.Mode<SingleModes>(//
+							new SingleModes(
+									l.stream().collect(toImmutableMap(SingleMode::componentId, SingleMode::mode))), //
+							addToOptimizer, //
+							null); // TODO
 				}) //
 				.collect(toImmutableList());
 		return Modes.of(allModes);

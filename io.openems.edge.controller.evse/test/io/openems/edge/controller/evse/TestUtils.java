@@ -143,6 +143,7 @@ public class TestUtils {
 				.setApplySetPoint(new ApplySetPoint.Ability.MilliAmpere(THREE_PHASE, 6000, 16000)) //
 				.setIsReadyForCharging(true);
 		private final ElectricVehicleAbilities.Builder electricVehicleAbilities = ElectricVehicleAbilities.create() //
+				.setCapacity(64000) //
 				.setSinglePhaseLimitInMilliAmpere(6000, 32000) //
 				.setThreePhaseLimitInMilliAmpere(6000, 16000); //
 
@@ -150,11 +151,11 @@ public class TestUtils {
 		private Mode mode = Mode.ZERO;
 		private Integer activePower = null;
 		private int sessionEnergy = 0;
-		private int sessionEnergyLimit = 0;
+		private Integer sessionEnergyLimit = null;
 		private History history = new History();
 		private PhaseSwitching phaseSwitching = PhaseSwitching.DISABLE;
 		private Consumer<CombinedAbilities.Builder> combinedAbilitiesCallback;
-		private JSCalendar.Tasks<Payload> smartConfig = JSCalendar.Tasks.empty();
+		private JSCalendar.Tasks<Payload> tasks = JSCalendar.Tasks.empty();
 
 		public CtrlBuilder setId(String id) {
 			this.id = id;
@@ -176,7 +177,7 @@ public class TestUtils {
 			return this;
 		}
 
-		public CtrlBuilder setSessionEnergyLimit(int sessionEnergyLimit) {
+		public CtrlBuilder setSessionEnergyLimit(Integer sessionEnergyLimit) {
 			this.sessionEnergyLimit = sessionEnergyLimit;
 			return this;
 		}
@@ -207,8 +208,8 @@ public class TestUtils {
 			return this;
 		}
 
-		public CtrlBuilder setSmartConfig(JSCalendar.Tasks<Payload> smartConfig) {
-			this.smartConfig = smartConfig;
+		public CtrlBuilder setTasks(JSCalendar.Tasks<Payload> tasks) {
+			this.tasks = tasks;
 			return this;
 		}
 
@@ -219,7 +220,7 @@ public class TestUtils {
 				this.combinedAbilitiesCallback.accept(combinedAbilities);
 			}
 			var params = new Params(this.id, this.mode, this.activePower, this.sessionEnergy, this.sessionEnergyLimit,
-					this.history, this.phaseSwitching, combinedAbilities.build(), this.smartConfig);
+					this.history, this.phaseSwitching, combinedAbilities.build(), this.tasks);
 			return new DummyControllerEvseSingle(this.id) //
 					.withParams(params);
 		}

@@ -1,4 +1,5 @@
 // @ts-strict-ignore
+import { Signal, signal } from "@angular/core";
 import { TranslateService } from "@ngx-translate/core";
 import { compareVersions } from "compare-versions";
 import { BehaviorSubject, Subject } from "rxjs";
@@ -30,13 +31,11 @@ import { Role } from "../../type/role";
 import { Widgets } from "../../type/widgets";
 import { ArrayUtils } from "../../utils/array/array.utils";
 import { ObjectUtils } from "../../utils/object/object.utils";
-import { PromiseUtils } from "../../utils/promise/promise.utils";
 import { StringUtils } from "../../utils/string/string.utils";
 import { NavigationId, NavigationTree } from "../navigation/shared";
 import { Name } from "../shared/name";
 import { CurrentData } from "./currentdata";
 import { EdgeConfig } from "./edgeconfig";
-import { ThirdPartyUsageAcceptance } from "./popover/shared/third-party-usage-acceptance";
 
 export enum EdgeSettings {
     ANNUAL_REVIEW_2025 = "annual_review_2025",
@@ -57,6 +56,7 @@ export class Edge {
 
     // holds config
     private config: BehaviorSubject<EdgeConfig> = new BehaviorSubject<EdgeConfig>(null);
+    private _config = signal<EdgeConfig | null>(null);
 
     // holds currently subscribed channels, identified by source id
     private subscribedChannels: { [sourceId: string]: ChannelAddress[] } = {};
@@ -97,12 +97,22 @@ export class Edge {
      * Gets the Config. If not available yet, it requests it via Websocket.
      *
      * @param websocket the Websocket connection
+     * @deprecated use {@link getConfigSignal}
      */
     public getConfig(websocket: Websocket): BehaviorSubject<EdgeConfig> {
         if (this.config.value == null || !this.config.value.isValid()) {
             this.refreshConfig(websocket);
         }
         return this.config;
+    }
+
+    /**
+     * Gets the Config.
+     *
+     * @param websocket the Websocket connection
+     */
+    public getConfigSignal(): Signal<EdgeConfig> {
+        return this._config.asReadonly();
     }
 
     /**
@@ -202,6 +212,26 @@ export class Edge {
     }
 
     /**
+    * Add Channels to subscription with checking websocket states first.
+    *
+    * @param websocket the Websocket
+    * @param id        a unique ID for this subscription (e.g. the component selector)
+    * @param channels  the subscribed Channel-Addresses
+    */
+    public subscribeChannelsWithState(websocket: Websocket, id: string, channels: ChannelAddress[]): void {
+        const previousChannels = Object.values(this.subscribedChannels).flat().map(channel => channel.toString());
+        this.subscribedChannels[id] = channels;
+
+        const channelsToSubscribe = channels.map(channel => channel.toString());
+
+        if (previousChannels.length > 0 && ArrayUtils.containsAll({ strings: channelsToSubscribe, arr: previousChannels })) {
+            return;
+        }
+
+        this.sendSubscribeChannelsWithState(websocket);
+    }
+
+    /**
      * Add Channels to subscription
      *
      * @param websocket the Websocket
@@ -214,7 +244,7 @@ export class Edge {
 
         const channelsToSubscribe = channels.map(channel => channel.toString());
 
-        if (ArrayUtils.containsAll({ strings: channelsToSubscribe, arr: previousChannels })) {
+        if (previousChannels.length > 0 && ArrayUtils.containsAll({ strings: channelsToSubscribe, arr: previousChannels })) {
             return;
         }
 
@@ -330,6 +360,7 @@ export class Edge {
      */
     public handleEdgeConfigNotification(message: EdgeConfigNotification): void {
         this.config.next(new EdgeConfig(this, message.params));
+        this._config.set(new EdgeConfig(this, message.params));
     }
 
     /**
@@ -359,6 +390,18 @@ export class Edge {
     }
 
     /**
+     * Creates a configuration for a OpenEMS Edge Component.
+     *
+     * @param ws          the Websocket
+     * @param factoryPId  the OpenEMS Edge Factory-PID
+     * @param properties  the properties to be updated.
+     */
+    public createComponentConfigWithState(ws: Websocket, factoryPid: string, properties: { name: string, value: any }[]): Promise<JsonrpcResponseSuccess> {
+        const request = new CreateComponentConfigRequest({ factoryPid: factoryPid, properties: properties });
+        return this.sendStateFullRequest(ws, request);
+    }
+
+    /**
      * Updates the configuration of a OpenEMS Edge Component.
      *
      * @param ws          the Websocket
@@ -371,12 +414,35 @@ export class Edge {
     }
 
     /**
+     * Updates the configuration of a OpenEMS Edge Component.
+     *
+     * @param ws          the Websocket
+     * @param componentId the OpenEMS Edge Component-ID
+     * @param properties  the properties to be updated.
+     */
+    public updateComponentConfigWithState(ws: Websocket, componentId: string, properties: { name: string, value: any }[]): Promise<JsonrpcResponseSuccess> {
+        const request = new UpdateComponentConfigRequest({ componentId: componentId, properties: properties });
+        return this.sendStateFullRequest(ws, request);
+    }
+
+    /**
      * Deletes the configuration of a OpenEMS Edge Component.
      *
      * @param ws          the Websocket
      * @param componentId the OpenEMS Edge Component-ID
      */
     public deleteComponentConfig(ws: Websocket, componentId: string): Promise<JsonrpcResponseSuccess> {
+        const request = new DeleteComponentConfigRequest({ componentId: componentId });
+        return this.sendRequest(ws, request);
+    }
+
+    /**
+     * Deletes the configuration of a OpenEMS Edge Component.
+     *
+     * @param ws          the Websocket
+     * @param componentId the OpenEMS Edge Component-ID
+     */
+    public deleteComponentConfigWithState(ws: Websocket, componentId: string): Promise<JsonrpcResponseSuccess> {
         const request = new DeleteComponentConfigRequest({ componentId: componentId });
         return this.sendRequest(ws, request);
     }
@@ -392,6 +458,24 @@ export class Edge {
         const wrap = new EdgeRpcRequest({ edgeId: this.id, payload: request });
         return new Promise((resolve, reject) => {
             ws.sendRequest(wrap).then(response => {
+                resolve(response["result"]["payload"]);
+            }).catch(reason => {
+                reject(reason);
+            });
+        });
+    }
+
+    /**
+    * Sends a JSON-RPC Request. The Request is wrapped in a EdgeRpcRequest.
+    *
+    * @param ws               the Websocket
+    * @param request          the JSON-RPC Request
+    * @param responseCallback the JSON-RPC Response callback
+    */
+    public sendStateFullRequest<T = JsonrpcResponseSuccess>(ws: Websocket, request: JsonrpcRequest): Promise<T> {
+        const wrap = new EdgeRpcRequest({ edgeId: this.id, payload: request });
+        return new Promise((resolve, reject) => {
+            ws.sendStateFullRequest(wrap).then(response => {
                 resolve(response["result"]["payload"]);
             }).catch(reason => {
                 reject(reason);
@@ -502,6 +586,7 @@ export class Edge {
         const conf = await this.config.getValue();
         this.addCommonWidgetNavigation(edge, conf, navigationTree, translate);
         this.addControllerNavigation(edge, conf, navigationTree, translate);
+
         const baseMode: NavigationTree["mode"] = "label";
         for (const [componentId, component] of Object.entries(conf.components)) {
             if (component.isEnabled == false) {
@@ -521,11 +606,10 @@ export class Edge {
                                 new NavigationTree("energy-limit", { baseString: "energy-limit" }, { name: "settings-outline", color: "medium" }, translate.instant("GENERAL.ENERGY_LIMIT"), baseMode, [], null),
                                 new NavigationTree("phase-switching", { baseString: "phase-switching" }, { name: "menu-outline", color: "warning" }, translate.instant("EDGE.INDEX.WIDGETS.EVCS.PHASE_SWITCHING"), "label", [], null),
                                 new NavigationTree("schedule", { baseString: "schedule" }, { name: "calendar-outline", color: "warning" }, translate.instant("EDGE.INDEX.WIDGETS.EVSE.SCHEDULE.SCHEDULE"), baseMode, [
-                                    new NavigationTree("add-task", { baseString: "add-task" }, { name: "add-outline", color: "medium" }, translate.instant("EDGE.INDEX.WIDGETS.EVSE.SCHEDULE.ADD_TASK"), baseMode, [], null),
                                 ], null),
                                 new NavigationTree("charge-mode", { baseString: "charge-mode" }, { name: "checkmark-done-outline", color: "medium" }, translate.instant("EDGE.INDEX.WIDGETS.EVSE.CHARGE_MODE"), baseMode, [], null),
                                 ...(this.roleIsAtLeast(Role.OWNER)
-                                    ? [new NavigationTree("car", { baseString: "car/update/App.Evse.ElectricVehicle.Generic" }, { name: "car-sport-outline", color: "success" }, translate.instant("EVSE_SINGLE.HOME.VEHICLES"), baseMode, [], null)]
+                                    ? [new NavigationTree("car", { baseString: "car/update/App.Evse.ElectricVehicle.Generic", queryParams: { componentId: component.getPropertyFromComponent<string>("electricVehicle.id") } }, { name: "car-sport-outline", color: "success" }, translate.instant("EVSE_SINGLE.HOME.VEHICLES"), baseMode, [], null)]
                                     : []),
                             ], navigationTree));
                     break;
@@ -537,8 +621,8 @@ export class Edge {
                     break;
             }
         }
-        navigationTree.setChild(NavigationId.LIVE, new NavigationTree("navigation-info", { baseString: "navigation-info" }, { name: "information-outline" }, translate.instant("GENERAL.HELP"), "label", [], null));
-
+        navigationTree.setChild(NavigationId.LIVE, new NavigationTree("navigation-info", { baseString: "navigation-info" }, { name: "information-outline" }, translate.instant("GENERAL.HELP"), "label", [], null, "LOW"));
+        navigationTree.reorderByPriorization(navigationTree);
         return navigationTree;
     }
 
@@ -554,27 +638,7 @@ export class Edge {
      * @returns
      */
     public async shouldShowPrivacyPolicyPopover(websocket: Websocket): Promise<boolean> {
-        const [_err, config] = await PromiseUtils.Functions.handle(this.getFirstValidConfig(websocket));
-
-        if (_err) {
-            return false;
-        }
-
-        if (this.isOnline === false) {
-            return false;
-        }
-
-        const isUndecided = config
-            .getComponent("_meta")
-            .hasPropertyValue<ThirdPartyUsageAcceptance>("thirdPartyUsageAcceptance", ThirdPartyUsageAcceptance.UNDECIDED);
-        const latitude = config.getComponent("_meta").getPropertyFromComponent<number>("latitude");
-        const longitude = config.getComponent("_meta").getPropertyFromComponent<number>("longitude");
-        const hasValidCoordinates =
-            latitude != null && longitude != null &&
-            latitude >= -90 && latitude <= 90 &&
-            longitude >= -180 && longitude <= 180;
-        const isOwner = this.role === Role.OWNER;
-        return isUndecided && isOwner && hasValidCoordinates;
+        return false;
     }
 
     private addCommonWidgetNavigation(edge: Edge, conf: EdgeConfig, currentNavigationTree: NavigationTree, translate: TranslateService): void {
@@ -586,15 +650,15 @@ export class Edge {
             if (navigationTree == null) {
                 continue;
             }
-
             currentNavigationTree.setChild(NavigationId.LIVE, new NavigationTree(...navigationTree));
         }
     }
+
     private addControllerNavigation(edge: Edge, conf: EdgeConfig, currentNavigationTree: NavigationTree, translate: TranslateService): void {
         const list = Widgets.parseWidgets(edge, conf).list;
 
         for (const item of list) {
-            const navigationTree: ConstructorParameters<typeof NavigationTree> | null = Widgets.getControllerNavigationTree(edge, item.name, translate, conf);
+            const navigationTree: ConstructorParameters<typeof NavigationTree> | null = Widgets.getControllerNavigationTree(edge, item, translate, conf);
 
             if (navigationTree == null) {
                 continue;
@@ -623,9 +687,11 @@ export class Edge {
         this.sendRequest(websocket, request).then(response => {
             const edgeConfigResponse = response as GetEdgeConfigResponse;
             this.config.next(new EdgeConfig(this, edgeConfigResponse.result));
+            this._config.set(new EdgeConfig(this, edgeConfigResponse.result));
         }).catch(reason => {
             console.warn("Unable to refresh config", reason);
             this.config.next(new EdgeConfig(this));
+            this._config.set(new EdgeConfig(this));
         });
     }
 
@@ -648,6 +714,33 @@ export class Edge {
                 }
                 const request = new SubscribeChannelsRequest(channels);
                 this.sendRequest(websocket, request).then(() => {
+                    this.subscribeChannelsSuccessful = true;
+                }).catch(reason => {
+                    this.subscribeChannelsSuccessful = false;
+                    console.warn(reason);
+                });
+            }, 100);
+        }
+    }
+    /**
+   * Sends a SubscribeChannelsRequest for all Channels in 'this.subscribedChannels'
+   *
+   * @param websocket the Websocket
+   */
+    private sendSubscribeChannelsWithState(websocket: Websocket): void {
+        // make sure to send not faster than every 100 ms
+        if (this.subscribeChannelsTimeout == null) {
+            this.subscribeChannelsTimeout = setTimeout(() => {
+                // reset subscribeChannelsTimeout
+                this.subscribeChannelsTimeout = null;
+
+                // merge channels from currentDataSubscribes
+                const channels: ChannelAddress[] = [];
+                for (const componentId in this.subscribedChannels) {
+                    channels.push(...this.subscribedChannels[componentId]);
+                }
+                const request = new SubscribeChannelsRequest(channels);
+                this.sendStateFullRequest(websocket, request).then(() => {
                     this.subscribeChannelsSuccessful = true;
                 }).catch(reason => {
                     this.subscribeChannelsSuccessful = false;

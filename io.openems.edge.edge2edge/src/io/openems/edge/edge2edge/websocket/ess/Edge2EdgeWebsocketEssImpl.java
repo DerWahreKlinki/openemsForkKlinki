@@ -1,5 +1,7 @@
 package io.openems.edge.edge2edge.websocket.ess;
 
+import static io.openems.common.utils.IntUtils.maxInteger;
+import static io.openems.common.utils.IntUtils.minInteger;
 import static java.util.stream.Collectors.toSet;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -23,6 +25,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.ChannelCategory;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsRuntimeException;
+import io.openems.common.function.Disposable;
 import io.openems.common.jsonrpc.request.GetChannelsOfComponent;
 import io.openems.common.types.ChannelAddress;
 import io.openems.common.types.OpenemsType;
@@ -35,7 +38,6 @@ import io.openems.edge.common.type.TypeUtils;
 import io.openems.edge.edge2edge.websocket.Edge2EdgeWebsocket;
 import io.openems.edge.edge2edge.websocket.bridge.BridgeComponentStateHandler;
 import io.openems.edge.edge2edge.websocket.bridge.ChannelSubscriber;
-import io.openems.edge.edge2edge.websocket.bridge.Disposable;
 import io.openems.edge.edge2edge.websocket.bridge.Edge2EdgeWebsocketBridge;
 import io.openems.edge.ess.api.AsymmetricEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
@@ -205,11 +207,14 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 	public String debugLog() {
 		return "SoC:" + this.getSoc().asString() //
 				+ "|L:" + this.getActivePower().asString() //
-				+ "|Allowed:"
-				+ TypeUtils.max(this.getAllowedChargePower().get(),
+				+ "|Allowed:" //
+				+ maxInteger(//
+						this.getAllowedChargePower().get(), //
 						TypeUtils.multiply(this.getMaxApparentPower().get(), -1))
 				+ ";" //
-				+ TypeUtils.min(this.getAllowedDischargePower().get(), this.getMaxApparentPower().get()) //
+				+ minInteger(//
+						this.getAllowedDischargePower().get(), //
+						this.getMaxApparentPower().get()) //
 				+ "|" + this.getGridModeChannel().value().asOptionString();
 	}
 
@@ -224,8 +229,8 @@ public class Edge2EdgeWebsocketEssImpl extends AbstractOpenemsComponent implemen
 
 	@Override
 	public void applyPower(int activePower, int reactivePower) throws OpenemsNamedException {
-		this.setActivePowerEquals(activePower);
-		this.setReactivePowerEquals(reactivePower);
+		this.setActivePowerEqualsWithoutFilter(activePower);
+		this.setReactivePowerEqualsWithoutFilter(reactivePower);
 	}
 
 	@Override

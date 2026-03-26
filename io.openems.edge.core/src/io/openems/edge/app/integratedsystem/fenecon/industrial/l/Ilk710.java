@@ -2,8 +2,11 @@ package io.openems.edge.app.integratedsystem.fenecon.industrial.l;
 
 import static io.openems.edge.app.common.props.CommonProps.alias;
 import static io.openems.edge.app.common.props.CommonProps.defaultDef;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.predictionDefault;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.predictionUnmanagedConsumption;
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.battery;
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.batteryInverter;
+import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.batteryOld;
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.cycle;
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.essCluster;
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.essGenericManagedSymmetric;
@@ -14,6 +17,7 @@ import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconI
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.power;
 import static io.openems.edge.app.integratedsystem.fenecon.industrial.l.FeneconIndustrialLComponents.system;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -167,11 +171,10 @@ public class Ilk710 extends AbstractOpenemsAppWithProps<Ilk710, Property, Bundle
 				final var batteryInverterNumber = oneBased + 10;
 
 				if (batteryFirmwareVersion == BatteryFirmwareVersion.WUERTH_VERSION_CURRENT) {
-					components.add(battery(bundle, batteryId, oneBased, batteryModbusId,
-							batteryFirmwareVersion.getValue(), "Battery.WuerthBms"));
+					components.add(battery(bundle, batteryId, oneBased, batteryModbusId, "Battery.WuerthBms"));
 					components.add(cycle(500));
 				} else {
-					components.add(battery(bundle, batteryId, oneBased, batteryModbusId,
+					components.add(batteryOld(bundle, batteryId, oneBased, batteryModbusId,
 							batteryFirmwareVersion.getValue(), "Battery.EnfasBms"));
 					components.add(cycle(1000));
 				}
@@ -185,6 +188,9 @@ public class Ilk710 extends AbstractOpenemsAppWithProps<Ilk710, Property, Bundle
 
 			return AppConfiguration.create() //
 					.addTask(Tasks.component(components)) //
+					.addDependencies(List.of(//
+							predictionDefault(), //
+							predictionUnmanagedConsumption()))
 					.build();
 		};
 	}

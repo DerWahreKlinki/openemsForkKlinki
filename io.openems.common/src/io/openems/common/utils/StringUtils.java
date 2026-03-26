@@ -109,7 +109,7 @@ public class StringUtils {
 		}
 	}
 
-	private static final Pattern NAME_NUMBER_PATTERN = Pattern.compile("[^0-9]+([0-9]+)$");
+	private static final Pattern NAME_NUMBER_PATTERN = Pattern.compile("\\D++(\\d++)$");
 
 	/**
 	 * Causes this character sequence to be replaced by the reverse of the sequence.
@@ -209,5 +209,20 @@ public class StringUtils {
 	 */
 	public static String emptyToNull(String value) {
 		return (value == null || value.isBlank()) ? null : value;
+	}
+
+	/**
+	 * Calls .toString() if the given obj is not null and returns the result. If the
+	 * given obj is null, elseVal is returned.
+	 *
+	 * @param obj     Value to format to string
+	 * @param elseVal Value to return if obj is null
+	 * @return String
+	 */
+	public static String toStringOrElse(Object obj, String elseVal) {
+		if (obj == null) {
+			return elseVal;
+		}
+		return obj.toString();
 	}
 }

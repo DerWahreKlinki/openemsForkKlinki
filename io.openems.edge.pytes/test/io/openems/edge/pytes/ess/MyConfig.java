@@ -81,5 +81,23 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		return null;
 	}
 
+	@Override
+	public boolean standBy() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public int minSoc() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public boolean enableBackupPort() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 
 }

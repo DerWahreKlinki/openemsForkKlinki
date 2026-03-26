@@ -1,15 +1,11 @@
 package io.openems.edge.pytes.battery;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
-import static io.openems.common.channel.AccessMode.READ_WRITE;
-import static io.openems.common.channel.PersistencePriority.HIGH;
 import static io.openems.common.types.OpenemsType.BOOLEAN;
 import static io.openems.common.types.OpenemsType.INTEGER;
-import static io.openems.common.types.OpenemsType.LONG;
 
 import io.openems.common.channel.Unit;
 import io.openems.edge.battery.api.Battery;
-import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;
@@ -199,7 +195,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		 */
 		BMS_FAULT02_FORCE_CHARGE_REQUEST(Doc.of(BOOLEAN).accessMode(READ_ONLY)),
 
-		/*
+		/**
 		 * In this register current has no direction. So it can´t be used for main
 		 * battery class
 		 */
@@ -207,7 +203,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.accessMode(READ_ONLY)//
 				.unit(Unit.MILLIAMPERE)),
 
-		/*
+		/**
 		 * In this register current has no direction. So it can´t be used for main
 		 * battery class
 		 */

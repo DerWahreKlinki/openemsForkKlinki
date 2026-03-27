@@ -11,10 +11,10 @@ public enum Appendix2 implements OptionsEnum {
 	GENERATING(0x0003, "Generating"),
 	BYPASS_INVERTING_RUNNING(0x0004, "Bypass Inverting Running"),
 	BYPASS_INVERTING_SYNCHRONIZE(0x0005, "Bypass Inverting Synchronize"),
-	
+
 	BYPASS_GRID_RUNNING(0x0006, "Bypass Grid Running"),
 	NORMAL_RUNNING(0x000F, "Normal"),
-	
+
 	GRID_SURGE_WARNING(0xF010, "Grid Surge Warning"),
 	FAN_FAULT_WARNING(0xF011, "Fan Fault Warning"),
 	FAN_EXTERNAL_FAULT_WARNING(0xF015, "Fan Fault Warning External"),
@@ -50,7 +50,7 @@ public enum Appendix2 implements OptionsEnum {
 	DSP_B_PROTECTION(0x1036, "DSP B Protection"),
 	DC_INJECTION_PROTECTION(0x1037, "DC Injection Protection"),
 	V12_UNDER_VOLTAGE_FAULT(0x1038, "12V Under Voltage Fault"),
-	
+
 	LEAKAGE_CURRENT_CHECK_PROTECTION(0X1039, "Leakage Current Check Protection"),
 	UNDER_TEMPERATURE_PROTECTION(0x103A, "Under Temperature Protection"),
 
@@ -113,7 +113,7 @@ public enum Appendix2 implements OptionsEnum {
 	AFCI_CT_MODULE_FAIL(0x2042, "AFCI CT Module Fail"),
 	G100_OVI_PROTECTION(0x2043, "G100 OVI Protection"),
 	MULTIPLE_MASTER_SET_ERROR(0x2044, "Multiple Master Set Error");
-	
+
 
 	private final int value;
 	private final String name;

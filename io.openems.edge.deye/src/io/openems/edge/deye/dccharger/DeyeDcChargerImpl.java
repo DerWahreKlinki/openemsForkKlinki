@@ -25,6 +25,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.utils.IntUtils;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
@@ -256,7 +257,7 @@ public class DeyeDcChargerImpl extends AbstractOpenemsModbusComponent implements
 		// power sum DC Strings
 		Integer totalPower;
 		try {
-			totalPower = TypeUtils.sum(this.getDcPowerString1().getOrError(), this.getDcPowerString2().getOrError(),
+			totalPower = IntUtils.sumInt(this.getDcPowerString1().getOrError(), this.getDcPowerString2().getOrError(),
 					this.getDcPowerString3().getOrError(), this.getDcPowerString4().getOrError());
 			this._setActualPower(totalPower);
 		} catch (OpenemsNamedException e) {

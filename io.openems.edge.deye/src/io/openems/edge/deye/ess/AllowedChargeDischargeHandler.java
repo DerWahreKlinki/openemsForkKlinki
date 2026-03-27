@@ -8,7 +8,9 @@ import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.type.TypeUtils;
 import io.openems.edge.deye.battery.DeyeSunBattery;
 import io.openems.edge.deye.dccharger.DeyeDcCharger;
+import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.generic.common.AbstractAllowedChargeDischargeHandler;
+import static io.openems.edge.common.channel.ChannelUtils.setValue;
 
 public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischargeHandler<DeyeSunHybridImpl> {
 
@@ -26,7 +28,7 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 
 		if (battery == null) {
 
-			parent._setAllowedChargePower(0);
+			this._setAllowedChargePower(0);
 			parent._setAllowedDischargePower(0);
 			return;
 		}
@@ -42,7 +44,7 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 	public void accept(ClockProvider clockProvider) {
 
 		if (battery == null) {
-		    parent._setAllowedChargePower(0);
+		    this._setAllowedChargePower(0);
 		    parent._setAllowedDischargePower(0);
 		    return;
 		    
@@ -74,7 +76,7 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		        || bmsVoltage <= 0) {
 
 		    this.parent.logDebug(log, "[AllowChargeDischarge Handler] Values not available. Setting 0 W.");
-		    parent._setAllowedChargePower(0);
+		    this._setAllowedChargePower(0);
 		    parent._setAllowedDischargePower(0);
 		    return;
 		}
@@ -114,7 +116,14 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 						0),
 				0);
 		// Apply AllowedChargePower and AllowedDischargePower
-		this.parent._setAllowedChargePower((int) allowedChargePower); // 0 or negative
+		this._setAllowedChargePower((int) allowedChargePower); // 0 or negative
 		this.parent._setAllowedDischargePower((int) allowedDischargePower + pvProduction); // positive
+	}
+	
+	
+	// 2026 03 26 Helper to set allowed charge power via new method
+	private void _setAllowedChargePower(int allowedChargePower) {
+		setValue(this.parent, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,
+				allowedChargePower * -1 /* invert charge power */);
 	}
 }

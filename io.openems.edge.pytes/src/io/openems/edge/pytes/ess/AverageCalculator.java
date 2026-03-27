@@ -25,9 +25,9 @@ public class AverageCalculator {
     public int getAverage() {
         int sum = 0;
         int count = 0;
-        for (int i = 0; i < this.values.length; i++) {
-            if (this.values[i] != 0) {
-                sum += this.values[i];
+        for (int value : this.values) {
+            if (value != 0) {
+                sum += value;
                 count++;
             }
         }

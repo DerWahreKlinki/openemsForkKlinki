@@ -3,8 +3,8 @@ package io.openems.edge.pytes.ess;
 import org.junit.Test;
 
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
-import io.openems.edge.pytes.ess.PytesJs3Impl;
 import io.openems.edge.common.test.ComponentTest;
+import io.openems.edge.pytes.ess.PytesJs3Impl;
 
 public class MyDeviceTest {
 

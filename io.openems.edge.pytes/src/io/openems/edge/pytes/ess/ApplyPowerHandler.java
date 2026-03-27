@@ -1,15 +1,14 @@
 package io.openems.edge.pytes.ess;
 
-import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import org.slf4j.Logger;
 
+import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
 import io.openems.edge.pytes.enums.WorkState;
-
-import org.slf4j.Logger;
 
 public class ApplyPowerHandler {
 
@@ -37,7 +36,7 @@ public class ApplyPowerHandler {
 			log.debug("[ApplyPower] ESS not managed – skipping.");
 			return;
 		}
-		
+
 		if (ess.getWorkState() != WorkState.NORMAL) {
 			log.warn("ESS not in normal mode. Skipping ApplyPower");
 			return;
@@ -45,7 +44,7 @@ public class ApplyPowerHandler {
 		/*
 		 * ToDo if (ess.getWorkState() != WorkState.NORMAL) {
 		 * log.error("ESS not in normal state. Skipping ApplyPower"); return; }
-		 * 
+		 *
 		 */
 		Integer maxAllowedChargePower = this.ess.getAllowedChargePower().get();
 		Integer maxAllowedDischargePower = this.ess.getAllowedDischargePower().get(); // includes PV
@@ -55,7 +54,7 @@ public class ApplyPowerHandler {
 		Integer maxApparentPower = this.ess.getMaxApparentPower().get();
 
 		int pvPower = this.dcCharger != null ? this.dcCharger.getActualPower().orElse(0) : 0; // Maybe no pv connected
-		
+
 		Integer essActivePower = this.ess.getActivePower().get();
 		Integer essDcDischargePower = this.ess.getDcDischargePower().get();
 
@@ -83,37 +82,37 @@ public class ApplyPowerHandler {
 			log.error("[ApplyPower] batteryPower is null. Skipping ApplyPower");
 			return;
 		}
-		
+
 		if (essActivePower == null) {
 			log.error("[ApplyPower] essActivePower is null. Skipping ApplyPower");
 			return;
-		}	
-		
+		}
+
 		if (essDcDischargePower == null) {
 			log.error("[ApplyPower] essDcDischargePower is null. Skipping ApplyPower");
 			return;
-		}		
+		}
 
-	
+
 		// guards for AC
 		maxApparentPower = Math.min(maxApparentPower, configuredMaxApparentPower);
 		if (activePowerTarget > 0) { // discharging
 			activePowerTarget = Math.min(activePowerTarget, maxApparentPower);
 		} else {
 			activePowerTarget = Math.max(activePowerTarget, -maxApparentPower);
-		}		
-		
+		}
+
 		if (essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL) {
 			// guards for DC
-			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);			
-			batteryPowerTarget = activePowerTarget - pvPower;	
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);
+			batteryPowerTarget = activePowerTarget - pvPower;
 			sign = -1; // negative setpoint at batteryControl setpoint
 		} else {
 			batteryPowerTarget = activePowerTarget; // Testing
-			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);		// Testing		
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);		// Testing
 		}
 
-		
+
 
 		// DC-side clamp
 		if (batteryPowerTarget > 0) { // discharge
@@ -125,7 +124,7 @@ public class ApplyPowerHandler {
 		this.targetBatteryPowerAvg.addValue(batteryPowerTarget);
 
 		// int averageBatteryTargetPower = this.targetBatteryPowerAvg.getAverage();
-		
+
 		int averageBatteryTargetPower = batteryPowerTarget; // Testing
 
 		batteryPowerTarget = (int) Math.round(averageBatteryTargetPower / 10.0); // Applied value has to be diveded by
@@ -133,38 +132,38 @@ public class ApplyPowerHandler {
 
 		this.writeFlags();
 		/*
-		 * Definition is determined by44105 control switch 1->10W Default : 0W 
-		 * • When 44105=1, this register’s value is not effective 
+		 * Definition is determined by44105 control switch 1->10W Default : 0W
+		 * • When 44105=1, this register’s value is not effective
 		 * • When 44105=2, Negative value is battery discharge power, positive value is battery charge power.
 		 * Range: Negative maxcharge/discharge power* parallel unit number ~Positive max
-		 * charge/discharge power* parallelunit number 
+		 * charge/discharge power* parallelunit number
 		 * • When 44105=3, Negative value is Import power, positive value is Export power. Range:Negative inverter max
 		 * output power* parallelunit number ~ Positiveinverter max outputpower*
-		 * parallel unit number 
+		 * parallel unit number
 		 * • When 44105=4, Negative value is Import power, positive
 		 * value is Export power. Range:Negative inverter max output power* parallelunit
 		 * number ~ Positiveinverter max outputpower* parallel unit number
-		 * 
-		 * 
+		 *
+		 *
 		 */
 
 		//batteryPowerTarget = batteryPowerTarget * -1;
 		batteryPowerTarget = batteryPowerTarget * sign; // Testing
 
-		
+
 		this.ess.debugLog(""
 				+ "\n[ApplyPower] TargetPower: " + activePowerTarget
 				+ "\n[ApplyPower] EssPower: " + essActivePower
-				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower 
+				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower
 				+ "\n[ApplyPower] ESS DischargePower: " + essDcDischargePower
 				+ "\n[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget
 				+ "\n[ApplyPower]   PV Power 1/2 " + pvPower );
-		
+
 		//ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.GRID_POINT_CONTROL); // Battery Charge/Discharge Control
-		ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); // Battery Charge/Discharge Control		
+		ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); // Battery Charge/Discharge Control
 		ess.setRemoteDispatchRealtimeControlPower(batteryPowerTarget);
-		
-		
+
+
 	}
 
 	// ========================= Helper =========================
@@ -179,7 +178,7 @@ public class ApplyPowerHandler {
 
 		// ToDo: make configurable
 		ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby
-		
+
 	}
 
 }

@@ -14,7 +14,7 @@ public enum Appendix8 implements OptionsEnum {
     OFF_GRID_MODE(6, "Off-Grid Mode"),
     REMOTE_BATT_CONTROL(7, "Remote Battery Charge/Discharge Mode"),
     PASSIVE_MODE(8, "Passive Mode");
-	
+
 
 	private final int value;
 	private final String name;

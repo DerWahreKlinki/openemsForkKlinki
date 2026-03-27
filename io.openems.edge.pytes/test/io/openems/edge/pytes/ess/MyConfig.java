@@ -1,8 +1,8 @@
 package io.openems.edge.pytes.ess;
 
 import io.openems.common.test.AbstractComponentConfig;
-import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.ess.Config;
+import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 
 @SuppressWarnings("all")
 public class MyConfig extends AbstractComponentConfig implements Config {
@@ -31,7 +31,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	/**
 	 * Create a Config builder.
-	 * 
+	 *
 	 * @return a {@link Builder}
 	 */
 	public static Builder create() {

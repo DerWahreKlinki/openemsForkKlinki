@@ -18,10 +18,10 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 	@AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
 	boolean enabled() default true;
-	
+
 	@AttributeDefinition(name = "Pytes Ess id", description = "ID of Pytes ESS device.")
 	String ess_id() default "ess0";
-	
+
 	@AttributeDefinition(name = "Read-Only mode", description = "Enables Read-Only mode")
 	boolean readOnlyMode() default true;
 

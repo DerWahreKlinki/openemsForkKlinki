@@ -3,6 +3,8 @@ package io.openems.edge.controller.chp.costoptimization;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Map;
+
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -707,7 +709,19 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		// this.logDebug(this.log, " CurrentPrice " + currentPrice + "€/MWh\n");
 		return currentPrice;
 	}	
+	
+	private Double getFuturePrice() {
+	    var now = ZonedDateTime.now(this.componentManager.getClock());
+	    var target = now.plusSeconds(this.config.preparationHyteresis()); // z.B. +3600s
 
+	    if (!this.timeOfUseTariff.getPrices().isEmpty()) {
+	        var price = this.timeOfUseTariff.getPrices().getAt(target);
+	        return price != null ? price : 0.0;
+	    }
+
+	    return 0.0;
+	}	
+/*
 	private Double getFuturePrice() {
 		var from = ZonedDateTime.now(this.componentManager.getClock());
 		int qMin = (from.getMinute() / 15) * 15;
@@ -719,10 +733,18 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			// this.futurePrice = this.timeOfUseTariff.getPrices().get
 
 			// Double[] arrFuturePrices = this.timeOfUseTariff.getPrices().asArray();
+			
+			// ToDo 2026 03 27
+			//var avgEurPerMWh = this.timeOfUseTariff.getPrices().getBetweenExclusive(from, to).mapToDouble(Double::doubleValue)
+			//		.average().orElse(0.0);
 
-			var avgEurPerMWh = this.timeOfUseTariff.getPrices().getBetween(from, to).mapToDouble(Double::doubleValue)
-					.average().orElse(0.0);
-
+			var avgEurPerMWh = this.timeOfUseTariff.getPrices()
+			        .getBetweenExclusive(from, to)
+			        .map(Map.Entry::getValue)
+			        .mapToDouble(Double::doubleValue)
+			        .average()
+			        .orElse(0.0);			
+			
 			return avgEurPerMWh;
 
 		} else {
@@ -730,6 +752,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		}
 
 	}	
+*/
+	
 	
 	private Double getFutureCost(Integer power) {
 		var from = ZonedDateTime.now(this.componentManager.getClock());
@@ -743,8 +767,16 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 			// Double[] arrFuturePrices = this.timeOfUseTariff.getPrices().asArray();
 
-			var avgEurPerMWh = this.timeOfUseTariff.getPrices().getBetween(from, to).mapToDouble(Double::doubleValue)
-					.average().orElse(0.0);
+			// ToDo 2026 03 27
+			// var avgEurPerMWh = this.timeOfUseTariff.getPrices().getBetweenExclusive(from, to).mapToDouble(Double::doubleValue)
+			//		.average().orElse(0.0);
+			
+			var avgEurPerMWh = this.timeOfUseTariff.getPrices()
+			        .getBetweenExclusive(from, to)
+			        .map(Map.Entry::getValue)
+			        .mapToDouble(Double::doubleValue)
+			        .average()
+			        .orElse(0.0);				
 
 			double eurPerHour = Math.round((avgEurPerMWh * (power / 1_000_000.0)) * 1000.0) / 1000.0;
 			return eurPerHour;

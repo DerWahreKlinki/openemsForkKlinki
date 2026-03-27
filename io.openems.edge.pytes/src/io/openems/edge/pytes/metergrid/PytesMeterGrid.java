@@ -6,15 +6,13 @@ import static io.openems.common.types.OpenemsType.BOOLEAN;
 import static io.openems.common.types.OpenemsType.FLOAT;
 import static io.openems.common.types.OpenemsType.INTEGER;
 
-import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.Unit;
+import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.FloatReadChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;
-import io.openems.common.types.OpenemsType;
-import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.meter.api.ElectricityMeter;
 import io.openems.edge.pytes.enums.AlarmCode;
@@ -59,7 +57,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		APPARENT_POWER_L3(Doc.of(INTEGER) //
 				.accessMode(READ_ONLY) //
 				.unit(Unit.VOLT_AMPERE)),
-		
+
 		/**
 		 * External meter total apparent power (reg 33279, S32)
 		 * Datasheet: 1 VA -> no converter needed
@@ -94,7 +92,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 */
 		EPM_SWITCH(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
-		
+
 		/**
 		 * reg 33248 BIT01 - Failsafe switch state
 		 * The failsafe switch limits export power when triggered
@@ -103,7 +101,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 */
 		FAILSAFE_SWITCH(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
-		
+
 		// -----------------------------------------------------------------------
 		// EPM / meter / CT status bits (reg 33250 - input register, FC4)
 		// These are the EPM and meter system status flags
@@ -115,14 +113,14 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 */
 		METER_IN_GRID(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)), //
-		
+
 		/**
 		 * reg 33250 BIT02 - CT (current transformer) is installed on the grid side
 		 * Used for AC-coupled inverters to avoid uploading meter communication fail alarm
 		 */
 		CT_IN_GRID(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
-		
+
 		/**
 		 * reg 33250 BIT04 - EPM switch status (active state)
 		 * Indicated whether EPM is currently active and enforcing export limits
@@ -135,7 +133,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 * Indicate whether the failsafe limit is currently active and working or not		 */
 		FAILSAFE_SWITCH_STATUS(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
-		
+
 		/**
 		 * reg 33250 BIT07 - External meter fault
 		 * true = the external meter has reported a communication or hardware fault
@@ -148,7 +146,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 * true = the CT has reported a fault (open circuit, wrong phase, ...)
 		 */
 		CT_FAULT_STATUS(Doc.of(BOOLEAN) //
-				.accessMode(READ_ONLY)), 
+				.accessMode(READ_ONLY)),
 
 		/**
 		 * reg 33250 BIT09 - External meter connected in reverse polarity
@@ -239,14 +237,14 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 * See {@link MeterLocationCode} for values
 		 */
 		METER1_LOCATION_CODE(Doc.of(MeterLocationCode.values())),
-		
+
 		/**
 		 * Meter 1 device type (decoded from reg 33300 low byte)
 		 * Indicates the brand/protocol of the external meter
 		 * See {@link MeterTypeCode} for values
 		 */
 		METER1_TYPE_CODE(Doc.of(MeterTypeCode.values())),
-		
+
 		// -----------------------------------------------------------------------
 		// METER/CT Position - Appendix 12 bits (reg 43073, holding register R/W)
 		// This register controls EPM behaviour and meter/CT selection
@@ -340,7 +338,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 */
 		METER_CT_SELECTION(Doc.of(BOOLEAN) //
 				.accessMode(READ_WRITE)),
-		
+
 		METER_CT_POSITION(Doc.of(INTEGER)),
 		ALARM_CODE(Doc.of(AlarmCode.values())),
 		INVERTER_STATUS(Doc.of(InverterStatus.values())),
@@ -348,7 +346,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		;
 
 
-		
+
 		private final Doc doc;
 
 		private ChannelId(Doc doc) {
@@ -360,11 +358,11 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 			return this.doc;
 		}
 	}
-	
+
 	// -----------------------------------------------------------------------
 	// Accessor methods - Apparent Power
 	// -----------------------------------------------------------------------
-	
+
 	/** @return Channel for {@link ChannelId#APPARENT_POWER_L1} */
 	public default IntegerReadChannel getApparentPowerL1Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L1);
@@ -374,7 +372,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 	public default Value<Integer> getApparentPowerL1() {
 		return this.getApparentPowerL1Channel().value();
 	}
-	
+
 	/** @return Channel for {@link ChannelId#APPARENT_POWER_L2} */
 	public default IntegerReadChannel getApparentPowerL2Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L2);

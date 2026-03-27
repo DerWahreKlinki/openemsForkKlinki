@@ -45,6 +45,7 @@ import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 
 import io.openems.edge.energy.api.EnergySchedulable;
 import io.openems.edge.energy.api.handler.EnergyScheduleHandler;
+import io.openems.edge.energy.api.handler.RescheduleMode;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -155,6 +156,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		super.deactivate();
 	}
 
+	/* ToDo 2026 03 27
 	@Override
 	protected void modified(ComponentContext context, String id, String alias, boolean enabled) {
 		super.modified(context, id, alias, enabled);
@@ -163,7 +165,19 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.energyScheduleHandler.triggerReschedule("ControllerEssChargeDischargeLimiterImpl::modified()");
 		}
 	}
-
+	 */
+	
+	@Override
+	protected void modified(ComponentContext context, String id, String alias, boolean enabled) {
+		super.modified(context, id, alias, enabled);
+		this.updateConfig(this.config);
+		if (this.energyScheduleHandler != null) {
+			this.energyScheduleHandler.triggerReschedule("ControllerEssChargeDischargeLimiterImpl::modified()", RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
+		}
+	}	
+	
+	
+	
 	private void updateConfig(Config config) {
 		this.config = config;
 		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {

@@ -198,8 +198,15 @@ public class PredictorWeatherForecastModelImpl extends AbstractPredictor
 				}
 			}
 
+			var baseTime = startOfDay
+			        .plusMinutes(currentIntervalIndex * 15)
+			        .toInstant();
+
+			return Prediction.from(baseTime, values);			
+			
+			// ToDo 2026 03 27
 			// Return the prediction starting from the calculated time
-			return Prediction.from(startOfDay.plusMinutes(currentIntervalIndex * 15), values);
+			//return Prediction.from(startOfDay.plusMinutes(currentIntervalIndex * 15), values);
 
 		} catch (Exception e) {
 			log.error("Error creating prediction: ", e);

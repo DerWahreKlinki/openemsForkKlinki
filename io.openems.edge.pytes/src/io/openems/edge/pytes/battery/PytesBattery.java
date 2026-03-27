@@ -218,16 +218,16 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		DC_DISCHARGE_POWER(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.unit(Unit.WATT)),
-		
+
 		/**
-		 * Battery Power / DC Discharge Power. Attention! Only positive values. 
+		 * Battery Power / DC Discharge Power. Attention! Only positive values.
 		 * Battery power direction needed for calculating DC_DISCHARGE_POWER
 		 * discharging. Datasheet: 1 W resolution. Unit: W
 		 */
 		DC_DISCHARGE_POWER_UNSIGNED(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.unit(Unit.WATT)),
-		
+
 
 		;
 
@@ -387,7 +387,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	public default void _setBmsBatteryFaultStatus02(Integer value) {
 		this.getBmsBatteryFaultStatus02Channel().setNextValue(value);
 	}
-	
+
 
 	/**
 	 * Gets the Channel for {@link ChannelId#DC_DISCHARGE_POWER}.
@@ -416,7 +416,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	 */
 	public default void _setDcDischargePower(Integer value) {
 		this.getDcDischargePowerChannel().setNextValue(value);
-	}	
+	}
 
 	/**
 	 * Gets the Channel for {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED}.

@@ -339,6 +339,7 @@ public class ControllerEssThresholdPeakshaverImpl extends AbstractOpenemsCompone
 
 	}
 
+	// ToDo 2026 03 27  Constraint mit oder ohne Filter?
 	/**
 	 * Applies the power on the ESS.
 	 *
@@ -347,6 +348,7 @@ public class ControllerEssThresholdPeakshaverImpl extends AbstractOpenemsCompone
 	 * @param activePower the active power
 	 * @throws OpenemsNamedException on error
 	 */
+	/*
 	private void applyPower(ManagedSymmetricEss ess, Integer activePower) throws OpenemsNamedException {
 		if (activePower != null) {
 			this.logDebug(this.log, "PeakShaver applyPower: " + activePower + "[W]");
@@ -364,6 +366,26 @@ public class ControllerEssThresholdPeakshaverImpl extends AbstractOpenemsCompone
 
 		}
 	}
+	*/
+	
+	
+	private void applyPower(ManagedSymmetricEss ess, Integer activePower) throws OpenemsNamedException {
+		if (activePower != null) {
+			this.logDebug(this.log, "PeakShaver applyPower: " + activePower + "[W]");
+			if (activePower == 0) {
+				this.logDebug(this.log, "PeakShaver applyPower with setActivePowerEquals: " + activePower + "[W]");
+				ess.setActivePowerEqualsWithoutFilter(activePower);
+			} else {
+				this.logDebug(this.log,
+						"PeakShaver applyPower with setActivePowerEqualsWithPid: " + activePower + "[W]");
+				ess.setActivePowerEqualsWithFilter(activePower);
+			}
+
+			ess.setReactivePowerEqualsWithoutFilter(0);
+			this._setCalculatedPower(activePower); // save value to channel
+
+		}
+	}	
 
 	/**
 	 * Changes the state if hysteresis time passed, to avoid too quick changes.

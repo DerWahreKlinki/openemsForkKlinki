@@ -67,7 +67,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	private Double futurePrice = 0.0;
 
 	private boolean targetNotReachedStartFlag = false;
-	private boolean idleStartFlag = false;
+	//private boolean idleStartFlag = false;
 	private boolean wasTemperatureNearMax = false;
 
 	private boolean temperatureAboveThreshold = false;

@@ -139,7 +139,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
             const prepareBatteryExtensionCtrl = this.config.getComponentsByFactory("Controller.Ess.PrepareBatteryExtension");
             const essSohCycleCtrl = this.config.getComponentsByFactory("Controller.Ess.SoH.Cycle");
             this.hasRequiredEdgeVersion = this.edge.isVersionAtLeast("2024.12.3");
-            const components = [...prepareBatteryExtensionCtrl, ...emergencyReserveCtrl, ...essSohCycleCtrl].filter(component => component.isEnabled).reduce((result, component) => {
+            const components = [...prepareBatteryExtensionCtrl, ...emergencyReserveCtrl, ...essSohCycleCtrl, ...chargeDischargeLimiterCtrl].filter(component => component.isEnabled).reduce((result, component) => {
                 const essId = component.properties["ess.id"];
                 if (result[essId] == null) {
                     result[essId] = [];
@@ -154,6 +154,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
             if (this.hasRequiredEdgeVersion) {
                 channelAddresses.push(new ChannelAddress("_meta", "IsEssChargeFromGridAllowed"));
             }
+
             for (const essId in prepareBatteryExtensionCtrl) {
                 const controller = prepareBatteryExtensionCtrl[essId];
                 channelAddresses.push(
@@ -165,7 +166,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     new ChannelAddress(controller.id, "ExpectedStartEpochSeconds"),
                 );
             }
-            // ChargeDischargeLimiter: subscribe channels
+
             for (const ctrl of chargeDischargeLimiterCtrl as EdgeConfig.Component[]) {
                 channelAddresses.push(
                     new ChannelAddress(ctrl.id, "_PropertyMinSoc"),
@@ -177,7 +178,8 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     new ChannelAddress(ctrl.id, "BalancingRemainingSeconds"),
                     new ChannelAddress(ctrl.id, "ChargedEnergy"),
                 );
-            
+            }
+
             for (const essId in essSohCycleCtrl) {
                 const controller = essSohCycleCtrl[essId];
                 channelAddresses.push(
@@ -190,13 +192,15 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     new ChannelAddress(controller.id, "IsBatteryBalanced"),
                     new ChannelAddress(controller.id, "IsMeasured"),
                 );
-            }            
+            }
+
             for (const batteryInverter of this.batteryInverters) {
                 channelAddresses.push(new ChannelAddress(batteryInverter.id, "ActivePower"));
                 channelAddresses.push(new ChannelAddress(batteryInverter.id, "AirTemperature"));
             }
 
             this.edge.subscribeChannels(this.websocket, "storage", channelAddresses);
+
 
             this.edge.currentData
                 .subscribe(currentData => {
@@ -314,7 +318,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                             } else if (controller.factoryId == "Controller.Ess.SoH.Cycle") {
                                 this.addSohCycleFormGroup(currentData, controller, controllerFrmGrp);
                             }
-                            
+
                         }
                         controls.addControl(essId, controllerFrmGrp);
                     }
@@ -323,9 +327,8 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                         this.formGroup = controls;
                     }
                 });
-        },
-        );
-
+        }
+        )
     }
 
     getBackgroundClass(state: number): string {

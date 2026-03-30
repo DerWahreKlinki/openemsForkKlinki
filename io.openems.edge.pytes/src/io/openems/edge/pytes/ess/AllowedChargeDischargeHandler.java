@@ -110,7 +110,7 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 	// 2026 03 26 Helper to set allowed charge power via new method
 	private void _setAllowedChargePower(int allowedChargePower) {
 		setValue(this.parent, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,
-				allowedChargePower * -1 /* invert charge power */);
+				allowedChargePower);
 	}	
 	
 }

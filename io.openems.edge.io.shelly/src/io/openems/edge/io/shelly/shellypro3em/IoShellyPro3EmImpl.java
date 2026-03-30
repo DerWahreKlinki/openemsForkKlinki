@@ -24,11 +24,13 @@ import com.google.gson.JsonElement;
 import io.openems.common.bridge.http.api.BridgeHttpFactory;
 import io.openems.common.bridge.http.api.HttpError;
 import io.openems.common.bridge.http.api.HttpResponse;
+import io.openems.common.channel.AccessMode;
 import io.openems.common.types.MeterType;
 import io.openems.common.utils.JsonUtils;
 import io.openems.edge.bridge.http.cycle.HttpBridgeCycleServiceDefinition;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.mdns.MDnsDiscovery;
+import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.io.shelly.common.HttpBridgeShellyService;
 import io.openems.edge.io.shelly.common.component.ShellyEnergyMeter;
 import io.openems.edge.io.shelly.common.component.ShellyEnergyMeterHandler;
@@ -161,5 +163,16 @@ public class IoShellyPro3EmImpl extends IoGen2ShellyBaseImpl implements IoShelly
 	@Override
 	protected MDnsDiscovery getMDnsDiscovery() {
 		return this.mDnsDiscovery;
+	}
+
+	/**
+	 * Modbus-Table for module.
+	 */
+	@Override
+	public ModbusSlaveTable getModbusSlaveTable(AccessMode accessMode) {
+		return new ModbusSlaveTable(//
+				OpenemsComponent.getModbusSlaveNatureTable(accessMode), //
+				ElectricityMeter.getModbusSlaveNatureTable(accessMode) //
+		);
 	}
 }

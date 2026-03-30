@@ -6,6 +6,7 @@ import static io.openems.common.types.OpenemsType.INTEGER;
 
 import io.openems.common.channel.Unit;
 import io.openems.edge.battery.api.Battery;
+import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;

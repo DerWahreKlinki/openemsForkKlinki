@@ -9,9 +9,10 @@ import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.evcs.api.MetaEvcs;
 
-public interface EvcsClusterPeakShaving extends MetaEvcs, OpenemsComponent {
+public interface EvcsClusterPeakShaving extends MetaEvcs, OpenemsComponent, ModbusSlave {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		EVCS_CLUSTER_STATUS(Doc.of(EvcsClusterStatus.values())//

@@ -225,54 +225,73 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 		return new ModbusProtocol(this,
 
 
-				// ---------------------------------------------------
-				// Battery core values: SOC, SOH, Voltage, Current
-				// ---------------------------------------------------
-				new FC4ReadInputRegistersTask(33133, Priority.HIGH, //
-						
-						m(PytesBattery.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(33133), // mV
+				// ---------------------------------------------------------------
+				// Inverter battery port + BMS values (reg 33133-33144)
+				// Priority HIGH - read every cycle for power/current/voltage calc
+				// ---------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33133, Priority.HIGH,
+
+						// reg 33133 - Battery voltage at inverter port [mV]
+						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
+						m(PytesBattery.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(33133),
 								ElementToChannelConverter.SCALE_FACTOR_2),
-								
-						m(PytesBattery.ChannelId.CURRENT_WITHOUT_DIRECTION, new SignedWordElement(33134), // mA. direction depends on 33135
+						
+						// reg 33134 - Battery current magnitude [mA] (always positive, no sign)
+						// Direction is in reg 33135. Datasheet: 0.1 A -> SCALE_FACTOR_2
+						m(PytesBattery.ChannelId.CURRENT_WITHOUT_DIRECTION, new SignedWordElement(33134),
 								ElementToChannelConverter.SCALE_FACTOR_2),
 						
-						m(PytesBattery.ChannelId.BATTERY_CURRENT_DIRECTION, new UnsignedWordElement(33135)),  // 0-> charge, 1-> discharge
-								
+						// reg 33135 - Battery current direction
+						// 0  = charging (power into battery), 1 = discharge (power out)
+						m(PytesBattery.ChannelId.BATTERY_CURRENT_DIRECTION, new UnsignedWordElement(33135)),
+						
+						// reg 33136 - LLC bus voltage (internal DC bus between battery and inverter) [mV]
+						// Datasheet: 0.1 V -> SCALE_FACTOR_2
 						m(PytesBattery.ChannelId.LLC_BUS_VOLTAGE, new UnsignedWordElement(33136),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverter.SCALE_FACTOR_2),
 						
 						new DummyRegisterElement(33137, 33138), // 		
 
-						// Battery SOC [%], resolution 1 (100=100%)
+						// reg 33139 - Batter state of Charge [%]
+						// Datasheet: resolution 1 -> no converter needed
 						m(Battery.ChannelId.SOC, new UnsignedWordElement(33139)),
 						
-						// Battery SOH [%], resolution 1 (100=100%)
+						// reg 33140 - Batter state of Health [%]
+						// Datasheet: resolution 1 -> no converter needed
 						m(Battery.ChannelId.SOH, new UnsignedWordElement(33140)),
 						
-						// Battery Voltage [mV], resolution 0.01V
+						// reg 33141 - BMS battery voltage [mV]
+						// Datasheet: 0.01 V -> SCALE_FACTOR_1
+						// Battery.ChannelId.VOLTAGE is set programmatically in V by
+						// calculateAndSetBatteryPower() - this register is the BMS cross-check 
 						m(Battery.ChannelId.VOLTAGE, new UnsignedWordElement(33141),
 								ElementToChannelConverter.SCALE_FACTOR_1),
 						
-						// Battery Current [mA], resolution 0.1A
+						// reg 33142 – BMS battery current [mA], signed
+						// Positive = charging, negative = discharging (BMS-reported).
+						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 						m(PytesBattery.ChannelId.BMS_BATTERY_CURRENT, new SignedWordElement(33142),
 								ElementToChannelConverter.SCALE_FACTOR_2),
 						
-						// BMS Charge Current Limit [mA], resolution 0.1A
+						// reg 33143 – BMS maximum charge current limit [mA]
+						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 						m(PytesBattery.ChannelId.BMS_CHARGE_CURRENT_LIMIT, new UnsignedWordElement(33143),
 								ElementToChannelConverter.SCALE_FACTOR_2),
 						
-						// BMS Discharge Current Limit [mA], resolution 0.1A
+						// reg 33144 – BMS maximum discharge current limit [mA]
+						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 						m(PytesBattery.ChannelId.BMS_DISCHARGE_CURRENT_LIMIT, new UnsignedWordElement(33144),
 								ElementToChannelConverter.SCALE_FACTOR_2)
 						
 				),
 						
-				// -------------------------------------------------------------
-				// Battery fault status words (Low Priority - diagnostic only)
-				// -------------------------------------------------------------
-				new FC4ReadInputRegistersTask(33145, Priority.LOW, //
+				// ---------------------------------------------------------------
+				// Fault status words (reg 33145–33148)
+				// Priority LOW – diagnostic only, not needed every cycle
+				// ---------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33145, Priority.LOW,
 
-						// Battery Fault Status 01 (Appendix 9)
+						// reg 33145 – Battery Fault Status word 01 (Appendix 9)
 						m(new BitsWordElement(33145, this)
 							.bit(1, PytesBattery.ChannelId.BMS_FAULT01_OVERVOLTAGE_PRO)
 							.bit(2, PytesBattery.ChannelId.BMS_FAULT01_UNDERVOLTAGE_PRO)
@@ -283,7 +302,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 							.bit(7, PytesBattery.ChannelId.BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO)),
 
 					
-						// Battery Fault Status 02 (Appendix 9)
+						// reg 33146 – Battery Fault Status word 02 (Appendix 9)
 						m(new BitsWordElement(33146, this)
 							.bit(0, PytesBattery.ChannelId.BMS_FAULT02_CHARGE_OVERCURRENT_PRO)
 							.bit(1, PytesBattery.ChannelId.BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1)
@@ -297,12 +316,17 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 				),
 						
 				// ---------------------------------------------------------------
-				// Battery Power (HIGH priority – used by ESS controllers)
+				// Battery power direct read (reg 33149–33150)
+				// Priority HIGH – cross-check against calculated DC_DISCHARGE_POWER
 				// ---------------------------------------------------------------
 				new FC4ReadInputRegistersTask(33149, Priority.HIGH,
  
-						// Battery Power [W], resolution: 1 W
+						// reg 33149–33150 – Battery power [W] (S32, two registers)
+						// Datasheet: 1 W resolution → no converter needed
 						// Positive = charging, negative = discharging
+						// Stored in DC_DISCHARGE_POWER_UNSIGNED for cross-check.
+						// The signed DC_DISCHARGE_POWER is set programmatically by
+						// calculateAndSetBatteryPower() using voltage × current × direction.
 						m(PytesBattery.ChannelId.DC_DISCHARGE_POWER_UNSIGNED, new SignedDoublewordElement(33149))
 				)								
 				

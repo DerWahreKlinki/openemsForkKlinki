@@ -312,7 +312,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 				// ---------------------------------------------------------------
 				// Battery power direct read (reg 33149–33150)
 				// Priority HIGH – cross-check against calculated DC_DISCHARGE_POWER
-				// ---------------------------------------------------------------
+				// --------------------------------------------------------------
 				new FC4ReadInputRegistersTask(33149, Priority.HIGH,
  
 						// reg 33149–33150 – Battery power [W] (S32, two registers)

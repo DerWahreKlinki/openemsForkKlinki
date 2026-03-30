@@ -253,27 +253,9 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		 */
 		BMS_FAULT02_FORCE_CHARGE_REQUEST(Doc.of(BOOLEAN).accessMode(READ_ONLY)),
 
-<<<<<<< HEAD
 		// -----------------------------------------------------------------------
 		// Battery power (reg 33149)
 		// -----------------------------------------------------------------------
-=======
-		/**
-		 * In this register current has no direction. So it can´t be used for main
-		 * battery class
-		 */
-		CURRENT_WITHOUT_DIRECTION(Doc.of(INTEGER)//
-				.accessMode(READ_ONLY)//
-				.unit(Unit.MILLIAMPERE)),
-
-		/**
-		 * In this register current has no direction. So it can´t be used for main
-		 * battery class
-		 */
-		BATTERY_CURRENT_DIRECTION(Doc.of(INTEGER)//
-				.accessMode(READ_ONLY)//
-		),
->>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 
 		/**
 		 * Battery power - signed, calculated programmatically (reg 33149, S32)
@@ -288,27 +270,16 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.unit(Unit.WATT)),
 
 		/**
-<<<<<<< HEAD
 		 * Battery power as read directly from the inverter (reg 33149, S32).
 		 * This is the inverter's own computed value — used as a cross-check
 		 * against the programmatically calculated DC_DISCHARGE_POWER.
 		 * Positive = charging, negative = discharging.
 		 * Datasheet: 1 W resolution → no converter needed.
 		 * Unit: W
-=======
-		 * Battery Power / DC Discharge Power. Attention! Only positive values.
-		 * Battery power direction needed for calculating DC_DISCHARGE_POWER
-		 * discharging. Datasheet: 1 W resolution. Unit: W
->>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 		 */
 		DC_DISCHARGE_POWER_UNSIGNED(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.unit(Unit.WATT)),
-<<<<<<< HEAD
-=======
-
-
->>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 		;
 
 		private final Doc doc;
@@ -445,22 +416,9 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		return this.getBmsBatteryFaultStatus02Channel().value();
 	}
 
-<<<<<<< HEAD
 	// -----------------------------------------------------------------------
 	// Accessor methods – Fault Status 01 decoded bits (reg 33145)
 	// -----------------------------------------------------------------------
-=======
-	/**
-	 * Internal method to set the 'nextValue' on
-	 * {@link ChannelId#BMS_BATTERY_FAULT_STATUS02} Channel.
-	 *
-	 * @param value the next value
-	 */
-	public default void _setBmsBatteryFaultStatus02(Integer value) {
-		this.getBmsBatteryFaultStatus02Channel().setNextValue(value);
-	}
-
->>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 
 	/** @return Channel for {@link ChannelId#BMS_FAULT01_OVERVOLTAGE_PRO} */
 	public default BooleanReadChannel getBmsFault01OvervoltageProChannel() {

@@ -44,11 +44,13 @@ export enum WidgetFactory {
     "Controller.Io.HeatPump.SgReady",
     "Controller.Heat.Heatingelement",
     "Controller.Symmetric.PeakShaving",
+    "Controller.Symmetric.Balancing",
     "Controller.TimeslotPeakshaving",
     "Controller.ThresholdPeakshaving",
     "Evcs.Cluster.PeakShaving",
     "Evcs.Cluster.SelfConsumption",
     "Weather.OpenMeteo",
+    "Scheduler.JSCalendar",
 }
 
 export type Icon = {

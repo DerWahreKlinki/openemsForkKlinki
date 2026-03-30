@@ -178,6 +178,7 @@
       "DEC": "Dez",
       "END_DATE": "Enddatum wählen",
       "EXPORT": "Download als EXCEL-Datei",
+      "EXPORT_LOADING": "Bericht lädt - vielen Dank für Deine Geduld",
       "EXTERNAL_LIMITATION": "Externe Limitierung",
       "FEB": "Feb",
       "FRI": "Fr",
@@ -212,7 +213,9 @@
       "WED": "Mi",
       "WEEK": "Woche",
       "YEAR": "Jahr",
-      "YESTERDAY": "Gestern"
+      "YESTERDAY": "Gestern",
+      "NO_LOCAL_DATA_INFO": "Historische Daten sind derzeit lokal nicht verfügbar",
+      "NO_LOCAL_DATA_NOTICE": "Bitte besuchen Sie https://github.com/OpenEMS/openems für Updates zu diesem Thema."
     },
     "INDEX": {
       "EMERGENCY_RESERVE": {
@@ -569,9 +572,6 @@
           "TOTAL_DC": "Gesamt DC"
         },
         "SYSTEM": {
-          "INDUSTRIAL": {
-            "NOTE": "Startet oder stoppt das Gesamtsystem, inklusive Batteriewechselrichter und Batterien."
-          },
           "OVERALL_SYSTEM": "Gesamtsystem"
         },
         "TIME_OF_USE_TARIFF": {
@@ -586,7 +586,8 @@
           "STATE": {
             "BALANCING": "Eigenverbrauchsoptimierung",
             "CHARGE_GRID": "Beladung aus dem Netz freigegeben",
-            "DELAY_DISCHARGE": "Entladung verzögert"
+            "DELAY_DISCHARGE": "Entladung verzögert",
+            "PEAK_SHAVING": "Lastspitzenkappung"
           }
         },
         "TWO_WAY_INFO_GRID": "Negative Werte entsprechen Netzeinspeisung, Positive Werte entsprechen Netzbezug",
@@ -595,7 +596,8 @@
             "SCHEDULE": "Zeitplan",
             "ADD_TASK": "Aufgabe hinzufügen"
           },
-          "CHARGE_MODE": "Lademodus"
+          "CHARGE_MODE": "Lademodus",
+          "VEHICLE_ID_ERROR": "Die Fahrzeug-ID konnte nicht gefunden werden. Bitte überprüfen Sie die Konfiguration. Alle registrierten Fahrzeuge werden angezeigt."
         }
       }
     },
@@ -1285,7 +1287,8 @@
     "REQUEST_TIMEOUT": "Zeitüberschreitung der Anforderung. Versuche es später noch einmal.",
     "SIGN_IN": "Anmelden",
     "TITLE": "Login",
-    "USER": "Benutzer"
+    "USER": "Benutzer",
+    "EMPLOYEE_LOGIN": "Mitarbeiter Login"
   },
   "MENU": {
     "ACCESS_LEVEL": "Zugriffslevel",
@@ -1332,6 +1335,11 @@
     "EDGE": {
       "DESCRIPTION": "Sollte das {{edgeShortName}}-Gerät neugestartet worden sein, warten Sie bitte einen Moment, bis der Neustart vollkommen durchgeführt wurde.",
       "LOCAL_ACCESS_CURRENTLY_NOT_POSSIBLE": "Lokalzugriff derzeit nicht möglich"
+    },
+    "GENERAL": {
+      "AVAILABILITY": "Der Onlinezugriff auf das Speichersystem ist aktuell nicht möglich.<br>Die Daten werden lokal gespeichert und gehen nicht verloren.",
+      "EMS_OFFLINE": "{{edgeShortName}} ist offline",
+      "MORE_INFO": "mehr Infos"
     }
   },
   "ORDER": {

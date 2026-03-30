@@ -2,6 +2,7 @@ package io.openems.edge.pytes.meterbackup;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
 import static io.openems.common.types.OpenemsType.INTEGER;
+
 import io.openems.common.channel.Unit;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.common.channel.Doc;
@@ -22,8 +23,8 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 		 */
 		APPARENT_POWER_L1(Doc.of(INTEGER) //
 					.accessMode(READ_ONLY) //
-					.unit(Unit.VOLT_AMPERE)),		
-		
+					.unit(Unit.VOLT_AMPERE)),
+
 		/**
 		 * Backup side Phase B apparent power (reg 33523, S16)
 		 * Calculated using L1-N voltage and L1 current.
@@ -32,8 +33,8 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 		 */
 		APPARENT_POWER_L2(Doc.of(INTEGER) //
 					.accessMode(READ_ONLY) //
-					.unit(Unit.VOLT_AMPERE)),		
-		
+					.unit(Unit.VOLT_AMPERE)),
+
 		/**
 		 * Backup side Phase C apparent power (reg 33523, S16)
 		 * Calculated using L1-N voltage and L1 current.
@@ -43,8 +44,8 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 		APPARENT_POWER_L3(Doc.of(INTEGER) //
 					.accessMode(READ_ONLY) //
 					.unit(Unit.VOLT_AMPERE)),
-		
-			
+
+
 		;
 		private final Doc doc;
 
@@ -57,7 +58,7 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 			return this.doc;
 		}
 	}
-	
+
 	/**@return Channel for {@link ChannelId#APPARENT_POWER_L1} */
 	public default IntegerReadChannel getApparentPowerL1Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L1);
@@ -66,8 +67,8 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 	/**@return  Phase A apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L1} */
 	public default Value<Integer> getApparentPowerL1() {
 		return this.getApparentPowerL1Channel().value();
-	}	
-	
+	}
+
 	/**@return Channel for {@link ChannelId#APPARENT_POWER_L2} */
 	public default IntegerReadChannel getApparentPowerL2Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L2);
@@ -77,7 +78,7 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 	public default Value<Integer> getApparentPowerL2() {
 		return this.getApparentPowerL2Channel().value();
 	}
-	
+
 
 	/**@return Channel for {@link ChannelId#APPARENT_POWER_L3} */
 	public default IntegerReadChannel getApparentPowerL3Channel() {
@@ -87,7 +88,7 @@ public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent,
 	/**@return  Phase C apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L3} */
 	public default Value<Integer> getApparentPowerL3() {
 		return this.getApparentPowerL3Channel().value();
-	}	
-	
-	
+	}
+
+
 }

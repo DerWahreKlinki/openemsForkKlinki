@@ -1,5 +1,7 @@
 package io.openems.edge.solaredge.hybrid.ess;
 
+import static io.openems.edge.common.channel.ChannelUtils.setValue;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -48,6 +50,7 @@ import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
+import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.common.type.TypeUtils;
 import io.openems.edge.controller.ess.limittotaldischarge.ControllerEssLimitTotalDischarge;
@@ -209,6 +212,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 			}
 
 			this.installListener();
+			setValue(this, SymmetricEss.ChannelId.GRID_MODE, GridMode.ON_GRID);
 
 		} catch (Exception e) {
 			this.logError(this.log, "Error activating component: " + e.getMessage());
@@ -1081,7 +1085,10 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 				+ maxChargePower + "/" + maxDischargePower + "W");
 
 		// Apply AllowedChargePower and AllowedDischargePower
-		this._setAllowedChargePower(maxChargePower/* inverted charge power */);
+		// ToDo 2026 03 27
+		//this._setAllowedChargePower(maxChargePower/* inverted charge power */);
+		
+		setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,maxChargePower);
 		this._setAllowedDischargePower(maxDischargePower);
 
 		this._setMaxApparentPower(HW_MAX_APPARENT_POWER);

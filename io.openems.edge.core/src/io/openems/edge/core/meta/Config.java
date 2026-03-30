@@ -17,8 +17,8 @@ import io.openems.edge.common.meta.types.SubdivisionCode;
 	@AttributeDefinition(name = "Grid feed in limitation type", description = "Grid feed in limitation type.")
 	GridFeedInLimitationType gridFeedInLimitationType() default GridFeedInLimitationType.NO_LIMITATION;
 
-	@AttributeDefinition(name = "Maximum Grid Feed In Limit", description = "The target limit for sell-to-grid power.")
-	int maximumGridFeedInLimit() default 0;
+	@AttributeDefinition(name = "Maximum Grid Feed In Limit", description = "The target limit for sell-to-grid power; -1 for no fixed limit; 0 for zero-feed-in")
+	int maximumGridFeedInLimit() default -1;
 
 	@AttributeDefinition(name = "Is Ess Charge From Grid Allowed", description = "Charging the battery from grid is allowed.")
 	boolean isEssChargeFromGridAllowed() default false;
@@ -43,6 +43,9 @@ import io.openems.edge.common.meta.types.SubdivisionCode;
 
 	@AttributeDefinition(name = "Timezone", description = "The local time zone, e.g. 'Europe/Berlin'.")
 	String timezone() default "";
+
+	@AttributeDefinition(name = "Grid-Buy Soft-Limit [W]", description = "A Schedule for Soft-Limits on the grid. Controllers will try to achieve this Soft-Limit, e.g. via Peak-Shaving with an ESS.")
+	String gridBuySoftLimit() default "[]";
 
 	@AttributeDefinition(name = "Third-Party Usage Acceptance", description = "Indicates whether the user has accepted, declined, or not yet decided on third-party usage.")
 	ThirdPartyUsageAcceptance thirdPartyUsageAcceptance() default ThirdPartyUsageAcceptance.UNDECIDED;

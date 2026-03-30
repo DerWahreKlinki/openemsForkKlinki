@@ -1,20 +1,16 @@
 // @ts-strict-ignore
-import { ChangeDetectorRef, Component, Inject } from "@angular/core";
-import { FormBuilder, FormControl, FormGroup } from "@angular/forms";
-import { ActivatedRoute } from "@angular/router";
-import { ModalController } from "@ionic/angular";
-import { TranslateService } from "@ngx-translate/core";
+import { Component, inject, model } from "@angular/core";
+import { FormControl, FormGroup } from "@angular/forms";
 import { filter, take } from "rxjs";
 import { AbstractModal } from "src/app/shared/components/modal/abstractModal";
 import { NavigationService } from "src/app/shared/components/navigation/service/navigation.service";
+import { NavigationTree } from "src/app/shared/components/navigation/shared";
 import { OeImageComponent } from "src/app/shared/components/oe-img/oe-img";
-import { ComponentJsonApiRequest } from "src/app/shared/jsonrpc/request/componentJsonApiRequest";
-import { GetOneTasks } from "src/app/shared/jsonrpc/request/getOneTasks";
-import { GetOneTasksResponse } from "src/app/shared/jsonrpc/response/getOneTasksResponse";
-import { EdgeConfig, Service, Websocket } from "src/app/shared/shared";
+import { EdgeConfig, EdgePermission } from "src/app/shared/shared";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 import { EvseChargepoint } from "../shared/evse-chargepoint";
 import { ControllerEvseSingleShared } from "../shared/shared";
+import { EvseManualPayload } from "./schedule/js-calender-utils";
 
 @Component({
     selector: "oe-controller-evse-single-home",
@@ -33,6 +29,7 @@ import { ControllerEvseSingleShared } from "../shared/shared";
 })
 export class ModalComponent extends AbstractModal {
 
+    public payload = model(new EvseManualPayload());
     protected showNewFooter: boolean = true;
     protected label: string | null = null;
     protected chargePointComponent: EdgeConfig.Component | null = null;
@@ -45,18 +42,24 @@ export class ModalComponent extends AbstractModal {
     protected readonly CONVERT_TO_PHASE_SWITCH_LABEL = ControllerEvseSingleShared.CONVERT_TO_PHASE_SWITCH_LABEL(this.translate);
     protected readonly CONVERT_TO_ENERGY_LIMIT_LABEL = ControllerEvseSingleShared.CONVERT_TO_ENERGY_LIMIT_LABEL();
     protected oneTasks: OneTaskVM[] = null;
+    private navigationService: NavigationService = inject(NavigationService);
 
-    constructor(
-        @Inject(Websocket) protected override websocket: Websocket,
-        @Inject(ActivatedRoute) protected override route: ActivatedRoute,
-        @Inject(Service) protected override service: Service,
-        @Inject(ModalController) public override modalController: ModalController,
-        @Inject(TranslateService) protected override translate: TranslateService,
-        @Inject(FormBuilder) public override formBuilder: FormBuilder,
-        public override ref: ChangeDetectorRef,
-        private navigationService: NavigationService,
-    ) {
-        super(websocket, route, service, modalController, translate, formBuilder, ref);
+
+    async ionViewWillEnter() {
+        const edge = await this.service.getCurrentEdge();
+        const config = await this.service.getConfig();
+
+        if (edge == null || config == null) {
+            return;
+        }
+
+        this.chargePointComponent = config.getComponentFromOtherComponentsProperty(this.component.id, "chargePoint.id") ?? null;
+        if (EdgePermission.hasPhaseSwitchingAbility(edge, this.chargePointComponent) === false) {
+            return;
+        }
+
+        const tree = new NavigationTree("phase-switching", { baseString: "phase-switching" }, { name: "menu-outline", color: "warning" }, this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PHASE_SWITCHING"), "label", [], null);
+        this.navigationService.setChildToCurrentNavigation(tree);
     }
 
     public override async updateComponent(config: EdgeConfig) {
@@ -70,28 +73,13 @@ export class ModalComponent extends AbstractModal {
 
     protected override onIsInitialized(): void {
         this.chargePointComponent = this.config.getComponentFromOtherComponentsProperty(this.component.id, "chargePoint.id") ?? null;
+
         const evseChargepoint: EvseChargepoint | null = EvseChargepoint.getEvseChargepoint(this.chargePointComponent);
         if (evseChargepoint == null || this.chargePointComponent == null) {
             return;
         }
-        // Current date/time
-        const now = new Date(Date.now());
-
-        // Three days from now
-        const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days in milliseconds
 
         this.img = evseChargepoint.img;
-        this.edge.sendRequest(this.websocket, new ComponentJsonApiRequest({
-            componentId: this.component.id,
-            payload: new GetOneTasks(now.toISOString(), threeDaysFromNow.toISOString()),
-        })).then(response => {
-            const resp = response as GetOneTasksResponse;
-            this.oneTasks = resp.result.oneTasks.map(item => ({
-                start: item.start.replace(/([+-]\d{2}:\d{2}|Z)$/, ""),
-                end: item.end.replace(/([+-]\d{2}:\d{2}|Z)$/, ""),
-                mode: this.CONVERT_TO_MODE_LABEL(item.payload.mode),
-            }));
-        });
     }
 
     protected override getFormGroup(): FormGroup {
@@ -106,7 +94,7 @@ export class ModalComponent extends AbstractModal {
     }
 }
 
-interface OneTaskVM {
+export interface OneTaskVM {
     start: string;
     end: string;
     mode: string;

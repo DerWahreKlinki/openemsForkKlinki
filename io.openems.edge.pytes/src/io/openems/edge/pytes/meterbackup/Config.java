@@ -20,9 +20,9 @@ import io.openems.common.types.MeterType;
 
 	@AttributeDefinition(name = "Debug mode", description = "Enables Debug mode")
 	boolean debugMode() default false;
-	
+
 	@AttributeDefinition(name = "Extended Debug mode", description = "Enables extended Debug mode")
-	boolean extendedDebugMode() default false;		
+	boolean extendedDebugMode() default false;
 
 	@AttributeDefinition(name = "Modbus-ID", description = "ID of Modbus bridge.")
 	String modbus_id() default "modbus0";

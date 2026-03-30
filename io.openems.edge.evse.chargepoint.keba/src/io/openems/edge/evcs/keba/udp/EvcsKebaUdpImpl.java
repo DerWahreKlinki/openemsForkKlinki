@@ -216,8 +216,7 @@ public class EvcsKebaUdpImpl extends AbstractManagedEvcsComponent implements Keb
 		if (current < 6000) {
 			current = 0;
 		}
-		//return this.send("currtime " + current + " 1");
-		return this.send("currtime " + current + " 100"); // Current value for x seconds
+		return this.send("currtime " + current + " 1");
 	}
 
 	@Override
@@ -270,7 +269,7 @@ public class EvcsKebaUdpImpl extends AbstractManagedEvcsComponent implements Keb
 				Evcs.getModbusSlaveNatureTable(accessMode), //
 				ManagedEvcs.getModbusSlaveNatureTable(accessMode), //
 				KebaUdp.getModbusSlaveNatureTable(accessMode), //
-				ModbusSlaveNatureTable.of(EvcsKebaUdpImpl.class, accessMode, 0) //
+				ModbusSlaveNatureTable.of(EvcsKebaUdpImpl.class, accessMode, 100) //
 						.build());
 	}
 }

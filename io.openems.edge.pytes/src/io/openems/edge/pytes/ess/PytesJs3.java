@@ -1,26 +1,27 @@
 package io.openems.edge.pytes.ess;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
-import static io.openems.common.channel.AccessMode.WRITE_ONLY;
 import static io.openems.common.channel.AccessMode.READ_WRITE;
-import static io.openems.common.types.OpenemsType.INTEGER;
-import static io.openems.common.channel.PersistencePriority.LOW;
+import static io.openems.common.channel.AccessMode.WRITE_ONLY;
 import static io.openems.common.channel.PersistencePriority.HIGH;
+import static io.openems.common.channel.PersistencePriority.LOW;
+import static io.openems.common.types.OpenemsType.INTEGER;
+
 import org.osgi.service.event.EventHandler;
+
 import io.openems.common.channel.AccessMode;
+import io.openems.common.channel.Level;
 import io.openems.common.channel.Unit;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.types.OpenemsType;
+import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.WriteChannel;
 import io.openems.edge.common.channel.value.Value;
-import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.OpenemsComponent;
-import io.openems.edge.pytes.enums.WorkState;
 import io.openems.edge.pytes.battery.PytesBattery;
-
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.Appendix2;
 import io.openems.edge.pytes.enums.Appendix8;
@@ -28,12 +29,12 @@ import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
 import io.openems.edge.pytes.enums.StandardWorkingMode;
-import io.openems.common.channel.Level;
+import io.openems.edge.pytes.enums.WorkState;
 
 public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
-		
+
 		/**
 		 * Max Charge SoC (reg 43010).
 		 * The inverter stops charging when the battery reaches this level.
@@ -64,7 +65,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.unit(Unit.PERCENT)),
 
 		// Internal Statemachine
-		WORK_STATE(Doc.of(WorkState.values()).accessMode(AccessMode.READ_WRITE).persistencePriority(HIGH)),		
+		WORK_STATE(Doc.of(WorkState.values()).accessMode(AccessMode.READ_WRITE).persistencePriority(HIGH)),
 
 		STARTER_BATTERY_VOLTAGE(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
@@ -162,7 +163,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		FCAS_MODE_RUNNING_STATUS(Doc.of(INTEGER)
 		// .accessMode(READ_ONLY)
 		),
-/*		
+/*
 		SET_PV_SHUTDOWN_SWITCH(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("PV shutdown mode")),
 		SET_GRID_CHARGE_ALLOWED(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("Battery grid charge allowed")),
 		SET_DO_CONTROL(Doc.of(OpenemsType.BOOLEAN).accessMode(WRITE_ONLY).text("DO Control enabled")),
@@ -171,8 +172,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		PV_SHUTDOWN_SWITCH(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("PV shutdown mode")),
 		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Battery grid charge allowed")),
 		DO_CONTROL(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("DO Control enabled")),
-		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Off-grid battery standby")),		
-		
+		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Off-grid battery standby")),
+
 		BACKUP_PORT_ENABLED(Doc.of(EnableDisable.values()).accessMode(READ_ONLY).text("Backup Port enabled")),
 		ENABLE_BACKUP_PORT(Doc.of(EnableDisable.values()).accessMode(WRITE_ONLY).text("Backup Port enabled")),
 
@@ -532,8 +533,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 			return this.doc;
 		}
 	}
-	
-	
+
+
 
 	// -----------------------------------------------------------------------------
 	// Helpers: WorkState (internal state)
@@ -560,7 +561,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default void _setWorkState(WorkState value) {
 		this.getWorkStateChannel().setNextValue(value);
-	}	
+	}
 
 	// Set remote dispatch switch
 	/**
@@ -584,7 +585,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default WriteChannel<EnableDisable> setRemoteDispatchSwitchChannel() {
 	    return this.channel(ChannelId.SET_REMOTE_DISPATCH_SWITCH);
 	}
-	
+
 	// Enable / Disable Backup Port
 	/**
 	 * Enables or disables backup AC port.
@@ -607,7 +608,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 	public default WriteChannel<EnableDisable> setEnableBackupPortChannel() {
 	    return this.channel(ChannelId.ENABLE_BACKUP_PORT);
-	}	
+	}
 
 	// Set remote dispatch timeout
 	public default void setRemoteDispatchTimeout(int value) throws OpenemsNamedException {
@@ -617,14 +618,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteDispatchTimeoutChannel() {
 		return this.channel(ChannelId.SET_REMOTE_DISPATCH_TIMEOUT);
 	}
-	
-	
+
+
 	/**
 	 * Sets the remote dispatch system limit switch.
 	 *
 	 * <p>
-	 * BIT00: System Import Limit Switch (0 = Disable, 1 = Enable)  
-	 * BIT01: System Export Limit Switch (0 = Disable, 1 = Enable)  
+	 * BIT00: System Import Limit Switch (0 = Disable, 1 = Enable)
+	 * BIT01: System Export Limit Switch (0 = Disable, 1 = Enable)
 	 * BIT02-BIT15: Reserved
 	 *
 	 * @param value the {@link SystemLimitSwitch} value
@@ -682,7 +683,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.channel(ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
 	}
 
-	
+
 	/**
 	 * Sets the remote dispatch realtime control function switch.
 	 *
@@ -715,12 +716,12 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 		this.getSetRemoteDispatchRealtimeControlFunctionSwitchChannel().setNextWriteValue(value);
 	}
-	
+
 	public default IntegerWriteChannel getSetRemoteDispatchRealtimeControlFunctionSwitchChannel() {
 		return this.channel(ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
-	}	
-	
-	
+	}
+
+
 	/**
 	 * Gets the Channel for {@link ChannelId#PV_SHUTDOWN_SWITCH}.
 	 *
@@ -738,7 +739,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default EnableDisable getPvShutdownSwitch() {
 		return this.getPvShutdownSwitchChannel().value().asEnum();
 	}
-	
+
 	/**
 	 * Internal method to set the PV shutdown switch.
 	 *
@@ -746,7 +747,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default void _setPvShutdownSwitch(EnableDisable value) {
 		this.getPvShutdownSwitchChannel().setNextValue(value);
-	}	
+	}
 
 
 	/**
@@ -774,7 +775,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default void _setGridChargeAllowed(EnableDisable value) {
 		this.getGridChargeAllowedChannel().setNextValue(value);
-	}	
+	}
 
 	/**
 	 * Gets the Channel for {@link ChannelId#DO_CONTROL}.
@@ -793,7 +794,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default EnableDisable getDoControl() {
 		return this.getDoControlChannel().value().asEnum();
 	}
-	
+
 	/**
 	 * Internal method to set the DO control state channel.
 	 *
@@ -819,8 +820,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default EnableDisable getOffGridBatteryStandby() {
 		return this.getOffGridBatteryStandbyChannel().value().asEnum();
-	}	
-	
+	}
+
 	/**
 	 * Internal method to set the off-grid battery standby state.
 	 *
@@ -828,8 +829,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default void _setOffGridBatteryStandby(EnableDisable value) {
 		this.getOffGridBatteryStandbyChannel().setNextValue(value);
-	}	
-	
+	}
+
 	/**
 	 * Sets the remote dispatch realtime control switch.
 	 *
@@ -852,7 +853,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default WriteChannel<RemoteDispatchRealtimeControlSwitch> setRemoteDispatchRealtimeControlSwitchChannel() {
 	    return this.channel(ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_SWITCH);
 	}
-	
+
 
 	// Set remote control mode
 	public default void setRemoteControlMode(int value) throws OpenemsNamedException {
@@ -886,8 +887,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetMaxChargeSocChannel() {
 		return this.channel(ChannelId.SET_MAX_CHARGE_SOC);
 	}
-	
-	
+
+
 	// Overdischarge SoC
 	/**
 	 * Sets the Overdischarge SoC (reg 43011).
@@ -903,7 +904,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetOverdischargeSocChannel() {
 		return this.channel(ChannelId.SET_OVERDISCHARGE_SOC);
 	}
-	
+
 	/**
 	 * Gets the Channel for {@link ChannelId#SET_OVERDISCHARGE_SOC}.
 	 *
@@ -920,8 +921,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default Value<Integer> getOverDischargeSoc() {
 		return this.getOverDischargeSocChannel().value();
-	}	
-	
+	}
+
 
 	// FORCE CHARGE SOC
 	/**
@@ -938,7 +939,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetForceChargeSocChannel() {
 		return this.channel(ChannelId.SET_FORCE_CHARGE_SOC);
 	}
-	
+
 	/**
 	 * Gets the Channel for {@link ChannelId#SET_FORCE_CHARGE_SOC}.
 	 *
@@ -955,40 +956,40 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	 */
 	public default Value<Integer> getForceChargeSoc() {
 		return this.getForceChargeSocChannel().value();
-	}	
+	}
 
-	// 
+	//
 	/**
 	 * Adds Battery to ESS hybrid system.
-	 * 
+	 *
 	 * @param battery link to Pytes battery
 	 */
 	public void addBattery(PytesBattery battery);
 
 	/**
 	 * Removes link to battery.
-	 * 
+	 *
 	 * @param PytesBattery battery
 	 */
 	public void removeBattery(PytesBattery battery);
 
 	/**
 	 * Adds DC-charger to ESS hybrid system. Represents PV production
-	 * 
+	 *
 	 * @param charger link to DC charger(s)
 	 */
 	public void addCharger(PytesDcCharger charger);
 
 	/**
 	 * Removes link to pv DC charger.
-	 * 
+	 *
 	 * @param charger charger
 	 */
 	public void removeCharger(PytesDcCharger charger);
 
 	/**
 	 * returns ModbusBrdigeId from config.
-	 * 
+	 *
 	 * @return ModbusBrdigeId from config
 	 */
 	public String getModbusBridgeId();

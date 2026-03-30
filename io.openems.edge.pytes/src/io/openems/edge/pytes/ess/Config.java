@@ -18,30 +18,30 @@ import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 
 	@AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
 	boolean enabled() default true;
-	
+
 	@AttributeDefinition(name = "StandBy", description = "Set the device to standby")
-	boolean standBy() default false;	
+	boolean standBy() default false;
 
 	@AttributeDefinition(name = "ESS SetPoint", description = "SetPoint")
 	RemoteDispatchRealtimeControlSwitch essSetpoint() default RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
 	@AttributeDefinition(name = "Max. Apparent Power", description = "Inverter´s apparent power limit")
-	int maxApparentPower() default 10000;	
-	
+	int maxApparentPower() default 10000;
+
 	@AttributeDefinition(name = "Min SoC [5-100%]", description = "Minimum SoC. This value is written to hardware")
-	int minSoc() default 10;	
-	
+	int minSoc() default 10;
+
 	@AttributeDefinition(name = "Enable Backup Port", description = "Activate Backup Port")
 	boolean enableBackupPort() default true;
-	
+
 	String webconsole_configurationFactory_nameHint() default "io.openems.edge.pytes [{id}]";
 
 	@AttributeDefinition(name = "Debug Mode", description = "Activates the debug mode")
 	boolean debugMode() default false;
 
 	@AttributeDefinition(name = "ReadOnly Mode", description = "read only mode")
-	boolean readOnlyMode() default false;	
-	
+	boolean readOnlyMode() default false;
+
 	@AttributeDefinition(name = "Modbus-ID", description = "ID of Modbus bridge.")
 	String modbus_id() default "modbus0";
 

@@ -5,6 +5,7 @@ import static org.osgi.service.component.annotations.ReferenceCardinality.MANDAT
 import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
 import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -38,24 +39,24 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
+import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
-import io.openems.edge.pytes.enums.WorkState;
 import io.openems.edge.ess.api.AsymmetricEss;
 import io.openems.edge.ess.api.HybridEss;
 import io.openems.edge.ess.api.ManagedAsymmetricEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
-
 import io.openems.edge.ess.api.SymmetricEss;
-import io.openems.edge.ess.generic.common.CycleProvider;
 import io.openems.edge.ess.power.api.Power;
+import io.openems.edge.timedata.api.Timedata;
+import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
-import io.openems.edge.timedata.api.Timedata;
+import io.openems.edge.pytes.enums.WorkState;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -68,7 +69,7 @@ import io.openems.edge.timedata.api.Timedata;
 })
 public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		implements PytesJs3, HybridEss, SymmetricEss, ManagedSymmetricEss, AsymmetricEss, ManagedAsymmetricEss,
-		OpenemsComponent, ModbusComponent, EventHandler, CycleProvider {
+		OpenemsComponent, ModbusComponent, EventHandler, TimedataProvider, ClockProvider {
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -162,12 +163,12 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				 * m(PytesJs3.ChannelId.SET_REMOTE_CONTROL_MODE, new
 				 * UnsignedWordElement(43132))),
 				 */
-				
+
 				new FC16WriteRegistersTask(43111,
 						m(PytesJs3.ChannelId.ENABLE_BACKUP_PORT, new UnsignedWordElement(43111))),
-				
+
 				new FC3ReadRegistersTask(43111, Priority.LOW,
-						m(PytesJs3.ChannelId.BACKUP_PORT_ENABLED, new UnsignedWordElement(43111))),				
+						m(PytesJs3.ChannelId.BACKUP_PORT_ENABLED, new UnsignedWordElement(43111))),
 
 				new FC16WriteRegistersTask(44100,
 						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SWITCH, new UnsignedWordElement(44100)),
@@ -371,21 +372,21 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 		case WorkState.NORMAL:
 			if (this.getState() == Level.WARNING) {
-				this.changeState(WorkState.WARNING);				
+				this.changeState(WorkState.WARNING);
 				break; // no changes
 			}
 			if (this.getState() == Level.FAULT) {
 				this.changeState(WorkState.ERROR);
 				break;
 			}
-			break;			
+			break;
 
 		default:
 		}
 
 	}
-	
-	
+
+
 	private boolean setDefaultValues() {
 	    Integer currentForceMinSoc = this.getForceChargeSoc().get();
 	    Integer currentMinSoc = this.getOverDischargeSoc().get();
@@ -422,7 +423,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	        this.log.error("Failed to set default values", e);
 	        return false;
 	    }
-	    
+
 	    return true;
 	}
 
@@ -507,7 +508,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		if (config.debugMode()) {
 			return "SoC:" + this.getSoc().asString() //
 					+ "|L:" + this.getActivePower().asString()
-					
+
 					/*
 					+ this.channel(SymmetricEss.ChannelId.REACTIVE_POWER).value().asString() + "\nMaxApparentPower="
 					+ this.channel(SymmetricEss.ChannelId.MAX_APPARENT_POWER).value().asString() + "\nSafetyVersion="
@@ -529,7 +530,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 					+ this.channel(PytesJs3.ChannelId.INVERTER_CURRENT_STATUS).value().asString() + "\nOperatingMode="
 					+ this.channel(PytesJs3.ChannelId.OPERATING_MODE).value().asString() + "\nFrequency="
 					+ this.channel(PytesJs3.ChannelId.FREQUENCY).value().asString()
-			
+
 			  + "\nLeadAcidBatteryTemp=" +
 			  this.channel(PytesJs3.ChannelId.LEAD_ACID_BATTERY_TEMP).value().asString() +
 			  "\nFunctionStatus=" +
@@ -572,7 +573,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  this.channel(PytesJs3.ChannelId.FAULT_CODE_05).value().asString() +
 			  "\nOperatingStatus=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_STATUS).value().asString()
-			  
+
 			  + "\nWorkingModeRunningStatus=" +
 			  this.channel(PytesJs3.ChannelId.WORKING_MODE_RUNNING_STATUS).value().asString
 			  () + "\nFaultCode06=" +
@@ -582,15 +583,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  "\nStorageControlSwitchingValue=" +
 			  this.channel(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE).value().
 			  asString()
-			  
-			  
+
+
 			  + "\nPvShutdownSwitch=" + this.getPvShutdownSwitch().toString() +
 			  "\nGrid charge Allowed=" + this.getGridChargeAllowed().toString() +
 			  "\nDO Control=" + this.getDoControl().toString() +
 			  "\nOffGrid Battery Standby=" + this.getOffGridBatteryStandby().toString()
-			  
-			  
-			  // Appendix 4 decoded fault bits REG1 (33116) 
+
+
+			  // Appendix 4 decoded fault bits REG1 (33116)
 			  + "\nFaultReg1_NoGrid=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG1_NO_GRID).value().asString() +
 			  "\nFaultReg1_GridOvVoltage=" +
@@ -622,8 +623,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nFaultReg1_AbnGridPhase=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY).
 			  value().asString()
-			  
-			  // REG2 (33117) Backup / Hub faults 
+
+			  // REG2 (33117) Backup / Hub faults
 			  + "\nFaultReg2_BackupOvVolt=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERVOLTAGE).value().
 			  asString() + "\nFaultReg2_BackupOverload=" +
@@ -635,8 +636,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  ().asString() + "\nFaultReg2_HubPanelOvCurrent=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG2_HUB_PANEL_OV_CURRENT).value().
 			  asString()
-			  
-			  // REG3 (33118) Battery faults 
+
+			  // REG3 (33118) Battery faults
 			  + "\nFaultReg3_BattNotConnected=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG3_BATTERY_NOT_CONNECTED).value().
 			  asString() + "\nFaultReg3_BattOvVoltCheck=" +
@@ -662,8 +663,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  value().asString() + "\nFaultReg3_LowBattOffgrid=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG3_LOW_BATTERY_OFFGRID).value().
 			  asString()
-			  
-			  // REG4 (33119) DC / IGBT / AFCI faults 
+
+			  // REG4 (33119) DC / IGBT / AFCI faults
 			  + "\nFaultReg4_DcOvVolt=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG4_DC_OVERVOLTAGE).value().asString()
 			  + "\nFaultReg4_DcBusOvVolt=" +
@@ -695,8 +696,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nFaultReg4_BattDischargeOvCurr=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT).
 			  value().asString()
-			  
-			  // REG5 (33120) Protection faults 
+
+			  // REG5 (33120) Protection faults
 			  + "\nFaultReg5_GridInterf=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG5_GRID_INTERFERENCE).value().
 			  asString() + "\nFaultReg5_OverDcComponents=" +
@@ -729,8 +730,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  this.channel(PytesJs3.ChannelId.FAULT_REG5_BATTERY_COM_FAILURE).value().
 			  asString() + "\nFaultReg5_DspComFail=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG5_DSP_COM_FAIL).value().asString()
-			  
-			  // REG6 (33124) Parallel / multi-unit faults 
+
+			  // REG6 (33124) Parallel / multi-unit faults
 			  + "\nFaultReg6_SlaveLoseErr=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG6_SLAVE_LOSE_ERR).value().asString()
 			  + "\nFaultReg6_MasterLoseErr=" +
@@ -761,8 +762,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  this.channel(PytesJs3.ChannelId.FAULT_REG6_3P_CREATE_FAIL).value().asString()
 			  + "\nFaultReg6_AcbkOpen=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG6_ACBK_OPEN).value().asString()
-			  
-			  // REG7 (33125) Hardware / startup faults 
+
+			  // REG7 (33125) Hardware / startup faults
 			  + "\nFaultReg7_ReveDc=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG7_REVE_DC).value().asString() +
 			  "\nFaultReg7_BattHwOvVolt02=" +
@@ -784,8 +785,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nFaultReg7_DrmNotConnect=" +
 			  this.channel(PytesJs3.ChannelId.FAULT_REG7_DRM_NOT_CONNECT).value().asString(
 			  )
-			  
-			  // Appendix 5 Operating Status decoded bits (33121) 
+
+			  // Appendix 5 Operating Status decoded bits (33121)
 			  + "\nOperatStat_NormalOp=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_NORMAL_OPERATION).value().
 			  asString() + "\nOperatStat_Initializing=" +
@@ -815,7 +816,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nOperatStat_ExternalFanFail=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_STAT_EXTERNAL_FAN_FAIL).value().
 			  asString()
-			  
+
 			  // Appendix 6 Storage Control decoded bits (33132) + "\nStorageCtrl_SelfUse="
 			  +
 			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_SELF_USE_MODE).value().asString(
@@ -842,8 +843,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nStorageCtrl_PeakShaving=" +
 			  this.channel(PytesJs3.ChannelId.STORAGE_CTRL_PEAK_SHAVING_MODE).value().
 			  asString()
-			  
-			  // Appendix 7 Setting Flag Bit decoded bits (33115) 
+
+			  // Appendix 7 Setting Flag Bit decoded bits (33115)
 			  + "\nSettingFlag_FlashTimeout=" +
 			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_FLASH_TIMEOUT).value().asString(
 			  ) + "\nSettingFlag_ClearEnergy=" +
@@ -856,7 +857,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  */
 			  + "\nOperatingModeDecoded=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).value().asString()
-			 
+
 			;
 
 		} else {
@@ -1000,7 +1001,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			}
 			this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).setNextValue(bitPos);
 		}
-		;
 	}
 
 	/**
@@ -1136,7 +1136,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 	}
 
-	@Override
 	public int getCycleTime() {
 		return this.cycle != null ? this.cycle.getCycleTime() : DEFAULT_CYCLE_TIME;
 	}
@@ -1145,4 +1144,16 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	public boolean isManaged() {
 		return !this.config.readOnlyMode();
 	}
+	
+	@Override
+	public Timedata getTimedata() {
+		return this.timedata;
+	}
+
+	@Override
+	public Clock getClock() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+	
 }

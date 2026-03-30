@@ -14,6 +14,9 @@ import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.component.annotations.ReferencePolicyOption;
+import org.osgi.service.event.Event;
+import org.osgi.service.event.EventHandler;
+import org.osgi.service.event.propertytypes.EventTopics;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +36,7 @@ import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
@@ -40,11 +44,6 @@ import io.openems.edge.common.startstop.StartStop;
 import io.openems.edge.common.startstop.StartStoppable;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.pytes.ess.PytesJs3;
-
-import org.osgi.service.event.Event;
-import org.osgi.service.event.EventHandler;
-import org.osgi.service.event.propertytypes.EventTopics;
-import io.openems.edge.common.event.EdgeEventConstants;
 
 
 @Designate(ocd = Config.class, factory = true)
@@ -89,7 +88,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus);
 	}
-	
+
 	@Reference(
 		    name = "ess",
 		    policy = ReferencePolicy.STATIC,
@@ -97,7 +96,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 		    cardinality = ReferenceCardinality.MANDATORY
 		)
 		private volatile PytesJs3 ess;
-	
+
 
 
 	private int maxSocPercentage;
@@ -108,15 +107,11 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 
 	    if (super.activate(context, config.id(), config.alias(), config.enabled(),
 	            this.ess.getUnitId(), this.cm, "Modbus",
-	            this.ess.getModbusBridgeId())) {
-	        return;
-	    }	   
-	    
-	    if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(),
+	            this.ess.getModbusBridgeId()) || OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(),
 	            "ess", config.ess_id())) {
 	        return;
-	    }	    
-	    
+	    }
+
 	    this.ess.addBattery(this);
 
 
@@ -129,7 +124,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 	protected void deactivate() {
 		super.deactivate();
 	}
-	
+
 	@Override
 	public void handleEvent(Event event) {
 		// super.handleEvent(event);
@@ -140,7 +135,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 			this.calculateAndSetBatteryPower();
 			break;
 		}
-	}	
+	}
 
 	@Override
 	public String debugLog() {
@@ -175,10 +170,10 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 
 	private void installListener() {
 		// ToDo.
-		
+
 		//
 		// this.getVoltageChannel().onUpdate(value -> {
-		//	
+		//
 		//	Integer voltage =  value.get();
 		// }
 		// );
@@ -188,7 +183,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 		Integer batteryCurrentWithoutDirection = this.getCurrentWithoutDirection().get(); // mA
 		Integer batteryVoltage = this.getBatteryVoltage().get();
 		Integer batteryCurrentDirection = this.getBatteryCurrentDirection().get(); // 0 -> charge
-		
+
 		if (batteryCurrentWithoutDirection == null || batteryVoltage == null || batteryCurrentDirection == null ) {
 			log.error("Battery power cannot be calculated due to missing values");
 			return;
@@ -200,15 +195,14 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 	    this._setDcDischargePower(power);
 	    this._setVoltage((int) Math.round(batteryVoltage /1000.0)); // parent class wants V
 		this._setCurrent((int) Math.round((batteryCurrentWithoutDirection * sign)/1000.0)); // parent class wants A
-		
+
 	}
-	
+
 	@Override
 	public void setMinSocPercentage(int minSocPercentage) {
 		this.minSocPercentage = minSocPercentage;
 
 	}
-	
 
 	@Override
 	public int getConfiguredMaxChargeCurrent() {
@@ -225,6 +219,7 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 		return new ModbusProtocol(this,
 
 
+<<<<<<< HEAD
 				// ---------------------------------------------------------------
 				// Inverter battery port + BMS values (reg 33133-33144)
 				// Priority HIGH - read every cycle for power/current/voltage calc
@@ -251,10 +246,30 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_2),
 						
 						new DummyRegisterElement(33137, 33138), // 		
+=======
+				// ---------------------------------------------------
+				// Battery core values: SOC, SOH, Voltage, Current
+				// ---------------------------------------------------
+				new FC4ReadInputRegistersTask(33133, Priority.HIGH, //
+
+						m(PytesBattery.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(33133), // mV
+								ElementToChannelConverter.SCALE_FACTOR_2),
+
+						m(PytesBattery.ChannelId.CURRENT_WITHOUT_DIRECTION, new SignedWordElement(33134), // mA. direction depends on 33135
+								ElementToChannelConverter.SCALE_FACTOR_2),
+
+						m(PytesBattery.ChannelId.BATTERY_CURRENT_DIRECTION, new UnsignedWordElement(33135)),  // 0-> charge, 1-> discharge
+
+						m(PytesBattery.ChannelId.LLC_BUS_VOLTAGE, new UnsignedWordElement(33136),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+
+						new DummyRegisterElement(33137, 33138), //
+>>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 
 						// reg 33139 - Batter state of Charge [%]
 						// Datasheet: resolution 1 -> no converter needed
 						m(Battery.ChannelId.SOC, new UnsignedWordElement(33139)),
+<<<<<<< HEAD
 						
 						// reg 33140 - Batter state of Health [%]
 						// Datasheet: resolution 1 -> no converter needed
@@ -280,16 +295,43 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 						
 						// reg 33144 – BMS maximum discharge current limit [mA]
 						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
+=======
+
+						// Battery SOH [%], resolution 1 (100=100%)
+						m(Battery.ChannelId.SOH, new UnsignedWordElement(33140)),
+
+						// Battery Voltage [mV], resolution 0.01V
+						m(Battery.ChannelId.VOLTAGE, new UnsignedWordElement(33141),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+
+						// Battery Current [mA], resolution 0.1A
+						m(PytesBattery.ChannelId.BMS_BATTERY_CURRENT, new SignedWordElement(33142),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+
+						// BMS Charge Current Limit [mA], resolution 0.1A
+						m(PytesBattery.ChannelId.BMS_CHARGE_CURRENT_LIMIT, new UnsignedWordElement(33143),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+
+						// BMS Discharge Current Limit [mA], resolution 0.1A
+>>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 						m(PytesBattery.ChannelId.BMS_DISCHARGE_CURRENT_LIMIT, new UnsignedWordElement(33144),
 								ElementToChannelConverter.SCALE_FACTOR_2)
-						
+
 				),
+<<<<<<< HEAD
 						
 				// ---------------------------------------------------------------
 				// Fault status words (reg 33145–33148)
 				// Priority LOW – diagnostic only, not needed every cycle
 				// ---------------------------------------------------------------
 				new FC4ReadInputRegistersTask(33145, Priority.LOW,
+=======
+
+				// -------------------------------------------------------------
+				// Battery fault status words (Low Priority - diagnostic only)
+				// -------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33145, Priority.LOW, //
+>>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 
 						// reg 33145 – Battery Fault Status word 01 (Appendix 9)
 						m(new BitsWordElement(33145, this)
@@ -301,8 +343,13 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 							.bit(6, PytesBattery.ChannelId.BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO)
 							.bit(7, PytesBattery.ChannelId.BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO)),
 
+<<<<<<< HEAD
 					
 						// reg 33146 – Battery Fault Status word 02 (Appendix 9)
+=======
+
+						// Battery Fault Status 02 (Appendix 9)
+>>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 						m(new BitsWordElement(33146, this)
 							.bit(0, PytesBattery.ChannelId.BMS_FAULT02_CHARGE_OVERCURRENT_PRO)
 							.bit(1, PytesBattery.ChannelId.BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1)
@@ -314,22 +361,27 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 
 						new DummyRegisterElement(33147, 33148) // Reserved
 				),
-						
+
 				// ---------------------------------------------------------------
 				// Battery power direct read (reg 33149–33150)
 				// Priority HIGH – cross-check against calculated DC_DISCHARGE_POWER
 				// ---------------------------------------------------------------
 				new FC4ReadInputRegistersTask(33149, Priority.HIGH,
+<<<<<<< HEAD
  
 						// reg 33149–33150 – Battery power [W] (S32, two registers)
 						// Datasheet: 1 W resolution → no converter needed
+=======
+
+						// Battery Power [W], resolution: 1 W
+>>>>>>> 41dbfba39b34457c6f8332368a6ecd9f0ca3fa60
 						// Positive = charging, negative = discharging
 						// Stored in DC_DISCHARGE_POWER_UNSIGNED for cross-check.
 						// The signed DC_DISCHARGE_POWER is set programmatically by
 						// calculateAndSetBatteryPower() using voltage × current × direction.
 						m(PytesBattery.ChannelId.DC_DISCHARGE_POWER_UNSIGNED, new SignedDoublewordElement(33149))
-				)								
-				
+				)
+
 		);
 
 	}

@@ -94,7 +94,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
-		
+
 		this.meterType = config.type();
 		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
 				"Modbus", config.modbus_id())) {
@@ -135,7 +135,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 						.bit(1, PytesMeterGrid.ChannelId.FAILSAFE_SWITCH)),
 
 						// reg 33249 - reserved
-						new DummyRegisterElement(33249, 33249),				
+						new DummyRegisterElement(33249, 33249),
 
 						// reg 33250 - Meter/CT position and EPM status flags (Appendix 10)
 						// BIT01=meter in grid, BIT02=CT in grid, BIT04=EPM status,
@@ -175,7 +175,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 						// reg 33292 - Equipment fault sub-code
 						//Used together with reg 33095 to identify specific fault
-						m(PytesMeterGrid.ChannelId.EQUIPMENT_FAULT_CODE, new UnsignedWordElement(33292))				
+						m(PytesMeterGrid.ChannelId.EQUIPMENT_FAULT_CODE, new UnsignedWordElement(33292))
 
 				)
 		);
@@ -271,7 +271,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 				// Datasheet: 0.01 Hz -> SCALE_FACTOR_1
 				m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(33282),
 						ElementToChannelConverter.SCALE_FACTOR_1)
-				
+
 		));
 
 		// ---------------------------------------------------------------
@@ -303,9 +303,9 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 						.bit(9,  PytesMeterGrid.ChannelId.METER_EXTERNAL_EPM_FAILSAFE_SWITCH)
 						.bit(13, PytesMeterGrid.ChannelId.METER_CT_SELECTION))
 		));
-		
-			
-/*			
+
+
+/*
 		if (this.config.meterDeviceType() == MeterDeviceType.INTERNAL) {
 			// Inverter Grid Electrical (33073..33094)
 			modbusProtocol.addTask(new FC4ReadInputRegistersTask(33073, Priority.LOW, // total: 22 registers
@@ -328,9 +328,9 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 					new DummyRegisterElement(33085, 33093),
 					m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(33094))));
 		} else {
-*/		
+*/
 			// External meter / EPM Grid Electrical (33250..33282 / 33286)
-			
+
 		//}
 
 		return modbusProtocol;
@@ -372,8 +372,8 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 	protected void logInfo(Logger log, String message) {
 		super.logInfo(log, message);
 	}
-	
-	
+
+
 	private void installListeners() {
 
 		// Decode reg 33300 raw word into location and type sub-channels
@@ -411,7 +411,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 		BooleanReadChannel chExtEpmStatus = (BooleanReadChannel) this.channel(PytesMeterGrid.ChannelId.METER_EXTERNAL_EPM_STATUS);
 		BooleanReadChannel chExtFailsafe  = (BooleanReadChannel) this.channel(PytesMeterGrid.ChannelId.METER_EXTERNAL_EPM_FAILSAFE_SWITCH);
 		BooleanReadChannel chCtSelect     = (BooleanReadChannel) this.channel(PytesMeterGrid.ChannelId.METER_CT_SELECTION);
- 
+
 		Runnable rebuildMeterCtRaw = () -> {
 			int word = 0;
 			Boolean ctInGrid     = chCtInGrid.value().get();
@@ -423,24 +423,42 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 			Boolean extEpmStatus = chExtEpmStatus.value().get();
 			Boolean extFailsafe  = chExtFailsafe.value().get();
 			Boolean ctSelect     = chCtSelect.value().get();
-			
- 
-			if (ctInGrid     != null && ctInGrid)     word |= (1 << 2);
-			if (parallelPv   != null && parallelPv)   word |= (1 << 3);
-			if (epmSw        != null && epmSw)        word |= (1 << 4);
-			if (failsafeSw   != null && failsafeSw)   word |= (1 << 5);
-			if (pcmUnbal     != null && pcmUnbal)     word |= (1 << 6);
-			if (epmCurrSw    != null && epmCurrSw)    word |= (1 << 7);
-			if (extEpmStatus != null && extEpmStatus) word |= (1 << 8);
-			if (extFailsafe  != null && extFailsafe)  word |= (1 << 9);
-			if (ctSelect     != null && ctSelect)     word |= (1 << 13);
- 
+
+
+			if (ctInGrid     != null && ctInGrid) {
+				word |= (1 << 2);
+			}
+			if (parallelPv   != null && parallelPv) {
+				word |= (1 << 3);
+			}
+			if (epmSw        != null && epmSw) {
+				word |= (1 << 4);
+			}
+			if (failsafeSw   != null && failsafeSw) {
+				word |= (1 << 5);
+			}
+			if (pcmUnbal     != null && pcmUnbal) {
+				word |= (1 << 6);
+			}
+			if (epmCurrSw    != null && epmCurrSw) {
+				word |= (1 << 7);
+			}
+			if (extEpmStatus != null && extEpmStatus) {
+				word |= (1 << 8);
+			}
+			if (extFailsafe  != null && extFailsafe) {
+				word |= (1 << 9);
+			}
+			if (ctSelect     != null && ctSelect) {
+				word |= (1 << 13);
+			}
+
 			this.channel(PytesMeterGrid.ChannelId.METER_CT_POSITION_RAW).setNextValue(word);
 			if (this.config.debugMode()) {
 				this.logDebug(this.log, "METER_CT_POSITION_RAW (43073) reconstructed=0x" + Integer.toHexString(word));
 			}
 		};
- 
+
 		chCtInGrid.onUpdate(v -> rebuildMeterCtRaw.run());
 		chParallelPv.onUpdate(v -> rebuildMeterCtRaw.run());
 		chEpmSw.onUpdate(v -> rebuildMeterCtRaw.run());
@@ -452,7 +470,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 		chCtSelect.onUpdate(v -> rebuildMeterCtRaw.run());
 	}
 
-	
+
 
 	public String collectDebugData() {
 		// Collect channel values in one stream

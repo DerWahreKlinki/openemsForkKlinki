@@ -143,7 +143,7 @@ public class WriteHandler implements Runnable {
 			}
 
 			if (sent) {
-				this.logDebug("\n\n  WriteHandler/applyChargePower >>>>>>>Setting EVCS " + this.parent.alias() + " charge power to " + power + " W\n\n");
+				this.logDebug("Setting EVCS " + this.parent.alias() + " charge power to " + power + " W");
 				this.parent.setDisplayText(power + " W");
 
 				this.parent._setSetChargePowerLimit(power);

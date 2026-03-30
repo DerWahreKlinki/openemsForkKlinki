@@ -2,6 +2,7 @@ package io.openems.edge.deye.ess;
 
 import static io.openems.edge.common.cycle.Cycle.DEFAULT_CYCLE_TIME;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 
@@ -42,7 +43,7 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
-
+import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
@@ -62,7 +63,7 @@ import io.openems.edge.deye.enums.WorkState;
 import io.openems.edge.ess.api.HybridEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
-import io.openems.edge.ess.generic.common.CycleProvider;
+import io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId;
 import io.openems.edge.ess.power.api.Power;
 
 import io.openems.edge.timedata.api.Timedata;
@@ -82,7 +83,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 })
 public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 		implements DeyeSunHybrid, HybridEss, ManagedSymmetricEss, SymmetricEss, ModbusComponent, OpenemsComponent,
-		EventHandler, ModbusSlave, TimedataProvider, CycleProvider {
+		EventHandler, ModbusSlave, TimedataProvider, ClockProvider {
 
 	// protected static final int MAX_APPARENT_POWER = 20000;
 
@@ -701,7 +702,6 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 
 	}
 
-	@Override
 	public int getCycleTime() {
 		return this.cycle != null ? this.cycle.getCycleTime() : DEFAULT_CYCLE_TIME;
 	}
@@ -820,6 +820,13 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 
 	public boolean getChargeMode() {
 		return this.chargeMode;
+	}
+
+	
+	@Override
+	public Clock getClock() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 	/*

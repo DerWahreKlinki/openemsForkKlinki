@@ -26,6 +26,7 @@ import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.Appendix2;
 import io.openems.edge.pytes.enums.Appendix8;
 import io.openems.edge.pytes.enums.EnableDisable;
+import io.openems.edge.pytes.enums.InverterOperatingStatus;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
 import io.openems.edge.pytes.enums.StandardWorkingMode;
@@ -107,6 +108,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		),
 
 		INVERTER_CURRENT_STATUS(Doc.of(Appendix2.values()).accessMode(AccessMode.READ_ONLY)),
+		
+		OPERATING_STATUS(Doc.of(INTEGER).accessMode(READ_ONLY)),
 
 		LEAD_ACID_BATTERY_TEMP(Doc.of(INTEGER)
 		// .accessMode(READ_ONLY)
@@ -356,7 +359,18 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		FAULT_REG7_RESERVED_14(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Reserved (REG7 BIT14)")),
 		FAULT_REG7_RESERVED_15(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Reserved (REG7 BIT15)")),
 
-		OPERATING_STATUS(Doc.of(INTEGER).accessMode(READ_ONLY)),
+		// -----------------------------------------------------------------------
+		// Inverter operating status (reg 33287)
+		// -----------------------------------------------------------------------
+
+		/**
+		 * Inverter operating status (reg 33287, U16)
+		 * 0 = Stop, 1 = Open loop, 2 = Soft start, 3 = Grid-connected
+		 * 4 = Off-grid/EPS, 5 = Off-grid to on-grid transition, 6 = Backup bypass
+		 * 7 = Generator running
+		 * See {@link OperatingStatus} enum
+		 */
+		INVERTER_OPERATING_STATUS(Doc.of(InverterOperatingStatus.values())),
 
 		// ── Appendix 5 ── Register 33121 / 36026 decoded bits ──
 		OPERATING_STAT_NORMAL_OPERATION(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Normal Operation")),
@@ -721,7 +735,36 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.channel(ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
 	}
 
+	// Operating Status
+	/**
+	 * Gets the Channel for {@link ChannelId#OPERATING_STATUS}.
+	 * 
+	 * 0 = Stop
+	 * 1 = Open loop
+	 * 2 = Soft start
+	 * 3 = Grid-connected
+	 * 4 = Off-grid/EPS
+	 * 5 = Off-grid to on-grid transition
+	 * 6 = Backup bypass
+	 * 7 = Generator running
+	 * 
+	 * @return the Channel
+	 */
+	public default Channel<InverterOperatingStatus> getInverterOperatingStatusChannel() {
+		return this.channel(ChannelId.INVERTER_OPERATING_STATUS);
+	}
 
+	/**
+	 * Gets the operating status
+	 *
+	 * @return the {@link EnableDisable} value
+	 */
+	public default InverterOperatingStatus getInverterOperatingStatus() {
+		return this.getInverterOperatingStatusChannel().value().asEnum();
+	}	
+	
+
+	// PV Shutdown
 	/**
 	 * Gets the Channel for {@link ChannelId#PV_SHUTDOWN_SWITCH}.
 	 *

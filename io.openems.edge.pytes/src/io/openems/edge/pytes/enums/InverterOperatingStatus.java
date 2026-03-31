@@ -2,7 +2,7 @@ package io.openems.edge.pytes.enums;
 
 import io.openems.common.types.OptionsEnum;
 
-public enum OperatingStatus implements OptionsEnum {
+public enum InverterOperatingStatus implements OptionsEnum {
 
 	UNDEFINED(-1, "Undefined"),
 	STOP_RUNNING(0, "Stop running"),
@@ -17,7 +17,7 @@ public enum OperatingStatus implements OptionsEnum {
     private final int value;
     private final String name;
 
-    OperatingStatus(int value, String name) {
+    InverterOperatingStatus(int value, String name) {
         this.value = value;
         this.name = name;
     }

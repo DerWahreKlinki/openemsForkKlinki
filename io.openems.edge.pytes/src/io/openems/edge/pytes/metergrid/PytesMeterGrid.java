@@ -20,7 +20,7 @@ import io.openems.edge.pytes.enums.CtSelftestResult;
 import io.openems.edge.pytes.enums.InverterStatus;
 import io.openems.edge.pytes.enums.MeterLocationCode;
 import io.openems.edge.pytes.enums.MeterTypeCode;
-import io.openems.edge.pytes.enums.OperatingStatus;
+import io.openems.edge.pytes.enums.InverterOperatingStatus;
 
 public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, OpenemsComponent {
 
@@ -188,7 +188,7 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 		 * 7 = Generator running
 		 * See {@link OperatingStatus} enum
 		 */
-		OPERATING_STATUS(Doc.of(OperatingStatus.values())),
+		//OPERATING_STATUS(Doc.of(OperatingStatus.values())),
 
 		// -----------------------------------------------------------------------
 		// CT self-test result (reg 33290)

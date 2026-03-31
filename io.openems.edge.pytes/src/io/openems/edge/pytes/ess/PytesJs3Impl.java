@@ -56,7 +56,9 @@ import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
+import io.openems.edge.pytes.enums.InverterOperatingStatus;
 import io.openems.edge.pytes.enums.WorkState;
+import io.openems.edge.pytes.metergrid.PytesMeterGrid;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -125,7 +127,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 
 		this._setWorkState(WorkState.UNDEFINED);
-
 		this.installListener();
 	}
 
@@ -209,6 +210,12 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
 						new DummyRegisterElement(43012, 43017),
 						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC, new UnsignedWordElement(43018))),
+				
+				new FC4ReadInputRegistersTask(33287, Priority.LOW,
+						// reg 33287 - Inverter operating status
+						// 0=Stop, 1=Open loop, 2=Soft start, 3=Grid-connected,
+						// 4=Off-grid/EPS, 5=Off-grid to on-grid, 6=Bypass, 7=Generator
+						m(PytesJs3.ChannelId.INVERTER_OPERATING_STATUS, new UnsignedWordElement(33287))),						
 
 				new FC4ReadInputRegistersTask(33067, Priority.HIGH, //
 
@@ -324,7 +331,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						new DummyRegisterElement(33126, 33131),
 
-						m(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE, new UnsignedWordElement(33132)))
+						m(PytesJs3.ChannelId.STORAGE_CONTROL_SWITCHING_VALUE, new UnsignedWordElement(33132))
+
+						)
 
 		);
 
@@ -341,6 +350,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 		switch (this.getWorkState()) {
 		case WorkState.ERROR:
+			if (this.checkOperationalValues() == true) {
+				this.changeState(WorkState.NORMAL);
+				break;
+			}			
 			break;
 		case WorkState.WARNING:
 			if (this.getState() == Level.WARNING) {
@@ -379,6 +392,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				this.changeState(WorkState.ERROR);
 				break;
 			}
+			if (this.checkOperationalValues() == false) {
+				this.changeState(WorkState.ERROR);
+				break;
+			}			
 			break;
 
 		default:
@@ -426,6 +443,19 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	    return true;
 	}
+	
+	private boolean checkOperationalValues() {
+		
+		// ToDo
+		if ( this.getInverterOperatingStatus() != InverterOperatingStatus.GRID_CONNECTED_OPERATION) {
+			return false;
+		}
+		
+		
+		return true;
+		
+	}
+	
 
 	/**
 	 * Changes the state if hysteresis time passed, to avoid too quick changes.

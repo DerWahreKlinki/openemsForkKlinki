@@ -125,6 +125,11 @@
                   </Controller_ChpSocComponent>
                 </ion-col>
 
+                <ion-col *ngSwitchCase="'Controller.CHP.CostOptimization'" size="12" size-lg="6" class="ion-no-padding">
+                  <Controller_ChpCostOptimizationComponent [componentId]="widget.componentId">
+                  </Controller_ChpCostOptimizationComponent>
+                </ion-col>                        
+
                 <ion-col *ngSwitchCase="'Controller.IO.HeatingElement'" size="12" size-lg="6" class="ion-no-padding">
                   <Controller_Io_HeatingElement [componentId]="widget.componentId">
                   </Controller_Io_HeatingElement>
@@ -155,6 +160,11 @@
                   <Controller_Symmetric_TimeSlot_PeakShaving [componentId]="widget.componentId">
                   </Controller_Symmetric_TimeSlot_PeakShaving>
                 </ion-col>
+
+              <ion-col *ngSwitchCase="'Controller.ThresholdPeakshaving'" size="12" size-lg="6" class="ion-no-padding">
+                <Controller_Symmetric_Threshold_PeakShaving [componentId]="widget.componentId">
+                </Controller_Symmetric_Threshold_PeakShaving>
+              </ion-col>                  
 
                 <ion-col *ngSwitchCase="'Controller.Ess.DelayedSellToGrid'" size="12" size-lg="6"
                   class="ion-no-padding">

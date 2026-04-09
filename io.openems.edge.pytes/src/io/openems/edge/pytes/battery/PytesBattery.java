@@ -363,6 +363,16 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessor methods – BMS values (reg 33142–33144)
 	// -----------------------------------------------------------------------
 
+	/** @return Channel for {@link ChannelId#BMS_BATTERY_VOLTAGE} */
+	public default IntegerReadChannel getBmsBatteryVoltageChannel() {
+		return this.channel(ChannelId.BMS_BATTERY_VOLTAGE);
+	}
+
+	/** @return BMS battery current [mA], signed. See {@link ChannelId#BMS_BATTERY_VOLTAGE} */
+	public default Value<Integer> getBmsBatteryVoltage() {
+		return this.getBmsBatteryVoltageChannel().value();
+	}	
+	
 	/** @return Channel for {@link ChannelId#BMS_BATTERY_CURRENT} */
 	public default IntegerReadChannel getBmsBatteryCurrentChannel() {
 		return this.channel(ChannelId.BMS_BATTERY_CURRENT);

@@ -180,10 +180,16 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 	}
 
 	private void calculateAndSetBatteryPower() {
-		Integer batteryCurrentWithoutDirection = this.getCurrentWithoutDirection().get(); // mA
-		Integer batteryVoltage = this.getBatteryVoltage().get();
+		// Integer batteryCurrentWithoutDirection = this.getCurrentWithoutDirection().get(); // mA
+		
+		// Integer batteryVoltage = this.getBatteryVoltage().get(); //mV
+		
 		Integer batteryCurrentDirection = this.getBatteryCurrentDirection().get(); // 0 -> charge
 
+		Integer batteryCurrentWithoutDirection = this.getBmsBatteryCurrent().get(); // mA (from BMS)
+		Integer batteryVoltage = this.getBmsBatteryVoltage().get(); // mV (from BMS)
+		
+		
 		if (batteryCurrentWithoutDirection == null || batteryVoltage == null || batteryCurrentDirection == null ) {
 			log.error("Battery power cannot be calculated due to missing values");
 			return;
@@ -258,11 +264,11 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 						// Datasheet: 0.01 V -> SCALE_FACTOR_1
 						// Battery.ChannelId.VOLTAGE is set programmatically in V by
 						// calculateAndSetBatteryPower() - this register is the BMS cross-check 
-						m(Battery.ChannelId.VOLTAGE, new UnsignedWordElement(33141),
+						m(PytesBattery.ChannelId.BMS_BATTERY_VOLTAGE, new UnsignedWordElement(33141),
 								ElementToChannelConverter.SCALE_FACTOR_1),
 						
 						// reg 33142 – BMS battery current [mA], signed
-						// Positive = charging, negative = discharging (BMS-reported).
+						// No direction! Look at Register 33135
 						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 						m(PytesBattery.ChannelId.BMS_BATTERY_CURRENT, new SignedWordElement(33142),
 								ElementToChannelConverter.SCALE_FACTOR_2),

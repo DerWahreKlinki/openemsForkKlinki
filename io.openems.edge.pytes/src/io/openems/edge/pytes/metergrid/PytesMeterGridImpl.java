@@ -155,8 +155,8 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 								.bit(12, PytesMeterGrid.ChannelId.POWER_CONTROL_MODE_UNBALANCED_ALLOWED)),
 
 						// reg 33251-33286 - external meter electrical data (separate task below)
-						new DummyRegisterElement(33251, 33286),
-
+						new DummyRegisterElement(33251, 33289),
+/*
 						// reg 33287 - Inverter operating status
 						// 0=Stop, 1=Open loop, 2=Soft start, 3=Grid-connected,
 						// 4=Off-grid/EPS, 5=Off-grid to on-grid, 6=Bypass, 7=Generator
@@ -164,7 +164,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 						// reg 33288–33289 – reserved
 						new DummyRegisterElement(33288, 33289),
-
+*/
 						// reg 33290 - CT self-test result
 						// 0=Not tested, 1=Not meeting conditions, 2=Testing,
 						// 3=Normal, 100=Abnormal CT connection

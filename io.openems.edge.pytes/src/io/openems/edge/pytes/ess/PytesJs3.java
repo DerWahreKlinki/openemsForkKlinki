@@ -27,6 +27,7 @@ import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.Appendix2;
 import io.openems.edge.pytes.enums.Appendix8;
 import io.openems.edge.pytes.enums.EnableDisable;
+import io.openems.edge.pytes.enums.InverterOperatingStatus;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
 import io.openems.edge.pytes.enums.StandardWorkingMode;
@@ -854,6 +855,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 		SET_REMOTE_CONTROL_MODE(Doc.of(INTEGER)
 				.accessMode(AccessMode.WRITE_ONLY)),
+		
+		REMOTE_CONTROL_MODE(Doc.of(OpenemsType.INTEGER) 
+				.accessMode(AccessMode.READ_ONLY)),		
 
 		SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER(Doc.of(INTEGER) 
 				.accessMode(AccessMode.WRITE_ONLY)),
@@ -1244,7 +1248,36 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.channel(ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
 	}
 
+	// Operating Status
+	/**
+	 * Gets the Channel for {@link ChannelId#OPERATING_STATUS}.
+	 * 
+	 * 0 = Stop
+	 * 1 = Open loop
+	 * 2 = Soft start
+	 * 3 = Grid-connected
+	 * 4 = Off-grid/EPS
+	 * 5 = Off-grid to on-grid transition
+	 * 6 = Backup bypass
+	 * 7 = Generator running
+	 * 
+	 * @return the Channel
+	 */
+	public default Channel<InverterOperatingStatus> getInverterOperatingStatusChannel() {
+		return this.channel(ChannelId.INVERTER_OPERATING_STATUS);
+	}
 
+	/**
+	 * Gets the operating status
+	 *
+	 * @return the {@link EnableDisable} value
+	 */
+	public default InverterOperatingStatus getInverterOperatingStatus() {
+		return this.getInverterOperatingStatusChannel().value().asEnum();
+	}	
+	
+
+	// PV Shutdown
 	/**
 	 * Gets the Channel for {@link ChannelId#PV_SHUTDOWN_SWITCH}.
 	 *
@@ -1410,6 +1443,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteControlModeChannel() {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_MODE);
 	}
+	
+	public default Value<Integer> getRemoteControlMode() {
+		return this.getRemoteControlModeChannel().value();
+	}
+
+	public default IntegerReadChannel getRemoteControlModeChannel() {
+		return this.channel(ChannelId.REMOTE_CONTROL_MODE);
+	}		
 
 	// Set power setpoint
 	/**
@@ -1432,6 +1473,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteControlPowerChannel() {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER);
 	}
+	
+	public default Value<Integer> getRemoteControlPower() {
+		return this.getRemoteControlPowerChannel().value();
+	}
+
+	public default IntegerReadChannel getRemoteControlPowerChannel() {
+		return this.channel(ChannelId.REMOTE_CONTROL_AC_GRID_PORT_POWER);
+	}	
 
 	/**
 	 * Sets the Max Charge SoC (reg 43010).

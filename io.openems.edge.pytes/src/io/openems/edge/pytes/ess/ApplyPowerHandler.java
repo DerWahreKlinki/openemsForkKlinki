@@ -33,7 +33,8 @@ public class ApplyPowerHandler {
 
 		// --- Guards ---
 		if (!ess.isManaged()) {
-			log.debug("[ApplyPower] ESS not managed – skipping.");
+			this.writeInternalControlFlags();
+			log.debug("[ApplyPower] ReadOnly Mode enabled.Setting grid feed-in to 0. Skip ApplyPower");
 			return;
 		}
 
@@ -130,7 +131,7 @@ public class ApplyPowerHandler {
 		batteryPowerTarget = (int) Math.round(averageBatteryTargetPower / 10.0); // Applied value has to be diveded by
 																					// 10
 
-		this.writeFlags();
+		this.writeExternalControlFlags();
 		/*
 		 * Definition is determined by44105 control switch 1->10W Default : 0W
 		 * • When 44105=1, this register’s value is not effective
@@ -171,7 +172,8 @@ public class ApplyPowerHandler {
 	/**
 	 * ToDo: Read before Write
 	 */
-	private void writeFlags() throws OpenemsNamedException {
+	private void writeExternalControlFlags() throws OpenemsNamedException {
+		//ess.setRemoteControlMode(0);		
 		ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);
 		ess.setRemoteDispatchTimeout(5); // in Minutes
 		ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0
@@ -179,6 +181,12 @@ public class ApplyPowerHandler {
 		// ToDo: make configurable
 		ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby
 
+	}
+	
+	private void writeInternalControlFlags() throws OpenemsNamedException {
+		ess.setRemoteDispatchSwitch(EnableDisable.DISABLE);
+		ess.setRemoteControlMode(2);
+		ess.setRemoteControlPower(0);
 	}
 
 }

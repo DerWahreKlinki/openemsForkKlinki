@@ -57,6 +57,7 @@ import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
+import io.openems.edge.pytes.enums.InverterOperatingStatus;
 import io.openems.edge.pytes.enums.WorkState;
 
 @Designate(ocd = Config.class, factory = true)
@@ -269,23 +270,34 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						
 						// reg 44105 – Remote dispatch real-time control switch [read-back]
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_SWITCH, new UnsignedWordElement(44105)),
-						
-						// reg 44106–44107 – Remote dispatch real-time control power [read-back] (S32)
-						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_POWER, new SignedDoublewordElement(44106)),
-						
-						// reg 44108 – Remote dispatch real-time control function switch [read-back]
-						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH, new UnsignedWordElement(44108))),
+						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_POWER,
+								new SignedDoublewordElement(44106)),
+						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH,
+								new UnsignedWordElement(44108))),
 
+				// Write new values to inverter
+				// Each register gets its own task because they are not contiguous
+				new FC16WriteRegistersTask(43010,
+						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC, new UnsignedWordElement(43010)),
+						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
+						new DummyRegisterElement(43012, 43017),
+						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC, new UnsignedWordElement(43018))),
+
+				// Read current values back from inverter
+				new FC3ReadRegistersTask(43010, Priority.LOW,
+						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC, new UnsignedWordElement(43010)),
+						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
+						new DummyRegisterElement(43012, 43017),
+						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC, new UnsignedWordElement(43018))),
 				
-				// ---------------------------------------------------------------
-				// Main input registers - inverter status, AC measurements, faults
-				// (reg 33067-33132), FC4 read, Priority HIGH
-				// ---------------------------------------------------------------
-				new FC4ReadInputRegistersTask(33067, Priority.HIGH,
+				new FC4ReadInputRegistersTask(33287, Priority.LOW,
+						// reg 33287 - Inverter operating status
+						// 0=Stop, 1=Open loop, 2=Soft start, 3=Grid-connected,
+						// 4=Off-grid/EPS, 5=Off-grid to on-grid, 6=Bypass, 7=Generator
+						m(PytesJs3.ChannelId.INVERTER_OPERATING_STATUS, new UnsignedWordElement(33287))),						
 
-						// reg 33067 – Inverter rated apparent power [VA]
-						// Datasheet: "Inverter Rated Apparent Power. 10VA resolution."
-						// SCALE_FACTOR_1 -> VA. Mapped to SymmetricEss.MAX_APPARENT_POWER.
+				new FC4ReadInputRegistersTask(33067, Priority.HIGH, //
+
 						m(SymmetricEss.ChannelId.MAX_APPARENT_POWER, new UnsignedWordElement(33067),
 								ElementToChannelConverter.SCALE_FACTOR_1),
 
@@ -741,7 +753,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 		switch (this.getWorkState()) {
 		case WorkState.ERROR:
-			// Stay in error — manual intervention required
+			if (this.checkOperationalValues() == true) {
+				this.changeState(WorkState.NORMAL);
+				break;
+			}			
 			break;
 		case WorkState.WARNING:
 			if (this.getState() == Level.WARNING) {
@@ -779,6 +794,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				this.changeState(WorkState.ERROR);
 				break;
 			}
+			if (this.checkOperationalValues() == false) {
+				this.changeState(WorkState.ERROR);
+				break;
+			}			
 			break;
 		default:
 			break;
@@ -827,6 +846,19 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	    return true;
 	}
+	
+	private boolean checkOperationalValues() {
+		
+		// ToDo
+		if ( this.getInverterOperatingStatus() != InverterOperatingStatus.GRID_CONNECTED_OPERATION) {
+			return false;
+		}
+		
+		
+		return true;
+		
+	}
+	
 
 	/**
 	 * Transitions to a new work state with a 20-second hysteresis guard.
@@ -1057,7 +1089,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			return "SoC:" + this.getSoc().asString() //
 					+ "|L:" + this.getActivePower().asString()
 
-					/*
+					
 					+ this.channel(SymmetricEss.ChannelId.REACTIVE_POWER).value().asString() + "\nMaxApparentPower="
 					+ this.channel(SymmetricEss.ChannelId.MAX_APPARENT_POWER).value().asString() + "\nSafetyVersion="
 					+ this.channel(PytesJs3.ChannelId.SAFETY_VERSION).value().asString() + "\nHmiSubVersion="
@@ -1390,7 +1422,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nSettingFlag_FactoryRecover=" +
 			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_FACTORY_RECOVER).value().
 			  asString()
-			  */
+			  
 			  + "\nOperatingModeDecoded=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).value().asString()
 

@@ -20,7 +20,6 @@ import io.openems.edge.pytes.enums.CtSelftestResult;
 import io.openems.edge.pytes.enums.InverterStatus;
 import io.openems.edge.pytes.enums.MeterLocationCode;
 import io.openems.edge.pytes.enums.MeterTypeCode;
-import io.openems.edge.pytes.enums.InverterOperatingStatus;
 
 public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, OpenemsComponent {
 

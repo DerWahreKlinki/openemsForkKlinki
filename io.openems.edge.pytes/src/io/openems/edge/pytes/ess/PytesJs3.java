@@ -453,10 +453,16 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 		SET_REMOTE_CONTROL_AC_GRID_PORT_POWER(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.WATT).accessMode(AccessMode.WRITE_ONLY)), //
+		
+		REMOTE_CONTROL_AC_GRID_PORT_POWER(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT).accessMode(AccessMode.READ_ONLY)), //		
 
 		SET_REMOTE_CONTROL_MODE(Doc.of(OpenemsType.INTEGER) // 0 OFF， 1 ON with 'system grid connection point'， 2 ON
 															// with 'Inverter AC grid port'
 				.accessMode(AccessMode.WRITE_ONLY)),
+		
+		REMOTE_CONTROL_MODE(Doc.of(OpenemsType.INTEGER) 
+				.accessMode(AccessMode.READ_ONLY)),		
 
 		SET_REMOTE_DISPATCH_SWITCH(Doc.of(EnableDisable.values()) // 0 OFF, 1 ON
 		        .text("Remote dispatch switch. 0 = OFF, 1 = ON")
@@ -906,6 +912,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteControlModeChannel() {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_MODE);
 	}
+	
+	public default Value<Integer> getRemoteControlMode() {
+		return this.getRemoteControlModeChannel().value();
+	}
+
+	public default IntegerReadChannel getRemoteControlModeChannel() {
+		return this.channel(ChannelId.REMOTE_CONTROL_MODE);
+	}		
 
 	// Set power setpoint
 	public default void setRemoteControlPower(int value) throws OpenemsNamedException {
@@ -915,6 +929,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public default IntegerWriteChannel getSetRemoteControlPowerChannel() {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER);
 	}
+	
+	public default Value<Integer> getRemoteControlPower() {
+		return this.getRemoteControlPowerChannel().value();
+	}
+
+	public default IntegerReadChannel getRemoteControlPowerChannel() {
+		return this.channel(ChannelId.REMOTE_CONTROL_AC_GRID_PORT_POWER);
+	}	
 
 	/**
 	 * Sets the Max Charge SoC (reg 43010).

@@ -58,7 +58,6 @@ import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.InverterOperatingStatus;
 import io.openems.edge.pytes.enums.WorkState;
-import io.openems.edge.pytes.metergrid.PytesMeterGrid;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -156,14 +155,17 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 		return new ModbusProtocol(this, //
+				
+				new FC16WriteRegistersTask(43128,
+						m(PytesJs3.ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER, new UnsignedWordElement(43128)), 
+						new DummyRegisterElement(43129, 43131),
+						m(PytesJs3.ChannelId.SET_REMOTE_CONTROL_MODE, new UnsignedWordElement(43132))),
 
-				/*
-				 * not really reliable new FC16WriteRegistersTask(43128,
-				 * m(PytesJs3.ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER, new
-				 * UnsignedWordElement(43128)), new DummyRegisterElement(43129, 43131),
-				 * m(PytesJs3.ChannelId.SET_REMOTE_CONTROL_MODE, new
-				 * UnsignedWordElement(43132))),
-				 */
+				new FC3ReadRegistersTask(43128, Priority.LOW,
+						m(PytesJs3.ChannelId.REMOTE_CONTROL_AC_GRID_PORT_POWER, new UnsignedWordElement(43128)),
+						new DummyRegisterElement(43129, 43131),
+						m(PytesJs3.ChannelId.REMOTE_CONTROL_MODE, new UnsignedWordElement(43132))),				
+				 
 
 				new FC16WriteRegistersTask(43111,
 						m(PytesJs3.ChannelId.ENABLE_BACKUP_PORT, new UnsignedWordElement(43111))),
@@ -539,7 +541,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			return "SoC:" + this.getSoc().asString() //
 					+ "|L:" + this.getActivePower().asString()
 
-					/*
+					
 					+ this.channel(SymmetricEss.ChannelId.REACTIVE_POWER).value().asString() + "\nMaxApparentPower="
 					+ this.channel(SymmetricEss.ChannelId.MAX_APPARENT_POWER).value().asString() + "\nSafetyVersion="
 					+ this.channel(PytesJs3.ChannelId.SAFETY_VERSION).value().asString() + "\nHmiSubVersion="
@@ -884,7 +886,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  asString() + "\nSettingFlag_FactoryRecover=" +
 			  this.channel(PytesJs3.ChannelId.SETTING_FLAG_FACTORY_RECOVER).value().
 			  asString()
-			  */
+			  
 			  + "\nOperatingModeDecoded=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).value().asString()
 
@@ -1018,6 +1020,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						PytesJs3.ChannelId.SETTING_FLAG_RESERVED_15 });
 
 		// Appendix 8 — Operating Mode register 33122 (only one bit valid at a time)
+		/*
 		var rawMode = this.channel(PytesJs3.ChannelId.OPERATING_MODE).value();
 		if (rawMode.isDefined()) {
 			int raw = (Integer) rawMode.get();
@@ -1029,8 +1032,26 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 					break;
 				}
 			}
+
 			this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).setNextValue(bitPos);
+
 		}
+		*/
+		var rawMode = this.channel(PytesJs3.ChannelId.OPERATING_MODE).value();
+		int raw = (Integer) rawMode.get();
+
+		// Mask only valid bits (0–8)
+		int validMask = raw & 0x01FF; // 0000 0001 1111 1111
+
+		int bitPos = -1;
+		for (int i = 0; i <= 8; i++) {
+		    if ((validMask & (1 << i)) != 0) {
+		        bitPos = i;
+		        break;
+		    }
+		}
+
+		this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).setNextValue(bitPos);
 	}
 
 	/**

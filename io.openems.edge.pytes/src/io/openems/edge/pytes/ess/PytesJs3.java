@@ -747,6 +747,18 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		FAULT_REG7_RESERVED_14(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Reserved (REG7 BIT14)")),
 		FAULT_REG7_RESERVED_15(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Reserved (REG7 BIT15)")),
 
+		// -----------------------------------------------------------------------
+		// Inverter operating status (reg 33287)
+		// -----------------------------------------------------------------------
+
+		/**
+		 * Inverter operating status (reg 33287, U16)
+		 * 0 = Stop, 1 = Open loop, 2 = Soft start, 3 = Grid-connected
+		 * 4 = Off-grid/EPS, 5 = Off-grid to on-grid transition, 6 = Backup bypass
+		 * 7 = Generator running
+		 * See {@link OperatingStatus} enum
+		 */
+		INVERTER_OPERATING_STATUS(Doc.of(InverterOperatingStatus.values())),
 		// ── Appendix 5 ── Register 33121 / 36026 decoded bits ──
 		OPERATING_STAT_NORMAL_OPERATION(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Normal Operation")),
 		OPERATING_STAT_INITIALIZING(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Initializing")),
@@ -852,6 +864,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		SET_REMOTE_CONTROL_AC_GRID_PORT_POWER(Doc.of(INTEGER)
 				.accessMode(AccessMode.WRITE_ONLY)
 				.unit(Unit.WATT)),
+		
+		REMOTE_CONTROL_AC_GRID_PORT_POWER(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT).accessMode(AccessMode.READ_ONLY)), //		
 
 		SET_REMOTE_CONTROL_MODE(Doc.of(INTEGER)
 				.accessMode(AccessMode.WRITE_ONLY)),

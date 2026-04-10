@@ -1133,24 +1133,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  this.channel(PytesJs3.ChannelId.BATTERY_BMS_STATUS).value().asString() +
 			  "\nFcasModeRunningStatus=" +
 			  this.channel(PytesJs3.ChannelId.FCAS_MODE_RUNNING_STATUS).value().asString()
-			  "\nFaultCode01=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_01).value().asString() +
-			  "\nFaultCode02=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_02).value().asString() +
-			  "\nFaultCode03=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_03).value().asString() +
-			  "\nFaultCode04=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_04).value().asString() +
-			  "\nFaultCode05=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_05).value().asString() +
-			  
-
-			  
-			  () + "\nFaultCode06=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_06).value().asString() +
-			  "\nFaultCode07=" +
-			  this.channel(PytesJs3.ChannelId.FAULT_CODE_07).value().asString() +
-			  
 
 
 			  + "\nPvShutdownSwitch=" + this.getPvShutdownSwitch().toString() +

@@ -175,7 +175,7 @@ public class ApplyPowerHandler {
 	private void writeExternalControlFlags() throws OpenemsNamedException {
 		//ess.setRemoteControlMode(0);		
 		ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);
-		ess.setRemoteDispatchTimeout(5); // in Minutes
+		ess.setRemoteDispatchFailsafeSetting(5); // in Minutes
 		ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0
 
 		// ToDo: make configurable

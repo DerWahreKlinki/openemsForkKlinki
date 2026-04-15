@@ -87,7 +87,7 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		int allowedChargePower = (int) Math.min(0, Math.ceil(Math.round((maxChargeCurrent * batteryVoltage * -1)  /1000.0))); // Voltage is mV
 		int allowedDischargePower = (int) Math.max(0, Math.floor(Math.round((maxDischargeCurrent * batteryVoltage) / 1000.0)));
 
-		this.parent.logDebug(log,"[AllowChargeDischarge Handler] max. ChargeCurrent  " + maxChargeCurrent
+		this.parent.debugLog("[AllowChargeDischarge Handler] max. ChargeCurrent  " + maxChargeCurrent
 		+ "A maxDischargeCurrent: " + maxDischargeCurrent
 		+ "A Voltage:"  + batteryVoltage
 		+ "V Allowed Charge Power "+ allowedChargePower

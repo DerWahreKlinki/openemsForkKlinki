@@ -248,71 +248,127 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		HMI_SUB_VERSION(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
 
-		/*
-		 * Add Alarm code data to distinguishing displayed Alarm code For external fan
-		 * failure, each bit indicates the status of one fan; In conjunction with the
-		 * 33095 register address, it is used for subdivided fault information display.
-		 * Example: 33095 register read information is 0x1020,
+		/**
+		 * Alarm Code Data (reg 33070, U16, FC4)
+		 * Used together with {@link ChannelId#INVERTER_CURRENT_STATUS} (reg 33095)
+		 * for subdivided fault display. Each bit indicates a specific fault sub-type;
+		 * for external fan failures each bit represents one fan. Raw bitmask, no scale.
 		 */
 		ALARM_CODE_DATA(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
-
+		
+		/**
+		 * DC Bus Voltage (reg 33071, U16, FC4)
+		 * Datasheet: 0.1 V resolution stores as mV
+		 */
 		DC_BUS_VOLTAGE(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
 				.persistencePriority(HIGH)),
-
+		
+		/**
+		 * DC Bus Half Voltage (reg 33072, U16, FC4)
+		 * Datasheet: 0.1 V resolution stored as mV
+		 * Measures midpoint of split DC bus
+		 */
 		DC_BUS_HALF_VOLTAGE(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
 				.persistencePriority(LOW)),
 
+		/**
+		 * Phase L1 Voltage / AB line voltage (reg 33073, U16, FC4)
+		 * Datasheet: 0.1 V resolution stored as mV
+		 */
 		VOLTAGE_L1(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
 				.persistencePriority(HIGH)),
-
+		
+		/**
+		 * Phase L2 Voltage / BC line voltage (reg 33074, U16, FC4)
+		 * Datasheet: 0.1 V resolution stored as mV
+		 */
 		VOLTAGE_L2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
 				.persistencePriority(HIGH)),
 
+		/**
+		 * Phase L3 Voltage / CA line voltage (reg 33075, U16, FC4)
+		 * Datasheet: 0.1 V resolution stored as mV
+		 */
 		VOLTAGE_L3(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
 				.persistencePriority(HIGH)),
 
+		/**
+		 * Phase L1 Current (reg 33076, U16, FC4)
+		 * Datasheet: 0.1 A resolution stored as mA
+		 */
 		CURRENT_L1(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIAMPERE)
 				.persistencePriority(HIGH)),
 
+		/**
+		 * Phase L2 Current (reg 33077, U16, FC4)
+		 * Datasheet: 0.1 A resolution stored as mA
+		 */
 		CURRENT_L2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIAMPERE)
 				.persistencePriority(HIGH)),
-
+		
+		/**
+		 * Phase L3 Current (reg 33078, U16, FC4)
+		 * Datasheet: 0.1 A resolution stored as mA
+		 */
 		CURRENT_L3(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIAMPERE)
 				.persistencePriority(HIGH)),
-
+		
+		/**
+		 * Apparent Power (reg 33083-33084, S32, FC4)
+		 * Datasheet: 1 VA resolution.
+		 * Positive = generating, negative = consuming
+		 */
 		APPARENT_POWER(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.VOLT_AMPERE)
 				.persistencePriority(HIGH)),
-		
+
+		/**
+		 * Standard Working Mode (reg 33091, U16, FC4). See {@link StandardWorkingMode}
+		 * Datasheet: 00=No response, 01=volt-watt, 02=Volt-var, 03=Fixed PF,
+		 * 04=Fix reactive power, 05=Power-PF, 06=Rule21 Volt-watt, 0x0C=IEEE1547-2018
+		 */
 		STANDARD_WORKING_MODE(Doc.of(StandardWorkingMode.values())
 				.accessMode(AccessMode.READ_ONLY)),
-
+		
+		/**
+		 * Grid Frequency (reg 33094, U16, FC4)
+		 * Datasheet: 0.01 Hz resolution stored as mHz
+		 */
 		FREQUENCY(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIHERTZ)
 				.persistencePriority(HIGH)),
 
+		/**
+		 * Inverter Current Status (reg 33095, U16, FC4). See {@link Appendix2}
+		 * Used with {@link ChannelId#ALARM_CODE_DATA} (reg 33070) for fault sub-type display
+		 */
 		INVERTER_CURRENT_STATUS(Doc.of(Appendix2.values())
 				.accessMode(AccessMode.READ_ONLY)),
 
+		/**
+		 * Lead-Acid Battery Temperature (reg 33096, S16, FC4)
+		 * Datasheet: 0.1 degree C resolution stored raw
+		 * Used only when a lead-acid battery type is configured
+		 */
 		LEAD_ACID_BATTERY_TEMP(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
 
@@ -428,7 +484,12 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 * Bitmask of active Demand Response Mode conditions per AS/NZS 4755.3. Raw — no scale. */
 		CURRENT_DRM_CODE_STATUS(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
-
+		
+		/**
+		 * Inverter Cabinet Temperature (reg 33099, S16, FC4)
+		 * Datasheet: 0.1 degree C resolution stored raw
+		 * Triggers FAULT_REG5_OVER_TEMPERATURE when the hardware threshold is exceeded
+		 */
 		INVERTER_CABINET_TEMP(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.DEGREE_CELSIUS)
@@ -453,16 +514,30 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.accessMode(READ_ONLY)
 				.unit(Unit.PERCENT)),
 
+		/**
+		 * Inverter Module Temperature 2 (reg 33107, S16, FC4)
+		 * Datasheet: 0.1 degree C resolution. Second NTC sensor location (different from reg 33093)
+		 */
 		INVERTER_MODULE_TEMP2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.DEGREE_CELSIUS)
 				.persistencePriority(LOW)),
-
+		
+		/**
+		 * Volt-Var Real-Time Reference Voltage (reg 33108, U16, FC4)
+		 * Datasheet: 0.1 V resolution stored as mV. IEEE 1547-2018 Vref
+		 * Only active when Volt-var mode (WMODE_VOLT_VAR) is running
+		 */
 		VOLT_VAR_VREF_RT_VALUES(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
 				.persistencePriority(LOW)),
-
+		
+		/**
+		 * BMS Charging Voltage Limit (reg 33110, U16, FC4)
+		 * Datasheet: 0.1 V resolution stored as mV
+		 * Maximum charge voltage reported by the BMS to the inverter
+		 */
 		BMS_CHARGING_VOLTAGE_LIMIT(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.MILLIVOLT)
@@ -783,7 +858,14 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 * and stored in {@link ChannelId#OPERATING_MODE_DECODE}. */
 		OPERATING_MODE(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
-
+		
+		/**
+		 * Operating Mode Decoded (virtual channel, not a Modbus register).
+		 * Populated each cycle by decodeOperatingMode() in PytesJs3Impl.
+		 * Translates the one-hot bitmask from {@link ChannelId#OPERATING_MODE} (reg 33122)
+		 * into the human-readable {@link Appendix8} enum value.
+		 * Remains undefined until the first valid Modbus frame is received.
+		 */
 		OPERATING_MODE_DECODE(Doc.of(Appendix8.values())
 				.accessMode(AccessMode.READ_ONLY)),
 
@@ -857,6 +939,48 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		STORAGE_CTRL_RESERVED_14(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (STORAGE BIT14)")),
 		STORAGE_CTRL_RESERVED_15(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (STORAGE BIT15)")),
 		
+		// -----------------------------------------------------------------------
+		// Reg 44108 decoded sub-channels — written by installListeners() each cycle
+		// These channels store the decoded state of the 2-bit function groups.
+		// Use setRemoteDispatchRealtimeControlFunctionSwitch() to write reg 44108.
+		// -----------------------------------------------------------------------
+
+		/**
+		 * PV Shutdown Switch — decoded from reg 44108 BIT00–01 by installListeners().
+		 * Encoding: 1 = Disable, 2 = Enable. Raw 2-bit group, not a single boolean.
+		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
+		 */
+		PV_SHUTDOWN_SWITCH(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("PV shutdown switch (decoded from reg 44108 BIT00-01)")),
+
+		/**
+		 * Grid Charge Allowed — decoded from reg 44108 BIT04–05 by installListeners().
+		 * Encoding: 1 = Allow, 2 = Not allow.
+		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
+		 */
+		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("Grid charge allowed (decoded from reg 44108 BIT04-05)")),
+
+		/**
+		 * DO Control — decoded from reg 44108 BIT02–03 by installListeners().
+		 * Encoding: 1 = Disable, 2 = Enable.
+		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
+		 */
+		DO_CONTROL(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("DO control (decoded from reg 44108 BIT02-03)")),
+
+		/**
+		 * Off-Grid Battery Standby — decoded from reg 44108 BIT06–07 by installListeners().
+		 * Encoding: 1 = Disable, 2 = Enable.
+		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
+		 */
+		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("Off-grid battery standby (decoded from reg 44108 BIT06-07)")),
+
 		// -----------------------------------------------------------------------------------------------------------------------
 		// TODO: What are these??
 		// -----------------------------------------------------------------------------------------------------------------------
@@ -897,22 +1021,6 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 		BATCH_UPGRADE_BOWL(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
-
-		PV_SHUTDOWN_SWITCH(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("PV shutdown mode")),
-		
-		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("Battery grid charge allowed")),
-		
-		DO_CONTROL(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("DO Control enabled")),
-		
-		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("Off-grid battery standby")),
 
 		SETTING_FLAG_BIT(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),

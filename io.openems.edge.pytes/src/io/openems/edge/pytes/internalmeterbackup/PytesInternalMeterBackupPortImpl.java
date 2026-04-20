@@ -1,4 +1,4 @@
-package io.openems.edge.pytes.meterbackup;
+package io.openems.edge.pytes.internalmeterbackup;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -53,7 +53,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 @EventTopics({ //
 		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
 })
-public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent implements PytesMeterBackupPort,
+public class PytesInternalMeterBackupPortImpl extends AbstractOpenemsModbusComponent implements PytesInternalMeterBackupPort,
 		ElectricityMeter, ModbusComponent, OpenemsComponent, TimedataProvider, EventHandler, ModbusSlave {
 
 	private MeterType meterType = MeterType.CONSUMPTION_METERED;
@@ -75,16 +75,16 @@ public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent imp
 	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
 	private volatile Timedata timedata = null;
 
-	private final Logger log = LoggerFactory.getLogger(PytesMeterBackupPortImpl.class);
+	private final Logger log = LoggerFactory.getLogger(PytesInternalMeterBackupPortImpl.class);
 
 	private Config config;
 
-	public PytesMeterBackupPortImpl() throws OpenemsException {
+	public PytesInternalMeterBackupPortImpl() throws OpenemsException {
 		super(//
 				OpenemsComponent.ChannelId.values(), //
 				ModbusComponent.ChannelId.values(), //
 				ElectricityMeter.ChannelId.values(), //
-				PytesMeterBackupPort.ChannelId.values() //
+				PytesInternalMeterBackupPort.ChannelId.values() //
 		);
 
 	}
@@ -185,7 +185,7 @@ public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent imp
 						// reg 33523 - Backup Phase A apparent power [VA]
 						// For split-phase: using L1-N voltage and L1 current.
 						// Datasheet: 10 VA -> SCALE_FACTOR_1 -> VA
-						m(PytesMeterBackupPort.ChannelId.APPARENT_POWER_L1, new SignedWordElement(33523),
+						m(PytesInternalMeterBackupPort.ChannelId.APPARENT_POWER_L1, new SignedWordElement(33523),
 								ElementToChannelConverter.SCALE_FACTOR_1),
 
 						// reg 33524 - Backup Phase B active power [W]
@@ -203,7 +203,7 @@ public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent imp
 						// reg 33526 - Backup Phase B apparent power [VA]
 						// For split-phase: using L1-N voltage and L1 current.
 						// Datasheet: 10 VA -> SCALE_FACTOR_1 -> VA
-						m(PytesMeterBackupPort.ChannelId.APPARENT_POWER_L2, new SignedWordElement(33526),
+						m(PytesInternalMeterBackupPort.ChannelId.APPARENT_POWER_L2, new SignedWordElement(33526),
 								ElementToChannelConverter.SCALE_FACTOR_1),
 
 						// reg 33527 - Backup Phase C active power [W]
@@ -221,7 +221,7 @@ public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent imp
 						// reg 33529 - Backup Phase C apparent power [VA]
 						// For split-phase: using L1-N voltage and L1 current.
 						// Datasheet: 10 VA -> SCALE_FACTOR_1 -> VA
-						m(PytesMeterBackupPort.ChannelId.APPARENT_POWER_L3, new SignedWordElement(33529),
+						m(PytesInternalMeterBackupPort.ChannelId.APPARENT_POWER_L3, new SignedWordElement(33529),
 								ElementToChannelConverter.SCALE_FACTOR_1))
 		);
 
@@ -268,7 +268,7 @@ public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent imp
 		return Stream.of(OpenemsComponent.ChannelId.values(), //
 				ModbusComponent.ChannelId.values(), //
 				ElectricityMeter.ChannelId.values(), //
-				PytesMeterBackupPort.ChannelId.values() //
+				PytesInternalMeterBackupPort.ChannelId.values() //
 		).flatMap(Arrays::stream).map(id -> {
 			try {
 				return id.name() + "=" + this.channel(id).value().asString();
@@ -306,7 +306,7 @@ public class PytesMeterBackupPortImpl extends AbstractOpenemsModbusComponent imp
 		return new ModbusSlaveTable(//
 				OpenemsComponent.getModbusSlaveNatureTable(accessMode), //
 				ElectricityMeter.getModbusSlaveNatureTable(accessMode), //
-				ModbusSlaveNatureTable.of(PytesMeterBackupPort.class, accessMode, 100).build() //
+				ModbusSlaveNatureTable.of(PytesInternalMeterBackupPort.class, accessMode, 100).build() //
 		);
 	}
 

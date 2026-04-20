@@ -1,4 +1,4 @@
-package io.openems.edge.pytes.meterbackup;
+package io.openems.edge.pytes.internalmeterbackup;
 
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;

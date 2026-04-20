@@ -1,4 +1,4 @@
-package io.openems.edge.pytes.meterbackup;
+package io.openems.edge.pytes.internalmeterbackup;
 
 import static io.openems.common.channel.AccessMode.READ_ONLY;
 import static io.openems.common.types.OpenemsType.INTEGER;
@@ -11,7 +11,7 @@ import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.meter.api.ElectricityMeter;
 
-public interface PytesMeterBackupPort extends ElectricityMeter, ModbusComponent, OpenemsComponent {
+public interface PytesInternalMeterBackupPort extends ElectricityMeter, ModbusComponent, OpenemsComponent {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 

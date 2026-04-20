@@ -7,6 +7,9 @@ import static org.osgi.service.component.annotations.ReferencePolicyOption.GREED
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -152,6 +155,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			}
 			this.decodeOperatingMode();
 			this.defineWorkState();
+			this.logDebug();			
 			break;
 		}
 	}
@@ -165,12 +169,14 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				// FC16 write / FC3 read, Priority LOW
 				// Datasheet: "Backup circuit setting. 0x0000=disable, 0x0001=enable (default)"
 				// ---------------------------------------------------------------
+				
 				new FC16WriteRegistersTask(43111,
 						
 						// reg 43111 - Backup circuit setting [write]
 						// Uses EnableDisable enum.
 						m(PytesJs3.ChannelId.SET_BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111))),
-
+				
+				
 				new FC3ReadRegistersTask(43111, Priority.LOW,
 
 						// reg 43111 - Backup circuit setting [read-back]
@@ -214,6 +220,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				// Note: NOT saved after power cycle. Must be re-written every control cycle
 				// Datasheet: "All remote dispatch registers will not be saved after power cycle"
 				// ---------------------------------------------------------------
+
 				new FC16WriteRegistersTask(44100,
 
 						// reg 44100 - Remote dispatch switch [write] (0=OFF, 1=ON)
@@ -277,6 +284,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 				// Write new values to inverter
 				// Each register gets its own task because they are not contiguous
+				
 				new FC16WriteRegistersTask(43010,
 						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC, new UnsignedWordElement(43010)),
 						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
@@ -1110,7 +1118,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 					+ this.channel(PytesJs3.ChannelId.INVERTER_CURRENT_STATUS).value().asString() + "\nOperatingMode="
 					+ this.channel(PytesJs3.ChannelId.OPERATING_MODE).value().asString() + "\nFrequency="
 					+ this.channel(PytesJs3.ChannelId.FREQUENCY).value().asString()
-
+/*
 			  + "\nLeadAcidBatteryTemp=" +
 			  this.channel(PytesJs3.ChannelId.LEAD_ACID_BATTERY_TEMP).value().asString() +
 			  "\nCurrentDrmCodeStatus=" +
@@ -1407,7 +1415,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			  
 			  + "\nOperatingModeDecoded=" +
 			  this.channel(PytesJs3.ChannelId.OPERATING_MODE_DECODE).value().asString()
-
+*/
 			;
 
 		} else {
@@ -1461,17 +1469,42 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	}
 
+	protected String collectDebugData() {
+		// Collect channel values in one stream
+		return Stream.of(OpenemsComponent.ChannelId.values(), //
+				ModbusComponent.ChannelId.values(), //
+				HybridEss.ChannelId.values(), //
+				SymmetricEss.ChannelId.values(), //
+				ManagedSymmetricEss.ChannelId.values(), //
+				AsymmetricEss.ChannelId.values(), //
+				ManagedAsymmetricEss.ChannelId.values(), //
+				PytesJs3.ChannelId.values() // //
+		).flatMap(Arrays::stream).map(id -> {
+			try {
+				return id.name() + "=" + this.channel(id).value().asString();
+			} catch (Exception e) {
+				return id.name() + "=n/a";
+			}
+		}).collect(Collectors.joining("; \n"));
+	}	
+	
 	/**
 	 * Uses Info Log for further debug features.
 	 */
-	@Override
-	protected void logDebug(Logger log, String message) {
+	public void logDebug() {
 		if (this.config.debugMode()) {
 
-			this.logInfo(log, message);
+			if (this.config.extendedDebugMode()) {
+				this.logInfo(this.log,
+						"\n ############################################## ESS Values Start #############################################");
+				this.logInfo(log, this.collectDebugData());
+				this.logInfo(log,
+						"\n ############################################## ESS Values End #############################################");
+
+			}
 
 		}
-	}
+	}	
 
 	public Logger getLogger() {
 		return this.log;

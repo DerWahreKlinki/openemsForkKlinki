@@ -99,5 +99,17 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		return false;
 	}
 
+	@Override
+	public boolean extendedDebugMode() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean automaticMode() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 
 }

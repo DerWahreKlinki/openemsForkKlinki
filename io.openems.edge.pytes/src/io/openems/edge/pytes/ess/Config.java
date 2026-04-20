@@ -39,7 +39,13 @@ import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 	@AttributeDefinition(name = "Debug Mode", description = "Activates the debug mode")
 	boolean debugMode() default false;
 
-	@AttributeDefinition(name = "ReadOnly Mode", description = "read only mode no export to grid")
+	@AttributeDefinition(name = "Extended Debug mode", description = "Enables extended Debug mode")
+	boolean extendedDebugMode() default false;	
+	
+	@AttributeDefinition(name = "Automatic Mode", description = "automatic mode - no export to grid")
+	boolean automaticMode() default false;
+	
+	@AttributeDefinition(name = "ReadOnly Mode", description = "read only mode")
 	boolean readOnlyMode() default false;
 
 	@AttributeDefinition(name = "Modbus-ID", description = "ID of Modbus bridge.")

@@ -1326,6 +1326,29 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.channel(ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH);
 	}
 
+	// Get grid connection status
+	/**
+	 * Gets the current grid connection status (reg 33097).
+	 * 0 off-grid
+	 * 1 on-grid
+	 *
+	 * @return the Integer value
+	 */
+	public default Boolean getFunctionStatGridConnected() {
+		return this.getFunctionStatGridConnectedChannel().value().get();
+	}
+
+	/**
+	 * Returns the read-back Channel for
+	 * {@link ChannelId#FUNCTION_STAT_GRID_CONNECTED}
+	 * (reg 33097, FC3).
+	 *
+	 * @return the {@link Channel}
+	 */
+	public default Channel<Boolean> getFunctionStatGridConnectedChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_GRID_CONNECTED);
+	}	
+			
 
 	/**
 	 * Sets the remote dispatch realtime control function switch.

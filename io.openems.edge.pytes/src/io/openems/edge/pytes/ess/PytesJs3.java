@@ -15,6 +15,7 @@ import io.openems.common.channel.Level;
 import io.openems.common.channel.Unit;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.types.OpenemsType;
+import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.IntegerReadChannel;
@@ -248,18 +249,20 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		HMI_SUB_VERSION(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
 
-		/**
-		 * Alarm Code Data (reg 33070, U16, FC4)
-		 * Used together with {@link ChannelId#INVERTER_CURRENT_STATUS} (reg 33095)
-		 * for subdivided fault display. Each bit indicates a specific fault sub-type;
-		 * for external fan failures each bit represents one fan. Raw bitmask, no scale.
+		/*
+		 * Add Alarm code data to distinguishing displayed Alarm code For external fan
+		 * failure, each bit indicates the status of one fan; In conjunction with the
+		 * 33095 register address, it is used for subdivided fault information display.
+		 * Example: 33095 register read information is 0x1020,
 		 */
 		ALARM_CODE_DATA(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
 		
 		/**
-		 * DC Bus Voltage (reg 33071, U16, FC4)
-		 * Datasheet: 0.1 V resolution stores as mV
+		 * DC bus total voltage (reg 33071, U16, FC4).
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * persistencePriority(HIGH) — logged every cycle.
+		 * Unit: mV
 		 */
 		DC_BUS_VOLTAGE(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -267,9 +270,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 		
 		/**
-		 * DC Bus Half Voltage (reg 33072, U16, FC4)
-		 * Datasheet: 0.1 V resolution stored as mV
-		 * Measures midpoint of split DC bus
+		 * DC bus split-rail half voltage (reg 33072, U16, FC4).
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * Should equal DC_BUS_VOLTAGE / 2 under normal balance.
+		 * persistencePriority(LOW).
+		 * Unit: mV
 		 */
 		DC_BUS_HALF_VOLTAGE(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -277,8 +282,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(LOW)),
 
 		/**
-		 * Phase L1 Voltage / AB line voltage (reg 33073, U16, FC4)
-		 * Datasheet: 0.1 V resolution stored as mV
+		 * Phase L1 (or AB line) voltage (reg 33073, U16, FC4).
+		 * 3-phase models: AB line voltage. Single/split-phase: L1 phase voltage.
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * persistencePriority(HIGH).
+		 * Unit: mV
 		 */
 		VOLTAGE_L1(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -286,8 +294,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 		
 		/**
-		 * Phase L2 Voltage / BC line voltage (reg 33074, U16, FC4)
-		 * Datasheet: 0.1 V resolution stored as mV
+		 * Phase L2 (or BC line) voltage (reg 33074, U16, FC4).
+		 * 3-phase models: BC line voltage. Split-phase: L2 phase voltage.
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * persistencePriority(HIGH).
+		 * Unit: mV
 		 */
 		VOLTAGE_L2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -295,8 +306,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 
 		/**
-		 * Phase L3 Voltage / CA line voltage (reg 33075, U16, FC4)
-		 * Datasheet: 0.1 V resolution stored as mV
+		 * Phase L3 (or CA line) voltage (reg 33075, U16, FC4).
+		 * 3-phase models: CA line voltage. 0 on single-phase models.
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * persistencePriority(HIGH).
+		 * Unit: mV
 		 */
 		VOLTAGE_L3(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -304,8 +318,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 
 		/**
-		 * Phase L1 Current (reg 33076, U16, FC4)
-		 * Datasheet: 0.1 A resolution stored as mA
+		 * Phase L1 output current (reg 33076, U16, FC4).
+		 * Datasheet: 0.1 A → SCALE_FACTOR_2 → stored as mA.
+		 * persistencePriority(HIGH).
+		 * Unit: mA
 		 */
 		CURRENT_L1(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -313,8 +329,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 
 		/**
-		 * Phase L2 Current (reg 33077, U16, FC4)
-		 * Datasheet: 0.1 A resolution stored as mA
+		 * Phase L2 output current (reg 33077, U16, FC4).
+		 * Datasheet: 0.1 A → SCALE_FACTOR_2 → stored as mA.
+		 * persistencePriority(HIGH).
+		 * Unit: mA
 		 */
 		CURRENT_L2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -322,8 +340,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 		
 		/**
-		 * Phase L3 Current (reg 33078, U16, FC4)
-		 * Datasheet: 0.1 A resolution stored as mA
+		 * Phase L3 output current (reg 33078, U16, FC4).
+		 * 0 on single-phase models.
+		 * Datasheet: 0.1 A → SCALE_FACTOR_2 → stored as mA.
+		 * persistencePriority(HIGH).
+		 * Unit: mA
 		 */
 		CURRENT_L3(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -331,9 +352,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 		
 		/**
-		 * Apparent Power (reg 33083-33084, S32, FC4)
-		 * Datasheet: 1 VA resolution.
-		 * Positive = generating, negative = consuming
+		 * Total apparent power (reg 33083–33084, S32, FC4).
+		 * Datasheet: 1 VA resolution, no converter needed.
+		 * persistencePriority(HIGH).
+		 * Unit: VA
 		 */
 		APPARENT_POWER(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -341,16 +363,18 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 
 		/**
-		 * Standard Working Mode (reg 33091, U16, FC4). See {@link StandardWorkingMode}
-		 * Datasheet: 00=No response, 01=volt-watt, 02=Volt-var, 03=Fixed PF,
-		 * 04=Fix reactive power, 05=Power-PF, 06=Rule21 Volt-watt, 0x0C=IEEE1547-2018
+		 * Standard working mode (reg 33091, U16, FC4).
+		 * See {@link StandardWorkingMode} for values (e.g. Volt-watt, Volt-var, Fixed PF).
+		 * Used on models with Hawaii / AS/NZS 4777 grid standard.
 		 */
 		STANDARD_WORKING_MODE(Doc.of(StandardWorkingMode.values())
 				.accessMode(AccessMode.READ_ONLY)),
 		
 		/**
-		 * Grid Frequency (reg 33094, U16, FC4)
-		 * Datasheet: 0.01 Hz resolution stored as mHz
+		 * Grid frequency (reg 33094, U16, FC4).
+		 * Datasheet: 0.01 Hz → SCALE_FACTOR_1 → stored as mHz.
+		 * persistencePriority(HIGH).
+		 * Unit: mHz
 		 */
 		FREQUENCY(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -358,19 +382,22 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(HIGH)),
 
 		/**
-		 * Inverter Current Status (reg 33095, U16, FC4). See {@link Appendix2}
-		 * Used with {@link ChannelId#ALARM_CODE_DATA} (reg 33070) for fault sub-type display
+		 * Inverter current status code (reg 33095, U16, FC4).
+		 * See {@link Appendix2} enum.
+		 * Used with ALARM_CODE_DATA (reg 33070) for subdivided fault information display.
 		 */
 		INVERTER_CURRENT_STATUS(Doc.of(Appendix2.values())
 				.accessMode(AccessMode.READ_ONLY)),
 
 		/**
-		 * Lead-Acid Battery Temperature (reg 33096, S16, FC4)
-		 * Datasheet: 0.1 degree C resolution stored raw
-		 * Used only when a lead-acid battery type is configured
+		 * Lead-acid battery temperature (reg 33096, S16, FC4).
+		 * Datasheet: 0.1 °C resolution.
+		 * Only valid when a lead-acid battery type is configured; always 0 otherwise.
+		 * Unit: °C (raw × 0.1)
 		 */
 		LEAD_ACID_BATTERY_TEMP(Doc.of(INTEGER)
-				.accessMode(READ_ONLY)),
+				.accessMode(READ_ONLY)
+				.unit(Unit.DEGREE_CELSIUS)),
 
 		/**
 		 * Function Status (reg 33097, U16, read-only).
@@ -486,9 +513,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.accessMode(READ_ONLY)),
 		
 		/**
-		 * Inverter Cabinet Temperature (reg 33099, S16, FC4)
-		 * Datasheet: 0.1 degree C resolution stored raw
-		 * Triggers FAULT_REG5_OVER_TEMPERATURE when the hardware threshold is exceeded
+		 * Inverter cabinet temperature (reg 33099, S16, FC4).
+		 * Datasheet: 0.1 °C resolution → SCALE_FACTOR_MINUS_1 → stored as °C integer.
+		 * persistencePriority(LOW).
+		 * Unit: °C
 		 */
 		INVERTER_CABINET_TEMP(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -515,8 +543,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.unit(Unit.PERCENT)),
 
 		/**
-		 * Inverter Module Temperature 2 (reg 33107, S16, FC4)
-		 * Datasheet: 0.1 degree C resolution. Second NTC sensor location (different from reg 33093)
+		 * Inverter module temperature 2 (reg 33107, S16, FC4).
+		 * Second NTC sensor — only present on models with dual temperature sensing.
+		 * Datasheet: 0.1 °C resolution → SCALE_FACTOR_MINUS_1 → stored as °C integer.
+		 * persistencePriority(LOW).
+		 * Unit: °C
 		 */
 		INVERTER_MODULE_TEMP2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -524,9 +555,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(LOW)),
 		
 		/**
-		 * Volt-Var Real-Time Reference Voltage (reg 33108, U16, FC4)
-		 * Datasheet: 0.1 V resolution stored as mV. IEEE 1547-2018 Vref
-		 * Only active when Volt-var mode (WMODE_VOLT_VAR) is running
+		 * Volt-var real-time Vref value (reg 33108, U16, FC4).
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * Active voltage reference for IEEE 1547-2018 Volt-var mode.
+		 * persistencePriority(LOW).
+		 * Unit: mV
 		 */
 		VOLT_VAR_VREF_RT_VALUES(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -534,9 +567,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.persistencePriority(LOW)),
 		
 		/**
-		 * BMS Charging Voltage Limit (reg 33110, U16, FC4)
-		 * Datasheet: 0.1 V resolution stored as mV
-		 * Maximum charge voltage reported by the BMS to the inverter
+		 * BMS maximum charging voltage limit (reg 33110, U16, FC4).
+		 * Reported by the battery BMS to the inverter.
+		 * Datasheet: 0.1 V → SCALE_FACTOR_2 → stored as mV.
+		 * persistencePriority(LOW).
+		 * Unit: mV
 		 */
 		BMS_CHARGING_VOLTAGE_LIMIT(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
@@ -938,51 +973,11 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		STORAGE_CTRL_RESERVED_13(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (STORAGE BIT13)")),
 		STORAGE_CTRL_RESERVED_14(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (STORAGE BIT14)")),
 		STORAGE_CTRL_RESERVED_15(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (STORAGE BIT15)")),
-		
-		// -----------------------------------------------------------------------
-		// Reg 44108 decoded sub-channels — written by installListeners() each cycle
-		// These channels store the decoded state of the 2-bit function groups.
-		// Use setRemoteDispatchRealtimeControlFunctionSwitch() to write reg 44108.
-		// -----------------------------------------------------------------------
-
-		/**
-		 * PV Shutdown Switch — decoded from reg 44108 BIT00–01 by installListeners().
-		 * Encoding: 1 = Disable, 2 = Enable. Raw 2-bit group, not a single boolean.
-		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
-		 */
-		PV_SHUTDOWN_SWITCH(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("PV shutdown switch (decoded from reg 44108 BIT00-01)")),
-
-		/**
-		 * Grid Charge Allowed — decoded from reg 44108 BIT04–05 by installListeners().
-		 * Encoding: 1 = Allow, 2 = Not allow.
-		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
-		 */
-		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("Grid charge allowed (decoded from reg 44108 BIT04-05)")),
-
-		/**
-		 * DO Control — decoded from reg 44108 BIT02–03 by installListeners().
-		 * Encoding: 1 = Disable, 2 = Enable.
-		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
-		 */
-		DO_CONTROL(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("DO control (decoded from reg 44108 BIT02-03)")),
-
-		/**
-		 * Off-Grid Battery Standby — decoded from reg 44108 BIT06–07 by installListeners().
-		 * Encoding: 1 = Disable, 2 = Enable.
-		 * Write via {@link #setRemoteDispatchRealtimeControlFunctionSwitch}.
-		 */
-		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values())
-				.accessMode(READ_ONLY)
-				.text("Off-grid battery standby (decoded from reg 44108 BIT06-07)")),
 
 		// -----------------------------------------------------------------------------------------------------------------------
-		// TODO: What are these??
+		// Remote control legacy channels — register addresses not confirmed in current datasheet revision.
+		// These channels are retained for API compatibility. Use the remote-dispatch path
+		// (reg 44100–44108) for production use. See setRemoteControlMode() and setRemoteControlPower().
 		// -----------------------------------------------------------------------------------------------------------------------
 
 		SET_REMOTE_CONTROL_AC_GRID_PORT_POWER(Doc.of(INTEGER)
@@ -1021,6 +1016,22 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 		BATCH_UPGRADE_BOWL(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
+
+		PV_SHUTDOWN_SWITCH(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("PV shutdown mode")),
+		
+		GRID_CHARGE_ALLOWED(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("Battery grid charge allowed")),
+		
+		DO_CONTROL(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("DO Control enabled")),
+		
+		OFF_GRID_BATTERY_STANDBY(Doc.of(EnableDisable.values())
+				.accessMode(READ_ONLY)
+				.text("Off-grid battery standby")),
 
 		SETTING_FLAG_BIT(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)),
@@ -1100,6 +1111,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	    this.setRemoteDispatchSwitchChannel().setNextWriteValue(value);
 	}
 
+	/** @return Current remote dispatch switch state. See {@link ChannelId#REMOTE_DISPATCH_SWITCH} */
 	public default EnableDisable getRemoteDispatchSwitch() {
 	    return this.getRemoteDispatchSwitchChannel().value().asEnum();
 	}
@@ -1136,6 +1148,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	    this.setBackupCircuitSettingChannel().setNextWriteValue(value);
 	}
 
+	/** @return Current backup circuit relay state. See {@link ChannelId#BACKUP_CIRCUIT_SETTING} */
 	public default EnableDisable getBackupCircuitSetting() {
 	    return this.getBackupCircuitSettingChannel().value().asEnum();
 	}
@@ -1175,15 +1188,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	}
 
 	/**
-	 * Returns the write Channel for {@link ChannelId#SET_REMOTE_DISPATCH_FAILSAFE_SETTING}
-	 * (reg 44101, FC16). Range: 1–1440 minutes. Default: 5.
-	 *
-	 * @return the {@link IntegerWriteChannel}
-	 */
-	/**
 	 * Gets the current failsafe timeout read-back value (reg 44101, FC3).
 	 *
-	 * @return the read-back Channel
+	 * @return the {@link IntegerReadChannel}
 	 */
 	public default IntegerReadChannel getRemoteDispatchFailsafeSettingChannel() {
 		return this.channel(ChannelId.REMOTE_DISPATCH_FAILSAFE_SETTING);
@@ -1209,6 +1216,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	    this.setRemoteDispatchSystemLimitSwitchChannel().setNextWriteValue(value);
 	}
 
+	/** @return Current system limit switch state. See {@link ChannelId#REMOTE_DISPATCH_SYSTEM_LIMIT_SWITCH} */
 	public default RemoteDispatchSystemLimitSwitch getRemoteDispatchSystemLimitSwitch() {
 	    return this.getRemoteDispatchSystemLimitSwitchChannel().value().asEnum();
 	}
@@ -1544,6 +1552,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	    this.setRemoteDispatchRealtimeControlSwitchChannel().setNextWriteValue(value);
 	}
 
+	/** @return Current realtime control switch mode. See {@link ChannelId#REMOTE_DISPATCH_REALTIME_CONTROL_SWITCH} */
 	public default RemoteDispatchRealtimeControlSwitch getRemoteDispatchRealtimeControlSwitch() {
 	    return this.getRemoteDispatchRealtimeControlSwitchChannel().value().asEnum();
 	}
@@ -1590,10 +1599,12 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_MODE);
 	}
 	
+	/** @return Remote control mode read-back value. See {@link ChannelId#REMOTE_CONTROL_MODE} */
 	public default Value<Integer> getRemoteControlMode() {
 		return this.getRemoteControlModeChannel().value();
 	}
 
+	/** @return Channel for {@link ChannelId#REMOTE_CONTROL_MODE} */
 	public default IntegerReadChannel getRemoteControlModeChannel() {
 		return this.channel(ChannelId.REMOTE_CONTROL_MODE);
 	}		
@@ -1620,10 +1631,12 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return this.channel(ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER);
 	}
 	
+	/** @return Remote control AC grid port power read-back [W]. See {@link ChannelId#REMOTE_CONTROL_AC_GRID_PORT_POWER} */
 	public default Value<Integer> getRemoteControlPower() {
 		return this.getRemoteControlPowerChannel().value();
 	}
 
+	/** @return Channel for {@link ChannelId#REMOTE_CONTROL_AC_GRID_PORT_POWER} */
 	public default IntegerReadChannel getRemoteControlPowerChannel() {
 		return this.channel(ChannelId.REMOTE_CONTROL_AC_GRID_PORT_POWER);
 	}	
@@ -1661,11 +1674,6 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	}
 
 	/**
-	 * Gets the Channel for {@link ChannelId#SET_OVERDISCHARGE_SOC}.
-	 *
-	 * @return the Channel
-	 */
-	/**
 	 * Gets the read-back Channel for {@link ChannelId#OVERDISCHARGE_SOC} (reg 43011, FC3).
 	 * Used by setDefaultValues() to confirm the write was accepted by the inverter.
 	 *
@@ -1676,7 +1684,8 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	}
 
 	/**
-	 * Gets the DC Discharge Power in [W]. See {@link ChannelId#DC_DISCHARGE_POWER}.
+	 * Gets the overdischarge SoC read-back value [%].
+	 * See {@link ChannelId#OVERDISCHARGE_SOC}.
 	 *
 	 * @return the Channel {@link Value}
 	 */
@@ -1702,11 +1711,6 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	}
 
 	/**
-	 * Gets the Channel for {@link ChannelId#SET_FORCE_CHARGE_SOC}.
-	 *
-	 * @return the Channel
-	 */
-	/**
 	 * Gets the read-back Channel for {@link ChannelId#FORCE_CHARGE_SOC} (reg 43018, FC3).
 	 * Used by setDefaultValues() to confirm the write was accepted by the inverter.
 	 *
@@ -1717,13 +1721,2493 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	}
 
 	/**
-	 * Gets the DC Discharge Power in [W]. See {@link ChannelId#DC_DISCHARGE_POWER}.
+	 * Gets the force charge SoC read-back value [%].
+	 * See {@link ChannelId#FORCE_CHARGE_SOC}.
 	 *
 	 * @return the Channel {@link Value}
 	 */
 	public default Value<Integer> getForceChargeSoc() {
 		return this.getForceChargeSocChannel().value();
 	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Version and identification (reg 33068–33070)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#SAFETY_VERSION} */
+	public default IntegerReadChannel getSafetyVersionChannel() {
+		return this.channel(ChannelId.SAFETY_VERSION);
+	}
+
+	/** @return Safety (grid-code) version number — raw integer, no unit. See {@link ChannelId#SAFETY_VERSION} */
+	public default Value<Integer> getSafetyVersion() {
+		return this.getSafetyVersionChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#HMI_SUB_VERSION} */
+	public default IntegerReadChannel getHmiSubVersionChannel() {
+		return this.channel(ChannelId.HMI_SUB_VERSION);
+	}
+
+	/** @return HMI sub-version number — raw integer, no unit. See {@link ChannelId#HMI_SUB_VERSION} */
+	public default Value<Integer> getHmiSubVersion() {
+		return this.getHmiSubVersionChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#ALARM_CODE_DATA} */
+	public default IntegerReadChannel getAlarmCodeDataChannel() {
+		return this.channel(ChannelId.ALARM_CODE_DATA);
+	}
+
+	/** @return Alarm code data bitmask (used with INVERTER_CURRENT_STATUS for fault display). See {@link ChannelId#ALARM_CODE_DATA} */
+	public default Value<Integer> getAlarmCodeData() {
+		return this.getAlarmCodeDataChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – DC bus measurements (reg 33071–33072)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#DC_BUS_VOLTAGE} */
+	public default IntegerReadChannel getDcBusVoltageChannel() {
+		return this.channel(ChannelId.DC_BUS_VOLTAGE);
+	}
+
+	/** @return DC bus total voltage [mV]. See {@link ChannelId#DC_BUS_VOLTAGE} */
+	public default Value<Integer> getDcBusVoltage() {
+		return this.getDcBusVoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#DC_BUS_HALF_VOLTAGE} */
+	public default IntegerReadChannel getDcBusHalfVoltageChannel() {
+		return this.channel(ChannelId.DC_BUS_HALF_VOLTAGE);
+	}
+
+	/** @return DC bus half (split) voltage [mV]. See {@link ChannelId#DC_BUS_HALF_VOLTAGE} */
+	public default Value<Integer> getDcBusHalfVoltage() {
+		return this.getDcBusHalfVoltageChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – AC phase voltages (reg 33073–33075)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#VOLTAGE_L1} */
+	public default IntegerReadChannel getVoltageL1Channel() {
+		return this.channel(ChannelId.VOLTAGE_L1);
+	}
+
+	/** @return Phase L1 (or AB line) voltage [mV]. See {@link ChannelId#VOLTAGE_L1} */
+	public default Value<Integer> getVoltageL1() {
+		return this.getVoltageL1Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#VOLTAGE_L2} */
+	public default IntegerReadChannel getVoltageL2Channel() {
+		return this.channel(ChannelId.VOLTAGE_L2);
+	}
+
+	/** @return Phase L2 (or BC line) voltage [mV]. See {@link ChannelId#VOLTAGE_L2} */
+	public default Value<Integer> getVoltageL2() {
+		return this.getVoltageL2Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#VOLTAGE_L3} */
+	public default IntegerReadChannel getVoltageL3Channel() {
+		return this.channel(ChannelId.VOLTAGE_L3);
+	}
+
+	/** @return Phase L3 (or CA line) voltage [mV]. See {@link ChannelId#VOLTAGE_L3} */
+	public default Value<Integer> getVoltageL3() {
+		return this.getVoltageL3Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – AC phase currents (reg 33076–33078)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#CURRENT_L1} */
+	public default IntegerReadChannel getCurrentL1Channel() {
+		return this.channel(ChannelId.CURRENT_L1);
+	}
+
+	/** @return Phase L1 current [mA]. See {@link ChannelId#CURRENT_L1} */
+	public default Value<Integer> getCurrentL1() {
+		return this.getCurrentL1Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#CURRENT_L2} */
+	public default IntegerReadChannel getCurrentL2Channel() {
+		return this.channel(ChannelId.CURRENT_L2);
+	}
+
+	/** @return Phase L2 current [mA]. See {@link ChannelId#CURRENT_L2} */
+	public default Value<Integer> getCurrentL2() {
+		return this.getCurrentL2Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#CURRENT_L3} */
+	public default IntegerReadChannel getCurrentL3Channel() {
+		return this.channel(ChannelId.CURRENT_L3);
+	}
+
+	/** @return Phase L3 current [mA]. See {@link ChannelId#CURRENT_L3} */
+	public default Value<Integer> getCurrentL3() {
+		return this.getCurrentL3Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – AC power measurements (reg 33083–33084)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#APPARENT_POWER} */
+	public default IntegerReadChannel getApparentPowerChannel() {
+		return this.channel(ChannelId.APPARENT_POWER);
+	}
+
+	/** @return Total apparent power [VA]. See {@link ChannelId#APPARENT_POWER} */
+	public default Value<Integer> getApparentPower() {
+		return this.getApparentPowerChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Grid frequency and mode (reg 33091, 33094, 33095)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#STANDARD_WORKING_MODE} */
+	public default IntegerReadChannel getStandardWorkingModeChannel() {
+		return this.channel(ChannelId.STANDARD_WORKING_MODE);
+	}
+
+	/** @return Standard working mode enum (reg 33091). See {@link ChannelId#STANDARD_WORKING_MODE} */
+	public default Value<Integer> getStandardWorkingMode() {
+		return this.getStandardWorkingModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FREQUENCY} */
+	public default IntegerReadChannel getFrequencyChannel() {
+		return this.channel(ChannelId.FREQUENCY);
+	}
+
+	/** @return Grid frequency [mHz]. See {@link ChannelId#FREQUENCY} */
+	public default Value<Integer> getFrequency() {
+		return this.getFrequencyChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INVERTER_CURRENT_STATUS} */
+	public default IntegerReadChannel getInverterCurrentStatusChannel() {
+		return this.channel(ChannelId.INVERTER_CURRENT_STATUS);
+	}
+
+	/** @return Inverter current status code (Appendix 2). See {@link ChannelId#INVERTER_CURRENT_STATUS} */
+	public default Value<Integer> getInverterCurrentStatus() {
+		return this.getInverterCurrentStatusChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Lead-acid battery temperature (reg 33096)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#LEAD_ACID_BATTERY_TEMP} */
+	public default IntegerReadChannel getLeadAcidBatteryTempChannel() {
+		return this.channel(ChannelId.LEAD_ACID_BATTERY_TEMP);
+	}
+
+	/** @return Lead-acid battery temperature [°C, raw 0.1°C scale]. See {@link ChannelId#LEAD_ACID_BATTERY_TEMP} */
+	public default Value<Integer> getLeadAcidBatteryTemp() {
+		return this.getLeadAcidBatteryTempChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Function status decoded bits (reg 33097)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_DRM} */
+	public default BooleanReadChannel getFunctionStatDrmChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_DRM);
+	}
+
+	/** @return true if DRM function enabled (reg 33097 BIT00). See {@link ChannelId#FUNCTION_STAT_DRM} */
+	public default Value<Boolean> getFunctionStatDrm() {
+		return this.getFunctionStatDrmChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_PARALLEL_RUNNING} */
+	public default BooleanReadChannel getFunctionStatParallelRunningChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_PARALLEL_RUNNING);
+	}
+
+	/** @return true if parallel system running (reg 33097 BIT01). See {@link ChannelId#FUNCTION_STAT_PARALLEL_RUNNING} */
+	public default Value<Boolean> getFunctionStatParallelRunning() {
+		return this.getFunctionStatParallelRunningChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_MASTER} */
+	public default BooleanReadChannel getFunctionStatMasterChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_MASTER);
+	}
+
+	/** @return true if this unit is master (1=master, 0=slave) (reg 33097 BIT02). See {@link ChannelId#FUNCTION_STAT_MASTER} */
+	public default Value<Boolean> getFunctionStatMaster() {
+		return this.getFunctionStatMasterChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_3PH_UNBALANCED} */
+	public default BooleanReadChannel getFunctionStat3phUnbalancedChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_3PH_UNBALANCED);
+	}
+
+	/** @return true if 3-phase unbalanced operation (reg 33097 BIT03). See {@link ChannelId#FUNCTION_STAT_3PH_UNBALANCED} */
+	public default Value<Boolean> getFunctionStat3phUnbalanced() {
+		return this.getFunctionStat3phUnbalancedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_GEN_START_CONDITIONS} */
+	public default BooleanReadChannel getFunctionStatGenStartConditionsChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_GEN_START_CONDITIONS);
+	}
+
+	/** @return true if generator start conditions met (reg 33097 BIT04). See {@link ChannelId#FUNCTION_STAT_GEN_START_CONDITIONS} */
+	public default Value<Boolean> getFunctionStatGenStartConditions() {
+		return this.getFunctionStatGenStartConditionsChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_GEN_STARTED} */
+	public default BooleanReadChannel getFunctionStatGenStartedChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_GEN_STARTED);
+	}
+
+	/** @return true if generator started successfully (reg 33097 BIT05). See {@link ChannelId#FUNCTION_STAT_GEN_STARTED} */
+	public default Value<Boolean> getFunctionStatGenStarted() {
+		return this.getFunctionStatGenStartedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_BATT_INDEPENDENT} */
+	public default BooleanReadChannel getFunctionStatBattIndependentChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_BATT_INDEPENDENT);
+	}
+
+	/** @return true if battery in independent mode (reg 33097 BIT06). See {@link ChannelId#FUNCTION_STAT_BATT_INDEPENDENT} */
+	public default Value<Boolean> getFunctionStatBattIndependent() {
+		return this.getFunctionStatBattIndependentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_AFCI_PRESENT} */
+	public default BooleanReadChannel getFunctionStatAfciPresentChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_AFCI_PRESENT);
+	}
+
+	/** @return true if AFCI board present (reg 33097 BIT07). See {@link ChannelId#FUNCTION_STAT_AFCI_PRESENT} */
+	public default Value<Boolean> getFunctionStatAfciPresent() {
+		return this.getFunctionStatAfciPresentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_AFCI_SELFTEST_DONE} */
+	public default BooleanReadChannel getFunctionStatAfciSelftestDoneChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_AFCI_SELFTEST_DONE);
+	}
+
+	/** @return true if AFCI self-test finished (reg 33097 BIT08). See {@link ChannelId#FUNCTION_STAT_AFCI_SELFTEST_DONE} */
+	public default Value<Boolean> getFunctionStatAfciSelftestDone() {
+		return this.getFunctionStatAfciSelftestDoneChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_GRID_CONNECTED} */
+	public default BooleanReadChannel getFunctionStatGridConnectedChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_GRID_CONNECTED);
+	}
+
+	/** @return true if grid connected (1=on-grid, 0=off-grid) (reg 33097 BIT09). See {@link ChannelId#FUNCTION_STAT_GRID_CONNECTED} */
+	public default Value<Boolean> getFunctionStatGridConnected() {
+		return this.getFunctionStatGridConnectedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_DOUBLE_BACKUP} */
+	public default BooleanReadChannel getFunctionStatDoubleBackupChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_DOUBLE_BACKUP);
+	}
+
+	/** @return true if double backup enabled (reg 33097 BIT10). See {@link ChannelId#FUNCTION_STAT_DOUBLE_BACKUP} */
+	public default Value<Boolean> getFunctionStatDoubleBackup() {
+		return this.getFunctionStatDoubleBackupChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_RSD_SWITCH} */
+	public default BooleanReadChannel getFunctionStatRsdSwitchChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_RSD_SWITCH);
+	}
+
+	/** @return true if RSD switch closed (S6 HV only) (reg 33097 BIT11). See {@link ChannelId#FUNCTION_STAT_RSD_SWITCH} */
+	public default Value<Boolean> getFunctionStatRsdSwitch() {
+		return this.getFunctionStatRsdSwitchChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_EMERGENCY_SWITCH} */
+	public default BooleanReadChannel getFunctionStatEmergencySwitchChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_EMERGENCY_SWITCH);
+	}
+
+	/** @return true if emergency switch closed (S6 HV only) (reg 33097 BIT12). See {@link ChannelId#FUNCTION_STAT_EMERGENCY_SWITCH} */
+	public default Value<Boolean> getFunctionStatEmergencySwitch() {
+		return this.getFunctionStatEmergencySwitchChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_AC_COUPLING} */
+	public default BooleanReadChannel getFunctionStatAcCouplingChannel() {
+		return this.channel(ChannelId.FUNCTION_STAT_AC_COUPLING);
+	}
+
+	/** @return true if AC coupling running (reg 33097 BIT13). See {@link ChannelId#FUNCTION_STAT_AC_COUPLING} */
+	public default Value<Boolean> getFunctionStatAcCoupling() {
+		return this.getFunctionStatAcCouplingChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_RESERVED_14} */
+	public default BooleanReadChannel getFunctionStatReserved14Channel() {
+		return this.channel(ChannelId.FUNCTION_STAT_RESERVED_14);
+	}
+
+	/** @return true if reserved bit 14 set (reg 33097 BIT14). See {@link ChannelId#FUNCTION_STAT_RESERVED_14} */
+	public default Value<Boolean> getFunctionStatReserved14() {
+		return this.getFunctionStatReserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STAT_RESERVED_15} */
+	public default BooleanReadChannel getFunctionStatReserved15Channel() {
+		return this.channel(ChannelId.FUNCTION_STAT_RESERVED_15);
+	}
+
+	/** @return true if reserved bit 15 set (reg 33097 BIT15). See {@link ChannelId#FUNCTION_STAT_RESERVED_15} */
+	public default Value<Boolean> getFunctionStatReserved15() {
+		return this.getFunctionStatReserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Power quality measurements (reg 33098–33108)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#CURRENT_DRM_CODE_STATUS} */
+	public default IntegerReadChannel getCurrentDrmCodeStatusChannel() {
+		return this.channel(ChannelId.CURRENT_DRM_CODE_STATUS);
+	}
+
+	/** @return Current DRM code status bitmask (reg 33098). See {@link ChannelId#CURRENT_DRM_CODE_STATUS} */
+	public default Value<Integer> getCurrentDrmCodeStatus() {
+		return this.getCurrentDrmCodeStatusChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INVERTER_CABINET_TEMP} */
+	public default IntegerReadChannel getInverterCabinetTempChannel() {
+		return this.channel(ChannelId.INVERTER_CABINET_TEMP);
+	}
+
+	/** @return Inverter cabinet temperature [°C] (reg 33099). See {@link ChannelId#INVERTER_CABINET_TEMP} */
+	public default Value<Integer> getInverterCabinetTemp() {
+		return this.getInverterCabinetTempChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#LIMITED_POWER_ACTUAL_VALUE} */
+	public default IntegerReadChannel getLimitedPowerActualValueChannel() {
+		return this.channel(ChannelId.LIMITED_POWER_ACTUAL_VALUE);
+	}
+
+	/** @return Limited power actual value [%] (reg 33104). See {@link ChannelId#LIMITED_POWER_ACTUAL_VALUE} */
+	public default Value<Integer> getLimitedPowerActualValue() {
+		return this.getLimitedPowerActualValueChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#PF_ADJUSTMENT_ACTUAL_VALUE} */
+	public default IntegerReadChannel getPfAdjustmentActualValueChannel() {
+		return this.channel(ChannelId.PF_ADJUSTMENT_ACTUAL_VALUE);
+	}
+
+	/** @return Power factor adjustment actual value ×0.001 (reg 33105). See {@link ChannelId#PF_ADJUSTMENT_ACTUAL_VALUE} */
+	public default Value<Integer> getPfAdjustmentActualValue() {
+		return this.getPfAdjustmentActualValueChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#LIMITED_REACTIVE_POWER} */
+	public default IntegerReadChannel getLimitedReactivePowerChannel() {
+		return this.channel(ChannelId.LIMITED_REACTIVE_POWER);
+	}
+
+	/** @return Limited reactive power [%] (reg 33106). See {@link ChannelId#LIMITED_REACTIVE_POWER} */
+	public default Value<Integer> getLimitedReactivePower() {
+		return this.getLimitedReactivePowerChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INVERTER_MODULE_TEMP2} */
+	public default IntegerReadChannel getInverterModuleTemp2Channel() {
+		return this.channel(ChannelId.INVERTER_MODULE_TEMP2);
+	}
+
+	/** @return Inverter module temperature 2 [°C] (reg 33107). See {@link ChannelId#INVERTER_MODULE_TEMP2} */
+	public default Value<Integer> getInverterModuleTemp2() {
+		return this.getInverterModuleTemp2Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#VOLT_VAR_VREF_RT_VALUES} */
+	public default IntegerReadChannel getVoltVarVrefRtValuesChannel() {
+		return this.channel(ChannelId.VOLT_VAR_VREF_RT_VALUES);
+	}
+
+	/** @return Volt-var real-time Vref [mV] (reg 33108). See {@link ChannelId#VOLT_VAR_VREF_RT_VALUES} */
+	public default Value<Integer> getVoltVarVrefRtValues() {
+		return this.getVoltVarVrefRtValuesChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#BMS_CHARGING_VOLTAGE_LIMIT} */
+	public default IntegerReadChannel getBmsChargingVoltageLimitChannel() {
+		return this.channel(ChannelId.BMS_CHARGING_VOLTAGE_LIMIT);
+	}
+
+	/** @return BMS charging voltage limit [mV] (reg 33110). See {@link ChannelId#BMS_CHARGING_VOLTAGE_LIMIT} */
+	public default Value<Integer> getBmsChargingVoltageLimit() {
+		return this.getBmsChargingVoltageLimitChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Battery BMS status (reg 33111)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#BATTERY_BMS_STATUS} */
+	public default Channel<BatteryBmsStatus> getBatteryBmsStatusChannel() {
+		return this.channel(ChannelId.BATTERY_BMS_STATUS);
+	}
+
+	/** @return BMS communication status (reg 33111). See {@link ChannelId#BATTERY_BMS_STATUS} */
+	public default BatteryBmsStatus getBatteryBmsStatus() {
+		return this.getBatteryBmsStatusChannel().value().asEnum();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Inverter initial setting state decoded bits (reg 33112)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_MODEL_SET} */
+	public default BooleanReadChannel getInitStateModelSetChannel() {
+		return this.channel(ChannelId.INIT_STATE_MODEL_SET);
+	}
+
+	/** @return true if model setting complete (reg 33112 BIT00). See {@link ChannelId#INIT_STATE_MODEL_SET} */
+	public default Value<Boolean> getInitStateModelSet() {
+		return this.getInitStateModelSetChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_GRID_CODE_SET} */
+	public default BooleanReadChannel getInitStateGridCodeSetChannel() {
+		return this.channel(ChannelId.INIT_STATE_GRID_CODE_SET);
+	}
+
+	/** @return true if grid code setting complete (reg 33112 BIT01). See {@link ChannelId#INIT_STATE_GRID_CODE_SET} */
+	public default Value<Boolean> getInitStateGridCodeSet() {
+		return this.getInitStateGridCodeSetChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_POWER_CURVE_SET} */
+	public default BooleanReadChannel getInitStatePowerCurveSetChannel() {
+		return this.channel(ChannelId.INIT_STATE_POWER_CURVE_SET);
+	}
+
+	/** @return true if power curve setting complete (reg 33112 BIT02). See {@link ChannelId#INIT_STATE_POWER_CURVE_SET} */
+	public default Value<Boolean> getInitStatePowerCurveSet() {
+		return this.getInitStatePowerCurveSetChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_MODULE_TYPE_INFINEON} */
+	public default BooleanReadChannel getInitStateModuleTypeInfineonChannel() {
+		return this.channel(ChannelId.INIT_STATE_MODULE_TYPE_INFINEON);
+	}
+
+	/** @return true if module type is Infineon (1=Infineon, 0=Onsemi) (reg 33112 BIT03). See {@link ChannelId#INIT_STATE_MODULE_TYPE_INFINEON} */
+	public default Value<Boolean> getInitStateModuleTypeInfineon() {
+		return this.getInitStateModuleTypeInfineonChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_FAN_DETECTION_SUPPORTED} */
+	public default BooleanReadChannel getInitStateFanDetectionSupportedChannel() {
+		return this.channel(ChannelId.INIT_STATE_FAN_DETECTION_SUPPORTED);
+	}
+
+	/** @return true if fan detection hardware supported (reg 33112 BIT04). See {@link ChannelId#INIT_STATE_FAN_DETECTION_SUPPORTED} */
+	public default Value<Boolean> getInitStateFanDetectionSupported() {
+		return this.getInitStateFanDetectionSupportedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_FCAS_RUNNING} */
+	public default BooleanReadChannel getInitStateFcasRunningChannel() {
+		return this.channel(ChannelId.INIT_STATE_FCAS_RUNNING);
+	}
+
+	/** @return true if FCAS function currently running (reg 33112 BIT05). See {@link ChannelId#INIT_STATE_FCAS_RUNNING} */
+	public default Value<Boolean> getInitStateFcasRunning() {
+		return this.getInitStateFcasRunningChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_AFCI_TEST_ENDED} */
+	public default BooleanReadChannel getInitStateAfciTestEndedChannel() {
+		return this.channel(ChannelId.INIT_STATE_AFCI_TEST_ENDED);
+	}
+
+	/** @return true if AFCI self-test ended (reg 33112 BIT06). See {@link ChannelId#INIT_STATE_AFCI_TEST_ENDED} */
+	public default Value<Boolean> getInitStateAfciTestEnded() {
+		return this.getInitStateAfciTestEndedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_AFCI_ARC_FOUND} */
+	public default BooleanReadChannel getInitStateAfciArcFoundChannel() {
+		return this.channel(ChannelId.INIT_STATE_AFCI_ARC_FOUND);
+	}
+
+	/** @return true if AFCI self-test found arc — FAULT (reg 33112 BIT07). See {@link ChannelId#INIT_STATE_AFCI_ARC_FOUND} */
+	public default Value<Boolean> getInitStateAfciArcFound() {
+		return this.getInitStateAfciArcFoundChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_DSP_CHIP_TYPE_1} */
+	public default BooleanReadChannel getInitStateDspChipType1Channel() {
+		return this.channel(ChannelId.INIT_STATE_DSP_CHIP_TYPE_1);
+	}
+
+	/** @return true if DSP chip type bit 1 (reg 33112 BIT08). See {@link ChannelId#INIT_STATE_DSP_CHIP_TYPE_1} */
+	public default Value<Boolean> getInitStateDspChipType1() {
+		return this.getInitStateDspChipType1Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_DSP_CHIP_TYPE_2} */
+	public default BooleanReadChannel getInitStateDspChipType2Channel() {
+		return this.channel(ChannelId.INIT_STATE_DSP_CHIP_TYPE_2);
+	}
+
+	/** @return true if DSP chip type bit 2 (reg 33112 BIT09). See {@link ChannelId#INIT_STATE_DSP_CHIP_TYPE_2} */
+	public default Value<Boolean> getInitStateDspChipType2() {
+		return this.getInitStateDspChipType2Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_IGBT_SCREENING_COMPLETED} */
+	public default BooleanReadChannel getInitStateIgbtScreeningCompletedChannel() {
+		return this.channel(ChannelId.INIT_STATE_IGBT_SCREENING_COMPLETED);
+	}
+
+	/** @return true if IGBT screening complete (reg 33112 BIT10). See {@link ChannelId#INIT_STATE_IGBT_SCREENING_COMPLETED} */
+	public default Value<Boolean> getInitStateIgbtScreeningCompleted() {
+		return this.getInitStateIgbtScreeningCompletedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_RESERVED_11} */
+	public default BooleanReadChannel getInitStateReserved11Channel() {
+		return this.channel(ChannelId.INIT_STATE_RESERVED_11);
+	}
+
+	/** @return true if reserved (reg 33112 BIT11). See {@link ChannelId#INIT_STATE_RESERVED_11} */
+	public default Value<Boolean> getInitStateReserved11() {
+		return this.getInitStateReserved11Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_RESERVED_12} */
+	public default BooleanReadChannel getInitStateReserved12Channel() {
+		return this.channel(ChannelId.INIT_STATE_RESERVED_12);
+	}
+
+	/** @return true if reserved (reg 33112 BIT12). See {@link ChannelId#INIT_STATE_RESERVED_12} */
+	public default Value<Boolean> getInitStateReserved12() {
+		return this.getInitStateReserved12Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_RESERVED_13} */
+	public default BooleanReadChannel getInitStateReserved13Channel() {
+		return this.channel(ChannelId.INIT_STATE_RESERVED_13);
+	}
+
+	/** @return true if reserved (reg 33112 BIT13). See {@link ChannelId#INIT_STATE_RESERVED_13} */
+	public default Value<Boolean> getInitStateReserved13() {
+		return this.getInitStateReserved13Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INIT_STATE_WAVEFORM_READY} */
+	public default BooleanReadChannel getInitStateWaveformReadyChannel() {
+		return this.channel(ChannelId.INIT_STATE_WAVEFORM_READY);
+	}
+
+	/** @return true if DSP waveform data ready (reg 33112 BIT14). See {@link ChannelId#INIT_STATE_WAVEFORM_READY} */
+	public default Value<Boolean> getInitStateWaveformReady() {
+		return this.getInitStateWaveformReadyChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Batch upgrade support (reg 33113)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#BATCH_UPGRADE_DSP} */
+	public default BooleanReadChannel getBatchUpgradeDspChannel() {
+		return this.channel(ChannelId.BATCH_UPGRADE_DSP);
+	}
+
+	/** @return true if DSP processor supports batch upgrade (reg 33113 BIT00). See {@link ChannelId#BATCH_UPGRADE_DSP} */
+	public default Value<Boolean> getBatchUpgradeDsp() {
+		return this.getBatchUpgradeDspChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#BATCH_UPGRADE_ARM} */
+	public default BooleanReadChannel getBatchUpgradeArmChannel() {
+		return this.channel(ChannelId.BATCH_UPGRADE_ARM);
+	}
+
+	/** @return true if ARM processor supports batch upgrade (reg 33113 BIT04). See {@link ChannelId#BATCH_UPGRADE_ARM} */
+	public default Value<Boolean> getBatchUpgradeArm() {
+		return this.getBatchUpgradeArmChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – FCAS mode (reg 33114)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FCAS_MODE_RUNNING_STATUS} */
+	public default BooleanReadChannel getFcasModeRunningStatusChannel() {
+		return this.channel(ChannelId.FCAS_MODE_RUNNING_STATUS);
+	}
+
+	/** @return true if FCAS mode running status (reg 33114). See {@link ChannelId#FCAS_MODE_RUNNING_STATUS} */
+	public default Value<Boolean> getFcasModeRunningStatus() {
+		return this.getFcasModeRunningStatusChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Setting flag decoded bits (reg 33115, Appendix 7)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_FLASH_TIMEOUT} */
+	public default BooleanReadChannel getSettingFlagFlashTimeoutChannel() {
+		return this.channel(ChannelId.SETTING_FLAG_FLASH_TIMEOUT);
+	}
+
+	/** @return true if FLASH read/write timeout fault (reg 33115 BIT00). See {@link ChannelId#SETTING_FLAG_FLASH_TIMEOUT} */
+	public default Value<Boolean> getSettingFlagFlashTimeout() {
+		return this.getSettingFlagFlashTimeoutChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_CLEAR_ENERGY} */
+	public default BooleanReadChannel getSettingFlagClearEnergyChannel() {
+		return this.channel(ChannelId.SETTING_FLAG_CLEAR_ENERGY);
+	}
+
+	/** @return true if clear energy flag completed (reg 33115 BIT01). See {@link ChannelId#SETTING_FLAG_CLEAR_ENERGY} */
+	public default Value<Boolean> getSettingFlagClearEnergy() {
+		return this.getSettingFlagClearEnergyChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_02} */
+	public default BooleanReadChannel getSettingFlagReserved02Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_02);
+	}
+
+	/** @return true if reserved (reg 33115 BIT02). See {@link ChannelId#SETTING_FLAG_RESERVED_02} */
+	public default Value<Boolean> getSettingFlagReserved02() {
+		return this.getSettingFlagReserved02Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_03} */
+	public default BooleanReadChannel getSettingFlagReserved03Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_03);
+	}
+
+	/** @return true if reserved (reg 33115 BIT03). See {@link ChannelId#SETTING_FLAG_RESERVED_03} */
+	public default Value<Boolean> getSettingFlagReserved03() {
+		return this.getSettingFlagReserved03Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_04} */
+	public default BooleanReadChannel getSettingFlagReserved04Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_04);
+	}
+
+	/** @return true if reserved (reg 33115 BIT04). See {@link ChannelId#SETTING_FLAG_RESERVED_04} */
+	public default Value<Boolean> getSettingFlagReserved04() {
+		return this.getSettingFlagReserved04Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_05} */
+	public default BooleanReadChannel getSettingFlagReserved05Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_05);
+	}
+
+	/** @return true if reserved (reg 33115 BIT05). See {@link ChannelId#SETTING_FLAG_RESERVED_05} */
+	public default Value<Boolean> getSettingFlagReserved05() {
+		return this.getSettingFlagReserved05Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_06} */
+	public default BooleanReadChannel getSettingFlagReserved06Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_06);
+	}
+
+	/** @return true if reserved (reg 33115 BIT06). See {@link ChannelId#SETTING_FLAG_RESERVED_06} */
+	public default Value<Boolean> getSettingFlagReserved06() {
+		return this.getSettingFlagReserved06Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_07} */
+	public default BooleanReadChannel getSettingFlagReserved07Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_07);
+	}
+
+	/** @return true if reserved (reg 33115 BIT07). See {@link ChannelId#SETTING_FLAG_RESERVED_07} */
+	public default Value<Boolean> getSettingFlagReserved07() {
+		return this.getSettingFlagReserved07Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESET_DATALOGGER} */
+	public default BooleanReadChannel getSettingFlagResetDataloggerChannel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESET_DATALOGGER);
+	}
+
+	/** @return true if datalogger reset completed (reg 33115 BIT08). See {@link ChannelId#SETTING_FLAG_RESET_DATALOGGER} */
+	public default Value<Boolean> getSettingFlagResetDatalogger() {
+		return this.getSettingFlagResetDataloggerChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_FACTORY_RECOVER} */
+	public default BooleanReadChannel getSettingFlagFactoryRecoverChannel() {
+		return this.channel(ChannelId.SETTING_FLAG_FACTORY_RECOVER);
+	}
+
+	/** @return true if factory settings recovered (reg 33115 BIT09). See {@link ChannelId#SETTING_FLAG_FACTORY_RECOVER} */
+	public default Value<Boolean> getSettingFlagFactoryRecover() {
+		return this.getSettingFlagFactoryRecoverChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_10} */
+	public default BooleanReadChannel getSettingFlagReserved10Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_10);
+	}
+
+	/** @return true if reserved (reg 33115 BIT10). See {@link ChannelId#SETTING_FLAG_RESERVED_10} */
+	public default Value<Boolean> getSettingFlagReserved10() {
+		return this.getSettingFlagReserved10Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_11} */
+	public default BooleanReadChannel getSettingFlagReserved11Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_11);
+	}
+
+	/** @return true if reserved (reg 33115 BIT11). See {@link ChannelId#SETTING_FLAG_RESERVED_11} */
+	public default Value<Boolean> getSettingFlagReserved11() {
+		return this.getSettingFlagReserved11Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_12} */
+	public default BooleanReadChannel getSettingFlagReserved12Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_12);
+	}
+
+	/** @return true if reserved (reg 33115 BIT12). See {@link ChannelId#SETTING_FLAG_RESERVED_12} */
+	public default Value<Boolean> getSettingFlagReserved12() {
+		return this.getSettingFlagReserved12Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_13} */
+	public default BooleanReadChannel getSettingFlagReserved13Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_13);
+	}
+
+	/** @return true if reserved (reg 33115 BIT13). See {@link ChannelId#SETTING_FLAG_RESERVED_13} */
+	public default Value<Boolean> getSettingFlagReserved13() {
+		return this.getSettingFlagReserved13Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_14} */
+	public default BooleanReadChannel getSettingFlagReserved14Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_14);
+	}
+
+	/** @return true if reserved (reg 33115 BIT14). See {@link ChannelId#SETTING_FLAG_RESERVED_14} */
+	public default Value<Boolean> getSettingFlagReserved14() {
+		return this.getSettingFlagReserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_RESERVED_15} */
+	public default BooleanReadChannel getSettingFlagReserved15Channel() {
+		return this.channel(ChannelId.SETTING_FLAG_RESERVED_15);
+	}
+
+	/** @return true if reserved (reg 33115 BIT15). See {@link ChannelId#SETTING_FLAG_RESERVED_15} */
+	public default Value<Boolean> getSettingFlagReserved15() {
+		return this.getSettingFlagReserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 1 decoded bits (reg 33116, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_NO_GRID} */
+	public default BooleanReadChannel getFaultReg1NoGridChannel() {
+		return this.channel(ChannelId.FAULT_REG1_NO_GRID);
+	}
+
+	/** @return true if no grid detected (BIT00). See {@link ChannelId#FAULT_REG1_NO_GRID} */
+	public default Value<Boolean> getFaultReg1NoGrid() {
+		return this.getFaultReg1NoGridChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_OVERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg1GridOvervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_OVERVOLTAGE);
+	}
+
+	/** @return true if grid overvoltage fault (BIT01). See {@link ChannelId#FAULT_REG1_GRID_OVERVOLTAGE} */
+	public default Value<Boolean> getFaultReg1GridOvervoltage() {
+		return this.getFaultReg1GridOvervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_UNDERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg1GridUndervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_UNDERVOLTAGE);
+	}
+
+	/** @return true if grid undervoltage fault (BIT02). See {@link ChannelId#FAULT_REG1_GRID_UNDERVOLTAGE} */
+	public default Value<Boolean> getFaultReg1GridUndervoltage() {
+		return this.getFaultReg1GridUndervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_OVERFREQ} */
+	public default BooleanReadChannel getFaultReg1GridOverfreqChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_OVERFREQ);
+	}
+
+	/** @return true if grid overfrequency fault (BIT03). See {@link ChannelId#FAULT_REG1_GRID_OVERFREQ} */
+	public default Value<Boolean> getFaultReg1GridOverfreq() {
+		return this.getFaultReg1GridOverfreqChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_UNDERFREQ} */
+	public default BooleanReadChannel getFaultReg1GridUnderfreqChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_UNDERFREQ);
+	}
+
+	/** @return true if grid underfrequency fault (BIT04). See {@link ChannelId#FAULT_REG1_GRID_UNDERFREQ} */
+	public default Value<Boolean> getFaultReg1GridUnderfreq() {
+		return this.getFaultReg1GridUnderfreqChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_UNBALANCED_GRID} */
+	public default BooleanReadChannel getFaultReg1UnbalancedGridChannel() {
+		return this.channel(ChannelId.FAULT_REG1_UNBALANCED_GRID);
+	}
+
+	/** @return true if unbalanced grid fault (BIT05). See {@link ChannelId#FAULT_REG1_UNBALANCED_GRID} */
+	public default Value<Boolean> getFaultReg1UnbalancedGrid() {
+		return this.getFaultReg1UnbalancedGridChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_FREQ_FLUCTUATION} */
+	public default BooleanReadChannel getFaultReg1GridFreqFluctuationChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_FREQ_FLUCTUATION);
+	}
+
+	/** @return true if grid frequency fluctuation fault (BIT06). See {@link ChannelId#FAULT_REG1_GRID_FREQ_FLUCTUATION} */
+	public default Value<Boolean> getFaultReg1GridFreqFluctuation() {
+		return this.getFaultReg1GridFreqFluctuationChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_REVERSE_CURRENT} */
+	public default BooleanReadChannel getFaultReg1GridReverseCurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_REVERSE_CURRENT);
+	}
+
+	/** @return true if grid reverse current fault (BIT07). See {@link ChannelId#FAULT_REG1_GRID_REVERSE_CURRENT} */
+	public default Value<Boolean> getFaultReg1GridReverseCurrent() {
+		return this.getFaultReg1GridReverseCurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_GRID_CURRENT_TRACKING_ERROR} */
+	public default BooleanReadChannel getFaultReg1GridCurrentTrackingErrorChannel() {
+		return this.channel(ChannelId.FAULT_REG1_GRID_CURRENT_TRACKING_ERROR);
+	}
+
+	/** @return true if grid current tracking error (BIT08). See {@link ChannelId#FAULT_REG1_GRID_CURRENT_TRACKING_ERROR} */
+	public default Value<Boolean> getFaultReg1GridCurrentTrackingError() {
+		return this.getFaultReg1GridCurrentTrackingErrorChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_METER_COM_FAIL} */
+	public default BooleanReadChannel getFaultReg1MeterComFailChannel() {
+		return this.channel(ChannelId.FAULT_REG1_METER_COM_FAIL);
+	}
+
+	/** @return true if meter communication failure (BIT09). See {@link ChannelId#FAULT_REG1_METER_COM_FAIL} */
+	public default Value<Boolean> getFaultReg1MeterComFail() {
+		return this.getFaultReg1MeterComFailChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_FAILSAFE} */
+	public default BooleanReadChannel getFaultReg1FailsafeChannel() {
+		return this.channel(ChannelId.FAULT_REG1_FAILSAFE);
+	}
+
+	/** @return true if failsafe protection triggered (BIT10). See {@link ChannelId#FAULT_REG1_FAILSAFE} */
+	public default Value<Boolean> getFaultReg1Failsafe() {
+		return this.getFaultReg1FailsafeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_METER_SELECT_FAIL} */
+	public default BooleanReadChannel getFaultReg1MeterSelectFailChannel() {
+		return this.channel(ChannelId.FAULT_REG1_METER_SELECT_FAIL);
+	}
+
+	/** @return true if meter select failure (BIT11). See {@link ChannelId#FAULT_REG1_METER_SELECT_FAIL} */
+	public default Value<Boolean> getFaultReg1MeterSelectFail() {
+		return this.getFaultReg1MeterSelectFailChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_EPM_HARD_LIMIT} */
+	public default BooleanReadChannel getFaultReg1EpmHardLimitChannel() {
+		return this.channel(ChannelId.FAULT_REG1_EPM_HARD_LIMIT);
+	}
+
+	/** @return true if EPM hard limit protection (BIT12). See {@link ChannelId#FAULT_REG1_EPM_HARD_LIMIT} */
+	public default Value<Boolean> getFaultReg1EpmHardLimit() {
+		return this.getFaultReg1EpmHardLimitChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_G100_CURRENT_OVER_LIMIT} */
+	public default BooleanReadChannel getFaultReg1G100CurrentOverLimitChannel() {
+		return this.channel(ChannelId.FAULT_REG1_G100_CURRENT_OVER_LIMIT);
+	}
+
+	/** @return true if G100 current over limit (BIT13). See {@link ChannelId#FAULT_REG1_G100_CURRENT_OVER_LIMIT} */
+	public default Value<Boolean> getFaultReg1G100CurrentOverLimit() {
+		return this.getFaultReg1G100CurrentOverLimitChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_RESERVED_14} */
+	public default BooleanReadChannel getFaultReg1Reserved14Channel() {
+		return this.channel(ChannelId.FAULT_REG1_RESERVED_14);
+	}
+
+	/** @return true if reserved fault bit 14 set (BIT14). See {@link ChannelId#FAULT_REG1_RESERVED_14} */
+	public default Value<Boolean> getFaultReg1Reserved14() {
+		return this.getFaultReg1Reserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY} */
+	public default BooleanReadChannel getFaultReg1AbnormalGridPhasePolarityChannel() {
+		return this.channel(ChannelId.FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY);
+	}
+
+	/** @return true if abnormal grid phase polarity (BIT15). See {@link ChannelId#FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY} */
+	public default Value<Boolean> getFaultReg1AbnormalGridPhasePolarity() {
+		return this.getFaultReg1AbnormalGridPhasePolarityChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 2 decoded bits (reg 33117, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_BACKUP_OVERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg2BackupOvervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG2_BACKUP_OVERVOLTAGE);
+	}
+
+	/** @return true if backup port overvoltage fault (BIT00). See {@link ChannelId#FAULT_REG2_BACKUP_OVERVOLTAGE} */
+	public default Value<Boolean> getFaultReg2BackupOvervoltage() {
+		return this.getFaultReg2BackupOvervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_BACKUP_OVERLOAD} */
+	public default BooleanReadChannel getFaultReg2BackupOverloadChannel() {
+		return this.channel(ChannelId.FAULT_REG2_BACKUP_OVERLOAD);
+	}
+
+	/** @return true if backup port overload fault (BIT01). See {@link ChannelId#FAULT_REG2_BACKUP_OVERLOAD} */
+	public default Value<Boolean> getFaultReg2BackupOverload() {
+		return this.getFaultReg2BackupOverloadChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_GRID_BACKUP_OVERLOAD} */
+	public default BooleanReadChannel getFaultReg2GridBackupOverloadChannel() {
+		return this.channel(ChannelId.FAULT_REG2_GRID_BACKUP_OVERLOAD);
+	}
+
+	/** @return true if grid+backup combined overload (BIT02). See {@link ChannelId#FAULT_REG2_GRID_BACKUP_OVERLOAD} */
+	public default Value<Boolean> getFaultReg2GridBackupOverload() {
+		return this.getFaultReg2GridBackupOverloadChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg2OffgridBackupUndervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE);
+	}
+
+	/** @return true if off-grid backup undervoltage fault (BIT03). See {@link ChannelId#FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE} */
+	public default Value<Boolean> getFaultReg2OffgridBackupUndervoltage() {
+		return this.getFaultReg2OffgridBackupUndervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_HUB_PANEL_OV_CURRENT} */
+	public default BooleanReadChannel getFaultReg2HubPanelOvCurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG2_HUB_PANEL_OV_CURRENT);
+	}
+
+	/** @return true if hub panel over-current fault (BIT04). See {@link ChannelId#FAULT_REG2_HUB_PANEL_OV_CURRENT} */
+	public default Value<Boolean> getFaultReg2HubPanelOvCurrent() {
+		return this.getFaultReg2HubPanelOvCurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_05} */
+	public default BooleanReadChannel getFaultReg2Reserved05Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_05);
+	}
+
+	/** @return true if reserved (BIT05). See {@link ChannelId#FAULT_REG2_RESERVED_05} */
+	public default Value<Boolean> getFaultReg2Reserved05() {
+		return this.getFaultReg2Reserved05Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_06} */
+	public default BooleanReadChannel getFaultReg2Reserved06Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_06);
+	}
+
+	/** @return true if reserved (BIT06). See {@link ChannelId#FAULT_REG2_RESERVED_06} */
+	public default Value<Boolean> getFaultReg2Reserved06() {
+		return this.getFaultReg2Reserved06Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_07} */
+	public default BooleanReadChannel getFaultReg2Reserved07Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_07);
+	}
+
+	/** @return true if reserved (BIT07). See {@link ChannelId#FAULT_REG2_RESERVED_07} */
+	public default Value<Boolean> getFaultReg2Reserved07() {
+		return this.getFaultReg2Reserved07Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_08} */
+	public default BooleanReadChannel getFaultReg2Reserved08Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_08);
+	}
+
+	/** @return true if reserved (BIT08). See {@link ChannelId#FAULT_REG2_RESERVED_08} */
+	public default Value<Boolean> getFaultReg2Reserved08() {
+		return this.getFaultReg2Reserved08Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_09} */
+	public default BooleanReadChannel getFaultReg2Reserved09Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_09);
+	}
+
+	/** @return true if reserved (BIT09). See {@link ChannelId#FAULT_REG2_RESERVED_09} */
+	public default Value<Boolean> getFaultReg2Reserved09() {
+		return this.getFaultReg2Reserved09Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_10} */
+	public default BooleanReadChannel getFaultReg2Reserved10Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_10);
+	}
+
+	/** @return true if reserved (BIT10). See {@link ChannelId#FAULT_REG2_RESERVED_10} */
+	public default Value<Boolean> getFaultReg2Reserved10() {
+		return this.getFaultReg2Reserved10Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_11} */
+	public default BooleanReadChannel getFaultReg2Reserved11Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_11);
+	}
+
+	/** @return true if reserved (BIT11). See {@link ChannelId#FAULT_REG2_RESERVED_11} */
+	public default Value<Boolean> getFaultReg2Reserved11() {
+		return this.getFaultReg2Reserved11Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_12} */
+	public default BooleanReadChannel getFaultReg2Reserved12Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_12);
+	}
+
+	/** @return true if reserved (BIT12). See {@link ChannelId#FAULT_REG2_RESERVED_12} */
+	public default Value<Boolean> getFaultReg2Reserved12() {
+		return this.getFaultReg2Reserved12Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_13} */
+	public default BooleanReadChannel getFaultReg2Reserved13Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_13);
+	}
+
+	/** @return true if reserved (BIT13). See {@link ChannelId#FAULT_REG2_RESERVED_13} */
+	public default Value<Boolean> getFaultReg2Reserved13() {
+		return this.getFaultReg2Reserved13Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_14} */
+	public default BooleanReadChannel getFaultReg2Reserved14Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_14);
+	}
+
+	/** @return true if reserved (BIT14). See {@link ChannelId#FAULT_REG2_RESERVED_14} */
+	public default Value<Boolean> getFaultReg2Reserved14() {
+		return this.getFaultReg2Reserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG2_RESERVED_15} */
+	public default BooleanReadChannel getFaultReg2Reserved15Channel() {
+		return this.channel(ChannelId.FAULT_REG2_RESERVED_15);
+	}
+
+	/** @return true if reserved (BIT15). See {@link ChannelId#FAULT_REG2_RESERVED_15} */
+	public default Value<Boolean> getFaultReg2Reserved15() {
+		return this.getFaultReg2Reserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 3 decoded bits (reg 33118, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_BATTERY_NOT_CONNECTED} */
+	public default BooleanReadChannel getFaultReg3BatteryNotConnectedChannel() {
+		return this.channel(ChannelId.FAULT_REG3_BATTERY_NOT_CONNECTED);
+	}
+
+	/** @return true if battery not connected (BIT00). See {@link ChannelId#FAULT_REG3_BATTERY_NOT_CONNECTED} */
+	public default Value<Boolean> getFaultReg3BatteryNotConnected() {
+		return this.getFaultReg3BatteryNotConnectedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_BATTERY_OVERVOLTAGE_CHECK} */
+	public default BooleanReadChannel getFaultReg3BatteryOvervoltageCheckChannel() {
+		return this.channel(ChannelId.FAULT_REG3_BATTERY_OVERVOLTAGE_CHECK);
+	}
+
+	/** @return true if battery overvoltage check fault (BIT01). See {@link ChannelId#FAULT_REG3_BATTERY_OVERVOLTAGE_CHECK} */
+	public default Value<Boolean> getFaultReg3BatteryOvervoltageCheck() {
+		return this.getFaultReg3BatteryOvervoltageCheckChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_BATTERY_UNDERVOLTAGE_CHECK} */
+	public default BooleanReadChannel getFaultReg3BatteryUndervoltageCheckChannel() {
+		return this.channel(ChannelId.FAULT_REG3_BATTERY_UNDERVOLTAGE_CHECK);
+	}
+
+	/** @return true if battery undervoltage check fault (BIT02). See {@link ChannelId#FAULT_REG3_BATTERY_UNDERVOLTAGE_CHECK} */
+	public default Value<Boolean> getFaultReg3BatteryUndervoltageCheck() {
+		return this.getFaultReg3BatteryUndervoltageCheckChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_BATTERY_BMS_ALARM} */
+	public default BooleanReadChannel getFaultReg3BatteryBmsAlarmChannel() {
+		return this.channel(ChannelId.FAULT_REG3_BATTERY_BMS_ALARM);
+	}
+
+	/** @return true if battery BMS alarm (BIT03). See {@link ChannelId#FAULT_REG3_BATTERY_BMS_ALARM} */
+	public default Value<Boolean> getFaultReg3BatteryBmsAlarm() {
+		return this.getFaultReg3BatteryBmsAlarmChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_INCONSISTENT_BATTERY_SELECTION} */
+	public default BooleanReadChannel getFaultReg3InconsistentBatterySelectionChannel() {
+		return this.channel(ChannelId.FAULT_REG3_INCONSISTENT_BATTERY_SELECTION);
+	}
+
+	/** @return true if inconsistent battery type selection (BIT04). See {@link ChannelId#FAULT_REG3_INCONSISTENT_BATTERY_SELECTION} */
+	public default Value<Boolean> getFaultReg3InconsistentBatterySelection() {
+		return this.getFaultReg3InconsistentBatterySelectionChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_LEAD_ACID_TEMP_TOO_LOW} */
+	public default BooleanReadChannel getFaultReg3LeadAcidTempTooLowChannel() {
+		return this.channel(ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_LOW);
+	}
+
+	/** @return true if lead-acid battery temperature too low (BIT05). See {@link ChannelId#FAULT_REG3_LEAD_ACID_TEMP_TOO_LOW} */
+	public default Value<Boolean> getFaultReg3LeadAcidTempTooLow() {
+		return this.getFaultReg3LeadAcidTempTooLowChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_LEAD_ACID_TEMP_TOO_HIGH} */
+	public default BooleanReadChannel getFaultReg3LeadAcidTempTooHighChannel() {
+		return this.channel(ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_HIGH);
+	}
+
+	/** @return true if lead-acid battery temperature too high (BIT06). See {@link ChannelId#FAULT_REG3_LEAD_ACID_TEMP_TOO_HIGH} */
+	public default Value<Boolean> getFaultReg3LeadAcidTempTooHigh() {
+		return this.getFaultReg3LeadAcidTempTooHighChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED} */
+	public default BooleanReadChannel getFaultReg3SecondBatteryNotConnectedChannel() {
+		return this.channel(ChannelId.FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED);
+	}
+
+	/** @return true if second battery not connected (BIT07). See {@link ChannelId#FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED} */
+	public default Value<Boolean> getFaultReg3SecondBatteryNotConnected() {
+		return this.getFaultReg3SecondBatteryNotConnectedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg3SecondBatterySwOvervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE);
+	}
+
+	/** @return true if second battery software overvoltage (BIT08). See {@link ChannelId#FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE} */
+	public default Value<Boolean> getFaultReg3SecondBatterySwOvervoltage() {
+		return this.getFaultReg3SecondBatterySwOvervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg3SecondBatterySwUndervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE);
+	}
+
+	/** @return true if second battery software undervoltage (BIT09). See {@link ChannelId#FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE} */
+	public default Value<Boolean> getFaultReg3SecondBatterySwUndervoltage() {
+		return this.getFaultReg3SecondBatterySwUndervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL} */
+	public default BooleanReadChannel getFaultReg3ParallelBatteryComAbnormalChannel() {
+		return this.channel(ChannelId.FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL);
+	}
+
+	/** @return true if parallel battery communication abnormal (BIT10). See {@link ChannelId#FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL} */
+	public default Value<Boolean> getFaultReg3ParallelBatteryComAbnormal() {
+		return this.getFaultReg3ParallelBatteryComAbnormalChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_LOW_BATTERY_OFFGRID} */
+	public default BooleanReadChannel getFaultReg3LowBatteryOffgridChannel() {
+		return this.channel(ChannelId.FAULT_REG3_LOW_BATTERY_OFFGRID);
+	}
+
+	/** @return true if low battery in off-grid mode (BIT11). See {@link ChannelId#FAULT_REG3_LOW_BATTERY_OFFGRID} */
+	public default Value<Boolean> getFaultReg3LowBatteryOffgrid() {
+		return this.getFaultReg3LowBatteryOffgridChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_RESERVED_12} */
+	public default BooleanReadChannel getFaultReg3Reserved12Channel() {
+		return this.channel(ChannelId.FAULT_REG3_RESERVED_12);
+	}
+
+	/** @return true if reserved (BIT12). See {@link ChannelId#FAULT_REG3_RESERVED_12} */
+	public default Value<Boolean> getFaultReg3Reserved12() {
+		return this.getFaultReg3Reserved12Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_RESERVED_13} */
+	public default BooleanReadChannel getFaultReg3Reserved13Channel() {
+		return this.channel(ChannelId.FAULT_REG3_RESERVED_13);
+	}
+
+	/** @return true if reserved (BIT13). See {@link ChannelId#FAULT_REG3_RESERVED_13} */
+	public default Value<Boolean> getFaultReg3Reserved13() {
+		return this.getFaultReg3Reserved13Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_RESERVED_14} */
+	public default BooleanReadChannel getFaultReg3Reserved14Channel() {
+		return this.channel(ChannelId.FAULT_REG3_RESERVED_14);
+	}
+
+	/** @return true if reserved (BIT14). See {@link ChannelId#FAULT_REG3_RESERVED_14} */
+	public default Value<Boolean> getFaultReg3Reserved14() {
+		return this.getFaultReg3Reserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG3_RESERVED_15} */
+	public default BooleanReadChannel getFaultReg3Reserved15Channel() {
+		return this.channel(ChannelId.FAULT_REG3_RESERVED_15);
+	}
+
+	/** @return true if reserved (BIT15). See {@link ChannelId#FAULT_REG3_RESERVED_15} */
+	public default Value<Boolean> getFaultReg3Reserved15() {
+		return this.getFaultReg3Reserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 4 decoded bits (reg 33119, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_OVERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg4DcOvervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_OVERVOLTAGE);
+	}
+
+	/** @return true if DC overvoltage fault (BIT00). See {@link ChannelId#FAULT_REG4_DC_OVERVOLTAGE} */
+	public default Value<Boolean> getFaultReg4DcOvervoltage() {
+		return this.getFaultReg4DcOvervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_BUS_OVERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg4DcBusOvervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_BUS_OVERVOLTAGE);
+	}
+
+	/** @return true if DC bus overvoltage fault (BIT01). See {@link ChannelId#FAULT_REG4_DC_BUS_OVERVOLTAGE} */
+	public default Value<Boolean> getFaultReg4DcBusOvervoltage() {
+		return this.getFaultReg4DcBusOvervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE} */
+	public default BooleanReadChannel getFaultReg4DcBusUnbalancedVoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE);
+	}
+
+	/** @return true if DC bus unbalanced voltage fault (BIT02). See {@link ChannelId#FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE} */
+	public default Value<Boolean> getFaultReg4DcBusUnbalancedVoltage() {
+		return this.getFaultReg4DcBusUnbalancedVoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_BUS_UNDERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg4DcBusUndervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_BUS_UNDERVOLTAGE);
+	}
+
+	/** @return true if DC bus undervoltage fault (BIT03). See {@link ChannelId#FAULT_REG4_DC_BUS_UNDERVOLTAGE} */
+	public default Value<Boolean> getFaultReg4DcBusUndervoltage() {
+		return this.getFaultReg4DcBusUndervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE_2} */
+	public default BooleanReadChannel getFaultReg4DcBusUnbalancedVoltage2Channel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE_2);
+	}
+
+	/** @return true if DC bus unbalanced voltage 2 fault (BIT04). See {@link ChannelId#FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE_2} */
+	public default Value<Boolean> getFaultReg4DcBusUnbalancedVoltage2() {
+		return this.getFaultReg4DcBusUnbalancedVoltage2Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_OVERCURRENT_A} */
+	public default BooleanReadChannel getFaultReg4DcOvercurrentAChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_OVERCURRENT_A);
+	}
+
+	/** @return true if DC overcurrent on A circuit (BIT05). See {@link ChannelId#FAULT_REG4_DC_OVERCURRENT_A} */
+	public default Value<Boolean> getFaultReg4DcOvercurrentA() {
+		return this.getFaultReg4DcOvercurrentAChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_OVERCURRENT_B} */
+	public default BooleanReadChannel getFaultReg4DcOvercurrentBChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_OVERCURRENT_B);
+	}
+
+	/** @return true if DC overcurrent on B circuit (BIT06). See {@link ChannelId#FAULT_REG4_DC_OVERCURRENT_B} */
+	public default Value<Boolean> getFaultReg4DcOvercurrentB() {
+		return this.getFaultReg4DcOvercurrentBChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DC_INPUT_INTERFERENCE} */
+	public default BooleanReadChannel getFaultReg4DcInputInterferenceChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DC_INPUT_INTERFERENCE);
+	}
+
+	/** @return true if DC input interference fault (BIT07). See {@link ChannelId#FAULT_REG4_DC_INPUT_INTERFERENCE} */
+	public default Value<Boolean> getFaultReg4DcInputInterference() {
+		return this.getFaultReg4DcInputInterferenceChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_GRID_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg4GridOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG4_GRID_OVERCURRENT);
+	}
+
+	/** @return true if grid overcurrent fault (BIT08). See {@link ChannelId#FAULT_REG4_GRID_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg4GridOvercurrent() {
+		return this.getFaultReg4GridOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_IGBT_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg4IgbtOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG4_IGBT_OVERCURRENT);
+	}
+
+	/** @return true if IGBT overcurrent fault (BIT09). See {@link ChannelId#FAULT_REG4_IGBT_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg4IgbtOvercurrent() {
+		return this.getFaultReg4IgbtOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_GRID_INTERFERENCE_02} */
+	public default BooleanReadChannel getFaultReg4GridInterference02Channel() {
+		return this.channel(ChannelId.FAULT_REG4_GRID_INTERFERENCE_02);
+	}
+
+	/** @return true if grid interference 02 fault (BIT10). See {@link ChannelId#FAULT_REG4_GRID_INTERFERENCE_02} */
+	public default Value<Boolean> getFaultReg4GridInterference02() {
+		return this.getFaultReg4GridInterference02Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_AFCI_SELF_CHECK} */
+	public default BooleanReadChannel getFaultReg4AfciSelfCheckChannel() {
+		return this.channel(ChannelId.FAULT_REG4_AFCI_SELF_CHECK);
+	}
+
+	/** @return true if AFCI self-check fault (BIT11). See {@link ChannelId#FAULT_REG4_AFCI_SELF_CHECK} */
+	public default Value<Boolean> getFaultReg4AfciSelfCheck() {
+		return this.getFaultReg4AfciSelfCheckChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_ARC_FAULT_RESERVED} */
+	public default BooleanReadChannel getFaultReg4ArcFaultReservedChannel() {
+		return this.channel(ChannelId.FAULT_REG4_ARC_FAULT_RESERVED);
+	}
+
+	/** @return true if arc fault reserved (BIT12). See {@link ChannelId#FAULT_REG4_ARC_FAULT_RESERVED} */
+	public default Value<Boolean> getFaultReg4ArcFaultReserved() {
+		return this.getFaultReg4ArcFaultReservedChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_GRID_CURRENT_SAMPLING_FAULT} */
+	public default BooleanReadChannel getFaultReg4GridCurrentSamplingFaultChannel() {
+		return this.channel(ChannelId.FAULT_REG4_GRID_CURRENT_SAMPLING_FAULT);
+	}
+
+	/** @return true if grid current sampling fault (BIT13). See {@link ChannelId#FAULT_REG4_GRID_CURRENT_SAMPLING_FAULT} */
+	public default Value<Boolean> getFaultReg4GridCurrentSamplingFault() {
+		return this.getFaultReg4GridCurrentSamplingFaultChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_DSP_SELF_CHECK_ERROR} */
+	public default BooleanReadChannel getFaultReg4DspSelfCheckErrorChannel() {
+		return this.channel(ChannelId.FAULT_REG4_DSP_SELF_CHECK_ERROR);
+	}
+
+	/** @return true if DSP self-check error (BIT14). See {@link ChannelId#FAULT_REG4_DSP_SELF_CHECK_ERROR} */
+	public default Value<Boolean> getFaultReg4DspSelfCheckError() {
+		return this.getFaultReg4DspSelfCheckErrorChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg4BatteryDischargeOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT);
+	}
+
+	/** @return true if battery discharge overcurrent (BIT15). See {@link ChannelId#FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg4BatteryDischargeOvercurrent() {
+		return this.getFaultReg4BatteryDischargeOvercurrentChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 5 decoded bits (reg 33120, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_GRID_INTERFERENCE} */
+	public default BooleanReadChannel getFaultReg5GridInterferenceChannel() {
+		return this.channel(ChannelId.FAULT_REG5_GRID_INTERFERENCE);
+	}
+
+	/** @return true if grid interference protection (BIT00). See {@link ChannelId#FAULT_REG5_GRID_INTERFERENCE} */
+	public default Value<Boolean> getFaultReg5GridInterference() {
+		return this.getFaultReg5GridInterferenceChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_OVER_DC_COMPONENTS} */
+	public default BooleanReadChannel getFaultReg5OverDcComponentsChannel() {
+		return this.channel(ChannelId.FAULT_REG5_OVER_DC_COMPONENTS);
+	}
+
+	/** @return true if over DC components protection (BIT01). See {@link ChannelId#FAULT_REG5_OVER_DC_COMPONENTS} */
+	public default Value<Boolean> getFaultReg5OverDcComponents() {
+		return this.getFaultReg5OverDcComponentsChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_OVER_TEMPERATURE} */
+	public default BooleanReadChannel getFaultReg5OverTemperatureChannel() {
+		return this.channel(ChannelId.FAULT_REG5_OVER_TEMPERATURE);
+	}
+
+	/** @return true if over temperature protection (BIT02). See {@link ChannelId#FAULT_REG5_OVER_TEMPERATURE} */
+	public default Value<Boolean> getFaultReg5OverTemperature() {
+		return this.getFaultReg5OverTemperatureChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_RELAY_CHECK} */
+	public default BooleanReadChannel getFaultReg5RelayCheckChannel() {
+		return this.channel(ChannelId.FAULT_REG5_RELAY_CHECK);
+	}
+
+	/** @return true if relay check protection (BIT03). See {@link ChannelId#FAULT_REG5_RELAY_CHECK} */
+	public default Value<Boolean> getFaultReg5RelayCheck() {
+		return this.getFaultReg5RelayCheckChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_UNDER_TEMPERATURE} */
+	public default BooleanReadChannel getFaultReg5UnderTemperatureChannel() {
+		return this.channel(ChannelId.FAULT_REG5_UNDER_TEMPERATURE);
+	}
+
+	/** @return true if under temperature protection (BIT04). See {@link ChannelId#FAULT_REG5_UNDER_TEMPERATURE} */
+	public default Value<Boolean> getFaultReg5UnderTemperature() {
+		return this.getFaultReg5UnderTemperatureChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_PV_INSULATION_FAULT} */
+	public default BooleanReadChannel getFaultReg5PvInsulationFaultChannel() {
+		return this.channel(ChannelId.FAULT_REG5_PV_INSULATION_FAULT);
+	}
+
+	/** @return true if PV insulation fault (BIT05). See {@link ChannelId#FAULT_REG5_PV_INSULATION_FAULT} */
+	public default Value<Boolean> getFaultReg5PvInsulationFault() {
+		return this.getFaultReg5PvInsulationFaultChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_12V_UNDERVOLTAGE} */
+	public default BooleanReadChannel getFaultReg512vUndervoltageChannel() {
+		return this.channel(ChannelId.FAULT_REG5_12V_UNDERVOLTAGE);
+	}
+
+	/** @return true if 12V auxiliary undervoltage protection (BIT06). See {@link ChannelId#FAULT_REG5_12V_UNDERVOLTAGE} */
+	public default Value<Boolean> getFaultReg512vUndervoltage() {
+		return this.getFaultReg512vUndervoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_LEAK_CURRENT} */
+	public default BooleanReadChannel getFaultReg5LeakCurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG5_LEAK_CURRENT);
+	}
+
+	/** @return true if leakage current protection (BIT07). See {@link ChannelId#FAULT_REG5_LEAK_CURRENT} */
+	public default Value<Boolean> getFaultReg5LeakCurrent() {
+		return this.getFaultReg5LeakCurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_LEAK_CURRENT_SELF_CHECK} */
+	public default BooleanReadChannel getFaultReg5LeakCurrentSelfCheckChannel() {
+		return this.channel(ChannelId.FAULT_REG5_LEAK_CURRENT_SELF_CHECK);
+	}
+
+	/** @return true if leakage current self-check protection (BIT08). See {@link ChannelId#FAULT_REG5_LEAK_CURRENT_SELF_CHECK} */
+	public default Value<Boolean> getFaultReg5LeakCurrentSelfCheck() {
+		return this.getFaultReg5LeakCurrentSelfCheckChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_DSP_INITIAL} */
+	public default BooleanReadChannel getFaultReg5DspInitialChannel() {
+		return this.channel(ChannelId.FAULT_REG5_DSP_INITIAL);
+	}
+
+	/** @return true if DSP initial protection (BIT09). See {@link ChannelId#FAULT_REG5_DSP_INITIAL} */
+	public default Value<Boolean> getFaultReg5DspInitial() {
+		return this.getFaultReg5DspInitialChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_DSP_B} */
+	public default BooleanReadChannel getFaultReg5DspBChannel() {
+		return this.channel(ChannelId.FAULT_REG5_DSP_B);
+	}
+
+	/** @return true if DSP B protection (BIT10). See {@link ChannelId#FAULT_REG5_DSP_B} */
+	public default Value<Boolean> getFaultReg5DspB() {
+		return this.getFaultReg5DspBChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_BATTERY_OVERVOLTAGE_HW} */
+	public default BooleanReadChannel getFaultReg5BatteryOvervoltageHwChannel() {
+		return this.channel(ChannelId.FAULT_REG5_BATTERY_OVERVOLTAGE_HW);
+	}
+
+	/** @return true if battery overvoltage hardware fault (BIT11). See {@link ChannelId#FAULT_REG5_BATTERY_OVERVOLTAGE_HW} */
+	public default Value<Boolean> getFaultReg5BatteryOvervoltageHw() {
+		return this.getFaultReg5BatteryOvervoltageHwChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_LLC_HW_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg5LlcHwOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG5_LLC_HW_OVERCURRENT);
+	}
+
+	/** @return true if LLC hardware overcurrent (BIT12). See {@link ChannelId#FAULT_REG5_LLC_HW_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg5LlcHwOvercurrent() {
+		return this.getFaultReg5LlcHwOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_GRID_TRANSIENT_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg5GridTransientOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG5_GRID_TRANSIENT_OVERCURRENT);
+	}
+
+	/** @return true if grid transient overcurrent (BIT13). See {@link ChannelId#FAULT_REG5_GRID_TRANSIENT_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg5GridTransientOvercurrent() {
+		return this.getFaultReg5GridTransientOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_BATTERY_COM_FAILURE} */
+	public default BooleanReadChannel getFaultReg5BatteryComFailureChannel() {
+		return this.channel(ChannelId.FAULT_REG5_BATTERY_COM_FAILURE);
+	}
+
+	/** @return true if battery communication failure (BIT14). See {@link ChannelId#FAULT_REG5_BATTERY_COM_FAILURE} */
+	public default Value<Boolean> getFaultReg5BatteryComFailure() {
+		return this.getFaultReg5BatteryComFailureChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG5_DSP_COM_FAIL} */
+	public default BooleanReadChannel getFaultReg5DspComFailChannel() {
+		return this.channel(ChannelId.FAULT_REG5_DSP_COM_FAIL);
+	}
+
+	/** @return true if DSP communication failure (BIT15). See {@link ChannelId#FAULT_REG5_DSP_COM_FAIL} */
+	public default Value<Boolean> getFaultReg5DspComFail() {
+		return this.getFaultReg5DspComFailChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 6 decoded bits (reg 33124, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_SLAVE_LOSE_ERR} */
+	public default BooleanReadChannel getFaultReg6SlaveLoseErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_SLAVE_LOSE_ERR);
+	}
+
+	/** @return true if slave sync-signal loss error (BIT00). See {@link ChannelId#FAULT_REG6_SLAVE_LOSE_ERR} */
+	public default Value<Boolean> getFaultReg6SlaveLoseErr() {
+		return this.getFaultReg6SlaveLoseErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_MASTER_LOSE_ERR} */
+	public default BooleanReadChannel getFaultReg6MasterLoseErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_MASTER_LOSE_ERR);
+	}
+
+	/** @return true if master sync-signal loss error (BIT01). See {@link ChannelId#FAULT_REG6_MASTER_LOSE_ERR} */
+	public default Value<Boolean> getFaultReg6MasterLoseErr() {
+		return this.getFaultReg6MasterLoseErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_SLAVE_PRD_ERR} */
+	public default BooleanReadChannel getFaultReg6SlavePrdErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_SLAVE_PRD_ERR);
+	}
+
+	/** @return true if slave sync period error (BIT02). See {@link ChannelId#FAULT_REG6_SLAVE_PRD_ERR} */
+	public default Value<Boolean> getFaultReg6SlavePrdErr() {
+		return this.getFaultReg6SlavePrdErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_MASTER_PRD_ERR} */
+	public default BooleanReadChannel getFaultReg6MasterPrdErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_MASTER_PRD_ERR);
+	}
+
+	/** @return true if master sync period error (BIT03). See {@link ChannelId#FAULT_REG6_MASTER_PRD_ERR} */
+	public default Value<Boolean> getFaultReg6MasterPrdErr() {
+		return this.getFaultReg6MasterPrdErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_ADDR_CONFLICT} */
+	public default BooleanReadChannel getFaultReg6AddrConflictChannel() {
+		return this.channel(ChannelId.FAULT_REG6_ADDR_CONFLICT);
+	}
+
+	/** @return true if address conflict between parallel units (BIT04). See {@link ChannelId#FAULT_REG6_ADDR_CONFLICT} */
+	public default Value<Boolean> getFaultReg6AddrConflict() {
+		return this.getFaultReg6AddrConflictChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_HEARTBEAT_LOSE} */
+	public default BooleanReadChannel getFaultReg6HeartbeatLoseChannel() {
+		return this.channel(ChannelId.FAULT_REG6_HEARTBEAT_LOSE);
+	}
+
+	/** @return true if heartbeat loss (BIT05). See {@link ChannelId#FAULT_REG6_HEARTBEAT_LOSE} */
+	public default Value<Boolean> getFaultReg6HeartbeatLose() {
+		return this.getFaultReg6HeartbeatLoseChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_DCAN_ERR} */
+	public default BooleanReadChannel getFaultReg6DcanErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_DCAN_ERR);
+	}
+
+	/** @return true if DCAN register error (BIT06). See {@link ChannelId#FAULT_REG6_DCAN_ERR} */
+	public default Value<Boolean> getFaultReg6DcanErr() {
+		return this.getFaultReg6DcanErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_MUL_MASTER_ERR} */
+	public default BooleanReadChannel getFaultReg6MulMasterErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_MUL_MASTER_ERR);
+	}
+
+	/** @return true if multiple master units detected (BIT07). See {@link ChannelId#FAULT_REG6_MUL_MASTER_ERR} */
+	public default Value<Boolean> getFaultReg6MulMasterErr() {
+		return this.getFaultReg6MulMasterErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_MODE_CONFLICT} */
+	public default BooleanReadChannel getFaultReg6ModeConflictChannel() {
+		return this.channel(ChannelId.FAULT_REG6_MODE_CONFLICT);
+	}
+
+	/** @return true if mode conflict between parallel units (BIT08). See {@link ChannelId#FAULT_REG6_MODE_CONFLICT} */
+	public default Value<Boolean> getFaultReg6ModeConflict() {
+		return this.getFaultReg6ModeConflictChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_S_PLUG_VOLT_ERR} */
+	public default BooleanReadChannel getFaultReg6SPlugVoltErrChannel() {
+		return this.channel(ChannelId.FAULT_REG6_S_PLUG_VOLT_ERR);
+	}
+
+	/** @return true if S-plug voltage error (BIT09). See {@link ChannelId#FAULT_REG6_S_PLUG_VOLT_ERR} */
+	public default Value<Boolean> getFaultReg6SPlugVoltErr() {
+		return this.getFaultReg6SPlugVoltErrChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_OTHERS_FAULT} */
+	public default BooleanReadChannel getFaultReg6OthersFaultChannel() {
+		return this.channel(ChannelId.FAULT_REG6_OTHERS_FAULT);
+	}
+
+	/** @return true if fault reported by another parallel unit (BIT10). See {@link ChannelId#FAULT_REG6_OTHERS_FAULT} */
+	public default Value<Boolean> getFaultReg6OthersFault() {
+		return this.getFaultReg6OthersFaultChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_CAN_BUS_LOSE} */
+	public default BooleanReadChannel getFaultReg6CanBusLoseChannel() {
+		return this.channel(ChannelId.FAULT_REG6_CAN_BUS_LOSE);
+	}
+
+	/** @return true if CAN bus lost (BIT11). See {@link ChannelId#FAULT_REG6_CAN_BUS_LOSE} */
+	public default Value<Boolean> getFaultReg6CanBusLose() {
+		return this.getFaultReg6CanBusLoseChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_MODEL_MISMATCH} */
+	public default BooleanReadChannel getFaultReg6ModelMismatchChannel() {
+		return this.channel(ChannelId.FAULT_REG6_MODEL_MISMATCH);
+	}
+
+	/** @return true if model mismatch between parallel units (BIT12). See {@link ChannelId#FAULT_REG6_MODEL_MISMATCH} */
+	public default Value<Boolean> getFaultReg6ModelMismatch() {
+		return this.getFaultReg6ModelMismatchChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_3P_CREATE_FAIL} */
+	public default BooleanReadChannel getFaultReg63pCreateFailChannel() {
+		return this.channel(ChannelId.FAULT_REG6_3P_CREATE_FAIL);
+	}
+
+	/** @return true if 3-phase parallel group creation failed (BIT13). See {@link ChannelId#FAULT_REG6_3P_CREATE_FAIL} */
+	public default Value<Boolean> getFaultReg63pCreateFail() {
+		return this.getFaultReg63pCreateFailChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_ACBK_OPEN} */
+	public default BooleanReadChannel getFaultReg6AcbkOpenChannel() {
+		return this.channel(ChannelId.FAULT_REG6_ACBK_OPEN);
+	}
+
+	/** @return true if AC breaker open (BIT14). See {@link ChannelId#FAULT_REG6_ACBK_OPEN} */
+	public default Value<Boolean> getFaultReg6AcbkOpen() {
+		return this.getFaultReg6AcbkOpenChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG6_RESERVED_15} */
+	public default BooleanReadChannel getFaultReg6Reserved15Channel() {
+		return this.channel(ChannelId.FAULT_REG6_RESERVED_15);
+	}
+
+	/** @return true if reserved (BIT15). See {@link ChannelId#FAULT_REG6_RESERVED_15} */
+	public default Value<Boolean> getFaultReg6Reserved15() {
+		return this.getFaultReg6Reserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Fault register 7 decoded bits (reg 33125, Appendix 4)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_REVE_DC} */
+	public default BooleanReadChannel getFaultReg7ReveDcChannel() {
+		return this.channel(ChannelId.FAULT_REG7_REVE_DC);
+	}
+
+	/** @return true if reverse DC polarity fault (BIT00). See {@link ChannelId#FAULT_REG7_REVE_DC} */
+	public default Value<Boolean> getFaultReg7ReveDc() {
+		return this.getFaultReg7ReveDcChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_BATTERY_HW_OVERVOLTAGE_02} */
+	public default BooleanReadChannel getFaultReg7BatteryHwOvervoltage02Channel() {
+		return this.channel(ChannelId.FAULT_REG7_BATTERY_HW_OVERVOLTAGE_02);
+	}
+
+	/** @return true if battery hardware overvoltage 02 (BIT01). See {@link ChannelId#FAULT_REG7_BATTERY_HW_OVERVOLTAGE_02} */
+	public default Value<Boolean> getFaultReg7BatteryHwOvervoltage02() {
+		return this.getFaultReg7BatteryHwOvervoltage02Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_BATTERY_HW_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg7BatteryHwOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG7_BATTERY_HW_OVERCURRENT);
+	}
+
+	/** @return true if battery hardware overcurrent (BIT02). See {@link ChannelId#FAULT_REG7_BATTERY_HW_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg7BatteryHwOvercurrent() {
+		return this.getFaultReg7BatteryHwOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg7BusMidpointHwOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT);
+	}
+
+	/** @return true if bus midpoint hardware overcurrent (BIT03). See {@link ChannelId#FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg7BusMidpointHwOvercurrent() {
+		return this.getFaultReg7BusMidpointHwOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_BATTERY_STARTUP_FAIL} */
+	public default BooleanReadChannel getFaultReg7BatteryStartupFailChannel() {
+		return this.channel(ChannelId.FAULT_REG7_BATTERY_STARTUP_FAIL);
+	}
+
+	/** @return true if battery startup failure (BIT04). See {@link ChannelId#FAULT_REG7_BATTERY_STARTUP_FAIL} */
+	public default Value<Boolean> getFaultReg7BatteryStartupFail() {
+		return this.getFaultReg7BatteryStartupFailChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_DC3_AVG_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg7Dc3AvgOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG7_DC3_AVG_OVERCURRENT);
+	}
+
+	/** @return true if DC string 3 average overcurrent (BIT05). See {@link ChannelId#FAULT_REG7_DC3_AVG_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg7Dc3AvgOvercurrent() {
+		return this.getFaultReg7Dc3AvgOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_DC4_AVG_OVERCURRENT} */
+	public default BooleanReadChannel getFaultReg7Dc4AvgOvercurrentChannel() {
+		return this.channel(ChannelId.FAULT_REG7_DC4_AVG_OVERCURRENT);
+	}
+
+	/** @return true if DC string 4 average overcurrent (BIT06). See {@link ChannelId#FAULT_REG7_DC4_AVG_OVERCURRENT} */
+	public default Value<Boolean> getFaultReg7Dc4AvgOvercurrent() {
+		return this.getFaultReg7Dc4AvgOvercurrentChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_SOFTRUN_TIMEOUT} */
+	public default BooleanReadChannel getFaultReg7SoftrunTimeoutChannel() {
+		return this.channel(ChannelId.FAULT_REG7_SOFTRUN_TIMEOUT);
+	}
+
+	/** @return true if soft-run timeout (BIT07). See {@link ChannelId#FAULT_REG7_SOFTRUN_TIMEOUT} */
+	public default Value<Boolean> getFaultReg7SoftrunTimeout() {
+		return this.getFaultReg7SoftrunTimeoutChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_OFFGRID_TO_GRID_TIMEOUT} */
+	public default BooleanReadChannel getFaultReg7OffgridToGridTimeoutChannel() {
+		return this.channel(ChannelId.FAULT_REG7_OFFGRID_TO_GRID_TIMEOUT);
+	}
+
+	/** @return true if off-grid to on-grid transition timeout (BIT08). See {@link ChannelId#FAULT_REG7_OFFGRID_TO_GRID_TIMEOUT} */
+	public default Value<Boolean> getFaultReg7OffgridToGridTimeout() {
+		return this.getFaultReg7OffgridToGridTimeoutChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_DRM_NOT_CONNECT} */
+	public default BooleanReadChannel getFaultReg7DrmNotConnectChannel() {
+		return this.channel(ChannelId.FAULT_REG7_DRM_NOT_CONNECT);
+	}
+
+	/** @return true if DRM port not connected (BIT09). See {@link ChannelId#FAULT_REG7_DRM_NOT_CONNECT} */
+	public default Value<Boolean> getFaultReg7DrmNotConnect() {
+		return this.getFaultReg7DrmNotConnectChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_RESERVED_10} */
+	public default BooleanReadChannel getFaultReg7Reserved10Channel() {
+		return this.channel(ChannelId.FAULT_REG7_RESERVED_10);
+	}
+
+	/** @return true if reserved (BIT10). See {@link ChannelId#FAULT_REG7_RESERVED_10} */
+	public default Value<Boolean> getFaultReg7Reserved10() {
+		return this.getFaultReg7Reserved10Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_RESERVED_11} */
+	public default BooleanReadChannel getFaultReg7Reserved11Channel() {
+		return this.channel(ChannelId.FAULT_REG7_RESERVED_11);
+	}
+
+	/** @return true if reserved (BIT11). See {@link ChannelId#FAULT_REG7_RESERVED_11} */
+	public default Value<Boolean> getFaultReg7Reserved11() {
+		return this.getFaultReg7Reserved11Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_RESERVED_12} */
+	public default BooleanReadChannel getFaultReg7Reserved12Channel() {
+		return this.channel(ChannelId.FAULT_REG7_RESERVED_12);
+	}
+
+	/** @return true if reserved (BIT12). See {@link ChannelId#FAULT_REG7_RESERVED_12} */
+	public default Value<Boolean> getFaultReg7Reserved12() {
+		return this.getFaultReg7Reserved12Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_RESERVED_13} */
+	public default BooleanReadChannel getFaultReg7Reserved13Channel() {
+		return this.channel(ChannelId.FAULT_REG7_RESERVED_13);
+	}
+
+	/** @return true if reserved (BIT13). See {@link ChannelId#FAULT_REG7_RESERVED_13} */
+	public default Value<Boolean> getFaultReg7Reserved13() {
+		return this.getFaultReg7Reserved13Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_RESERVED_14} */
+	public default BooleanReadChannel getFaultReg7Reserved14Channel() {
+		return this.channel(ChannelId.FAULT_REG7_RESERVED_14);
+	}
+
+	/** @return true if reserved (BIT14). See {@link ChannelId#FAULT_REG7_RESERVED_14} */
+	public default Value<Boolean> getFaultReg7Reserved14() {
+		return this.getFaultReg7Reserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FAULT_REG7_RESERVED_15} */
+	public default BooleanReadChannel getFaultReg7Reserved15Channel() {
+		return this.channel(ChannelId.FAULT_REG7_RESERVED_15);
+	}
+
+	/** @return true if reserved (BIT15). See {@link ChannelId#FAULT_REG7_RESERVED_15} */
+	public default Value<Boolean> getFaultReg7Reserved15() {
+		return this.getFaultReg7Reserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Operating status decoded bits (reg 33121, Appendix 5)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_NORMAL_OPERATION} */
+	public default BooleanReadChannel getOperatingStatNormalOperationChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_NORMAL_OPERATION);
+	}
+
+	/** @return true if inverter in normal operation (BIT00). See {@link ChannelId#OPERATING_STAT_NORMAL_OPERATION} */
+	public default Value<Boolean> getOperatingStatNormalOperation() {
+		return this.getOperatingStatNormalOperationChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_INITIALIZING} */
+	public default BooleanReadChannel getOperatingStatInitializingChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_INITIALIZING);
+	}
+
+	/** @return true if inverter initializing (BIT01). See {@link ChannelId#OPERATING_STAT_INITIALIZING} */
+	public default Value<Boolean> getOperatingStatInitializing() {
+		return this.getOperatingStatInitializingChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_CONTROLLED_OFF} */
+	public default BooleanReadChannel getOperatingStatControlledOffChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_CONTROLLED_OFF);
+	}
+
+	/** @return true if controlled turn-off in progress (BIT02). See {@link ChannelId#OPERATING_STAT_CONTROLLED_OFF} */
+	public default Value<Boolean> getOperatingStatControlledOff() {
+		return this.getOperatingStatControlledOffChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_FAULT_OFF} */
+	public default BooleanReadChannel getOperatingStatFaultOffChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_FAULT_OFF);
+	}
+
+	/** @return true if fault has forced inverter off (BIT03). See {@link ChannelId#OPERATING_STAT_FAULT_OFF} */
+	public default Value<Boolean> getOperatingStatFaultOff() {
+		return this.getOperatingStatFaultOffChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_STANDBY} */
+	public default BooleanReadChannel getOperatingStatStandbyChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_STANDBY);
+	}
+
+	/** @return true if inverter in standby (BIT04). See {@link ChannelId#OPERATING_STAT_STANDBY} */
+	public default Value<Boolean> getOperatingStatStandby() {
+		return this.getOperatingStatStandbyChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_LIMITED_TEMP_FREQ} */
+	public default BooleanReadChannel getOperatingStatLimitedTempFreqChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_LIMITED_TEMP_FREQ);
+	}
+
+	/** @return true if limited operation — temperature or frequency (BIT05). See {@link ChannelId#OPERATING_STAT_LIMITED_TEMP_FREQ} */
+	public default Value<Boolean> getOperatingStatLimitedTempFreq() {
+		return this.getOperatingStatLimitedTempFreqChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_LIMITED_EXTERNAL} */
+	public default BooleanReadChannel getOperatingStatLimitedExternalChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_LIMITED_EXTERNAL);
+	}
+
+	/** @return true if limited operation — external reason (BIT06). See {@link ChannelId#OPERATING_STAT_LIMITED_EXTERNAL} */
+	public default Value<Boolean> getOperatingStatLimitedExternal() {
+		return this.getOperatingStatLimitedExternalChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_BACKUP_OVERLOAD} */
+	public default BooleanReadChannel getOperatingStatBackupOverloadChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_BACKUP_OVERLOAD);
+	}
+
+	/** @return true if backup port overloaded (BIT07). See {@link ChannelId#OPERATING_STAT_BACKUP_OVERLOAD} */
+	public default Value<Boolean> getOperatingStatBackupOverload() {
+		return this.getOperatingStatBackupOverloadChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_LOAD_FAULT} */
+	public default BooleanReadChannel getOperatingStatLoadFaultChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_LOAD_FAULT);
+	}
+
+	/** @return true if load fault detected (BIT08). See {@link ChannelId#OPERATING_STAT_LOAD_FAULT} */
+	public default Value<Boolean> getOperatingStatLoadFault() {
+		return this.getOperatingStatLoadFaultChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_GRID_FAULT} */
+	public default BooleanReadChannel getOperatingStatGridFaultChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_GRID_FAULT);
+	}
+
+	/** @return true if grid fault / abnormal grid (BIT09). See {@link ChannelId#OPERATING_STAT_GRID_FAULT} */
+	public default Value<Boolean> getOperatingStatGridFault() {
+		return this.getOperatingStatGridFaultChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_BATTERY_FAULT} */
+	public default BooleanReadChannel getOperatingStatBatteryFaultChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_BATTERY_FAULT);
+	}
+
+	/** @return true if battery fault (BIT10). See {@link ChannelId#OPERATING_STAT_BATTERY_FAULT} */
+	public default Value<Boolean> getOperatingStatBatteryFault() {
+		return this.getOperatingStatBatteryFaultChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_RESERVED_11} */
+	public default BooleanReadChannel getOperatingStatReserved11Channel() {
+		return this.channel(ChannelId.OPERATING_STAT_RESERVED_11);
+	}
+
+	/** @return true if reserved (BIT11). See {@link ChannelId#OPERATING_STAT_RESERVED_11} */
+	public default Value<Boolean> getOperatingStatReserved11() {
+		return this.getOperatingStatReserved11Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_GRID_SURGE_WARN} */
+	public default BooleanReadChannel getOperatingStatGridSurgeWarnChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_GRID_SURGE_WARN);
+	}
+
+	/** @return true if grid surge warning (BIT12). See {@link ChannelId#OPERATING_STAT_GRID_SURGE_WARN} */
+	public default Value<Boolean> getOperatingStatGridSurgeWarn() {
+		return this.getOperatingStatGridSurgeWarnChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_FAN_FAULT_WARN} */
+	public default BooleanReadChannel getOperatingStatFanFaultWarnChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_FAN_FAULT_WARN);
+	}
+
+	/** @return true if fan fault warning (BIT13). See {@link ChannelId#OPERATING_STAT_FAN_FAULT_WARN} */
+	public default Value<Boolean> getOperatingStatFanFaultWarn() {
+		return this.getOperatingStatFanFaultWarnChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_EXTERNAL_FAN_FAIL} */
+	public default BooleanReadChannel getOperatingStatExternalFanFailChannel() {
+		return this.channel(ChannelId.OPERATING_STAT_EXTERNAL_FAN_FAIL);
+	}
+
+	/** @return true if external fan failure (BIT14). See {@link ChannelId#OPERATING_STAT_EXTERNAL_FAN_FAIL} */
+	public default Value<Boolean> getOperatingStatExternalFanFail() {
+		return this.getOperatingStatExternalFanFailChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STAT_RESERVED_15} */
+	public default BooleanReadChannel getOperatingStatReserved15Channel() {
+		return this.channel(ChannelId.OPERATING_STAT_RESERVED_15);
+	}
+
+	/** @return true if reserved (BIT15). See {@link ChannelId#OPERATING_STAT_RESERVED_15} */
+	public default Value<Boolean> getOperatingStatReserved15() {
+		return this.getOperatingStatReserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Operating mode (reg 33122, Appendix 8)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#OPERATING_MODE} */
+	public default IntegerReadChannel getOperatingModeChannel() {
+		return this.channel(ChannelId.OPERATING_MODE);
+	}
+
+	/** @return operating mode one-hot raw bitmask [reg 33122]. See {@link ChannelId#OPERATING_MODE} */
+	public default Value<Integer> getOperatingMode() {
+		return this.getOperatingModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_MODE_DECODE} */
+	public default Channel<Appendix8> getOperatingModeDecodeChannel() {
+		return this.channel(ChannelId.OPERATING_MODE_DECODE);
+	}
+
+	/** @return decoded operating mode (Appendix 8 enum). See {@link ChannelId#OPERATING_MODE_DECODE} */
+	public default Appendix8 getOperatingModeDecode() {
+		return this.getOperatingModeDecodeChannel().value().asEnum();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Working mode running status decoded bits (reg 33123)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#WMODE_VOLT_WATT} */
+	public default BooleanReadChannel getWmodeVoltWattChannel() {
+		return this.channel(ChannelId.WMODE_VOLT_WATT);
+	}
+
+	/** @return true if Volt-watt mode running (BIT00). See {@link ChannelId#WMODE_VOLT_WATT} */
+	public default Value<Boolean> getWmodeVoltWatt() {
+		return this.getWmodeVoltWattChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#WMODE_VOLT_VAR} */
+	public default BooleanReadChannel getWmodeVoltVarChannel() {
+		return this.channel(ChannelId.WMODE_VOLT_VAR);
+	}
+
+	/** @return true if Volt-var mode running (BIT01). See {@link ChannelId#WMODE_VOLT_VAR} */
+	public default Value<Boolean> getWmodeVoltVar() {
+		return this.getWmodeVoltVarChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#WMODE_FIXED_PF} */
+	public default BooleanReadChannel getWmodeFixedPfChannel() {
+		return this.channel(ChannelId.WMODE_FIXED_PF);
+	}
+
+	/** @return true if fixed power factor mode running (BIT02). See {@link ChannelId#WMODE_FIXED_PF} */
+	public default Value<Boolean> getWmodeFixedPf() {
+		return this.getWmodeFixedPfChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#WMODE_FIX_REACTIVE} */
+	public default BooleanReadChannel getWmodeFixReactiveChannel() {
+		return this.channel(ChannelId.WMODE_FIX_REACTIVE);
+	}
+
+	/** @return true if fixed reactive power mode running (BIT03). See {@link ChannelId#WMODE_FIX_REACTIVE} */
+	public default Value<Boolean> getWmodeFixReactive() {
+		return this.getWmodeFixReactiveChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#WMODE_POWER_PF} */
+	public default BooleanReadChannel getWmodePowerPfChannel() {
+		return this.channel(ChannelId.WMODE_POWER_PF);
+	}
+
+	/** @return true if Power-PF mode running (BIT04). See {@link ChannelId#WMODE_POWER_PF} */
+	public default Value<Boolean> getWmodePowerPf() {
+		return this.getWmodePowerPfChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#WMODE_POWER_Q} */
+	public default BooleanReadChannel getWmodePowerQChannel() {
+		return this.channel(ChannelId.WMODE_POWER_Q);
+	}
+
+	/** @return true if Power-Q mode running (BIT05). See {@link ChannelId#WMODE_POWER_Q} */
+	public default Value<Boolean> getWmodePowerQ() {
+		return this.getWmodePowerQChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Storage control decoded bits (reg 33132, Appendix 6)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_SELF_USE_MODE} */
+	public default BooleanReadChannel getStorageCtrlSelfUseModeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_SELF_USE_MODE);
+	}
+
+	/** @return true if self-use mode active (BIT00). See {@link ChannelId#STORAGE_CTRL_SELF_USE_MODE} */
+	public default Value<Boolean> getStorageCtrlSelfUseMode() {
+		return this.getStorageCtrlSelfUseModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_TIME_OF_USE_MODE} */
+	public default BooleanReadChannel getStorageCtrlTimeOfUseModeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_TIME_OF_USE_MODE);
+	}
+
+	/** @return true if time-of-use mode active (BIT01). See {@link ChannelId#STORAGE_CTRL_TIME_OF_USE_MODE} */
+	public default Value<Boolean> getStorageCtrlTimeOfUseMode() {
+		return this.getStorageCtrlTimeOfUseModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_OFFGRID_MODE} */
+	public default BooleanReadChannel getStorageCtrlOffgridModeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_OFFGRID_MODE);
+	}
+
+	/** @return true if off-grid mode active (BIT02). See {@link ChannelId#STORAGE_CTRL_OFFGRID_MODE} */
+	public default Value<Boolean> getStorageCtrlOffgridMode() {
+		return this.getStorageCtrlOffgridModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_BATT_WAKEUP} */
+	public default BooleanReadChannel getStorageCtrlBattWakeupChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_BATT_WAKEUP);
+	}
+
+	/** @return true if battery wakeup switch active (BIT03). See {@link ChannelId#STORAGE_CTRL_BATT_WAKEUP} */
+	public default Value<Boolean> getStorageCtrlBattWakeup() {
+		return this.getStorageCtrlBattWakeupChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_RESERVE_BATT_MODE} */
+	public default BooleanReadChannel getStorageCtrlReserveBattModeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_RESERVE_BATT_MODE);
+	}
+
+	/** @return true if reserve battery mode active (BIT04). See {@link ChannelId#STORAGE_CTRL_RESERVE_BATT_MODE} */
+	public default Value<Boolean> getStorageCtrlReserveBattMode() {
+		return this.getStorageCtrlReserveBattModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_ALLOW_GRID_CHARGE} */
+	public default BooleanReadChannel getStorageCtrlAllowGridChargeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_ALLOW_GRID_CHARGE);
+	}
+
+	/** @return true if grid-to-battery charging allowed (BIT05). See {@link ChannelId#STORAGE_CTRL_ALLOW_GRID_CHARGE} */
+	public default Value<Boolean> getStorageCtrlAllowGridCharge() {
+		return this.getStorageCtrlAllowGridChargeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_FEED_IN_PRIORITY} */
+	public default BooleanReadChannel getStorageCtrlFeedInPriorityChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_FEED_IN_PRIORITY);
+	}
+
+	/** @return true if feed-in priority mode active (BIT06). See {@link ChannelId#STORAGE_CTRL_FEED_IN_PRIORITY} */
+	public default Value<Boolean> getStorageCtrlFeedInPriority() {
+		return this.getStorageCtrlFeedInPriorityChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_BATT_OVC} */
+	public default BooleanReadChannel getStorageCtrlBattOvcChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_BATT_OVC);
+	}
+
+	/** @return true if battery OVC function active (BIT07). See {@link ChannelId#STORAGE_CTRL_BATT_OVC} */
+	public default Value<Boolean> getStorageCtrlBattOvc() {
+		return this.getStorageCtrlBattOvcChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING} */
+	public default BooleanReadChannel getStorageCtrlForceChargePeakshavingChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING);
+	}
+
+	/** @return true if force charge / peak shaving active (BIT08). See {@link ChannelId#STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING} */
+	public default Value<Boolean> getStorageCtrlForceChargePeakshaving() {
+		return this.getStorageCtrlForceChargePeakshavingChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_BATT_CURRENT_CORRECTION} */
+	public default BooleanReadChannel getStorageCtrlBattCurrentCorrectionChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_BATT_CURRENT_CORRECTION);
+	}
+
+	/** @return true if battery current correction enabled (BIT09). See {@link ChannelId#STORAGE_CTRL_BATT_CURRENT_CORRECTION} */
+	public default Value<Boolean> getStorageCtrlBattCurrentCorrection() {
+		return this.getStorageCtrlBattCurrentCorrectionChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_BATT_HEALING_MODE} */
+	public default BooleanReadChannel getStorageCtrlBattHealingModeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_BATT_HEALING_MODE);
+	}
+
+	/** @return true if battery healing mode active (BIT10). See {@link ChannelId#STORAGE_CTRL_BATT_HEALING_MODE} */
+	public default Value<Boolean> getStorageCtrlBattHealingMode() {
+		return this.getStorageCtrlBattHealingModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_PEAK_SHAVING_MODE} */
+	public default BooleanReadChannel getStorageCtrlPeakShavingModeChannel() {
+		return this.channel(ChannelId.STORAGE_CTRL_PEAK_SHAVING_MODE);
+	}
+
+	/** @return true if peak-shaving mode active (BIT11). See {@link ChannelId#STORAGE_CTRL_PEAK_SHAVING_MODE} */
+	public default Value<Boolean> getStorageCtrlPeakShavingMode() {
+		return this.getStorageCtrlPeakShavingModeChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_RESERVED_12} */
+	public default BooleanReadChannel getStorageCtrlReserved12Channel() {
+		return this.channel(ChannelId.STORAGE_CTRL_RESERVED_12);
+	}
+
+	/** @return true if reserved (BIT12). See {@link ChannelId#STORAGE_CTRL_RESERVED_12} */
+	public default Value<Boolean> getStorageCtrlReserved12() {
+		return this.getStorageCtrlReserved12Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_RESERVED_13} */
+	public default BooleanReadChannel getStorageCtrlReserved13Channel() {
+		return this.channel(ChannelId.STORAGE_CTRL_RESERVED_13);
+	}
+
+	/** @return true if reserved (BIT13). See {@link ChannelId#STORAGE_CTRL_RESERVED_13} */
+	public default Value<Boolean> getStorageCtrlReserved13() {
+		return this.getStorageCtrlReserved13Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_RESERVED_14} */
+	public default BooleanReadChannel getStorageCtrlReserved14Channel() {
+		return this.channel(ChannelId.STORAGE_CTRL_RESERVED_14);
+	}
+
+	/** @return true if reserved (BIT14). See {@link ChannelId#STORAGE_CTRL_RESERVED_14} */
+	public default Value<Boolean> getStorageCtrlReserved14() {
+		return this.getStorageCtrlReserved14Channel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CTRL_RESERVED_15} */
+	public default BooleanReadChannel getStorageCtrlReserved15Channel() {
+		return this.channel(ChannelId.STORAGE_CTRL_RESERVED_15);
+	}
+
+	/** @return true if reserved (BIT15). See {@link ChannelId#STORAGE_CTRL_RESERVED_15} */
+	public default Value<Boolean> getStorageCtrlReserved15() {
+		return this.getStorageCtrlReserved15Channel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Legacy / raw-word channels (superseded by per-bit decoded sub-channels)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#STARTER_BATTERY_VOLTAGE} */
+	public default IntegerReadChannel getStarterBatteryVoltageChannel() {
+		return this.channel(ChannelId.STARTER_BATTERY_VOLTAGE);
+	}
+
+	/** @return starter battery voltage [V] — register not yet identified. See {@link ChannelId#STARTER_BATTERY_VOLTAGE} */
+	public default Value<Integer> getStarterBatteryVoltage() {
+		return this.getStarterBatteryVoltageChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INVERTED_RATED_APPARENT_POWER} */
+	public default IntegerReadChannel getInvertedRatedApparentPowerChannel() {
+		return this.channel(ChannelId.INVERTED_RATED_APPARENT_POWER);
+	}
+
+	/** @return inverter rated apparent power [VA]. See {@link ChannelId#INVERTED_RATED_APPARENT_POWER} */
+	public default Value<Integer> getInvertedRatedApparentPower() {
+		return this.getInvertedRatedApparentPowerChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#FUNCTION_STATUS} */
+	public default IntegerReadChannel getFunctionStatusChannel() {
+		return this.channel(ChannelId.FUNCTION_STATUS);
+	}
+
+	/** @return function status raw word [reg 33097] — use FUNCTION_STAT_* instead. See {@link ChannelId#FUNCTION_STATUS} */
+	public default Value<Integer> getFunctionStatus() {
+		return this.getFunctionStatusChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#INVERTER_INITIAL_SETTING_STATE} */
+	public default IntegerReadChannel getInverterInitialSettingStateChannel() {
+		return this.channel(ChannelId.INVERTER_INITIAL_SETTING_STATE);
+	}
+
+	/** @return initial setting state raw word [reg 33112] — use INIT_STATE_* instead. See {@link ChannelId#INVERTER_INITIAL_SETTING_STATE} */
+	public default Value<Integer> getInverterInitialSettingState() {
+		return this.getInverterInitialSettingStateChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#BATCH_UPGRADE_BOWL} */
+	public default IntegerReadChannel getBatchUpgradeBowlChannel() {
+		return this.channel(ChannelId.BATCH_UPGRADE_BOWL);
+	}
+
+	/** @return batch upgrade support raw word [reg 33113] — use BATCH_UPGRADE_* instead. See {@link ChannelId#BATCH_UPGRADE_BOWL} */
+	public default Value<Integer> getBatchUpgradeBowl() {
+		return this.getBatchUpgradeBowlChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#SETTING_FLAG_BIT} */
+	public default IntegerReadChannel getSettingFlagBitChannel() {
+		return this.channel(ChannelId.SETTING_FLAG_BIT);
+	}
+
+	/** @return setting flag raw word [reg 33115] — use SETTING_FLAG_* instead. See {@link ChannelId#SETTING_FLAG_BIT} */
+	public default Value<Integer> getSettingFlagBit() {
+		return this.getSettingFlagBitChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#OPERATING_STATUS} */
+	public default IntegerReadChannel getOperatingStatusChannel() {
+		return this.channel(ChannelId.OPERATING_STATUS);
+	}
+
+	/** @return operating status raw word [reg 33121] — use OPERATING_STAT_* instead. See {@link ChannelId#OPERATING_STATUS} */
+	public default Value<Integer> getOperatingStatus() {
+		return this.getOperatingStatusChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#WORKING_MODE_RUNNING_STATUS} */
+	public default IntegerReadChannel getWorkingModeRunningStatusChannel() {
+		return this.channel(ChannelId.WORKING_MODE_RUNNING_STATUS);
+	}
+
+	/** @return working mode running status raw word [reg 33123] — use WMODE_* instead. See {@link ChannelId#WORKING_MODE_RUNNING_STATUS} */
+	public default Value<Integer> getWorkingModeRunningStatus() {
+		return this.getWorkingModeRunningStatusChannel().value();
+	}
+
+	/** @return Channel for {@link ChannelId#STORAGE_CONTROL_SWITCHING_VALUE} */
+	public default IntegerReadChannel getStorageControlSwitchingValueChannel() {
+		return this.channel(ChannelId.STORAGE_CONTROL_SWITCHING_VALUE);
+	}
+
+	/** @return storage control switching value raw word [reg 33132] — use STORAGE_CTRL_* instead. See {@link ChannelId#STORAGE_CONTROL_SWITCHING_VALUE} */
+	public default Value<Integer> getStorageControlSwitchingValue() {
+		return this.getStorageControlSwitchingValueChannel().value();
+	}
+
+	// -----------------------------------------------------------------------
+	// Accessor methods – Unconfirmed register channels (register address to be verified)
+	// -----------------------------------------------------------------------
+
+	/** @return Channel for {@link ChannelId#SET_REMOTE_CONTROL_AC_GRID_PORT_POWER} */
+	public default IntegerWriteChannel getSetRemoteControlAcGridPortPowerChannel() {
+		return this.channel(ChannelId.SET_REMOTE_CONTROL_AC_GRID_PORT_POWER);
+	}
+
+	/** @return Channel for {@link ChannelId#REMOTE_CONTROL_AC_GRID_PORT_POWER} */
+	public default IntegerWriteChannel getRemoteControlAcGridPortPowerChannel() {
+		return this.channel(ChannelId.REMOTE_CONTROL_AC_GRID_PORT_POWER);
+	}
+
 
 	//
 	/**
@@ -1755,9 +4239,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	public void removeCharger(PytesDcCharger charger);
 
 	/**
-	 * returns ModbusBrdigeId from config.
+	 * returns ModbusBridgeId from config.
 	 *
-	 * @return ModbusBrdigeId from config
+	 * @return ModbusBridgeId from config
 	 */
 	public String getModbusBridgeId();
 

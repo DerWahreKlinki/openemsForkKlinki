@@ -1,0 +1,225 @@
+package io.openems.edge.pytes.ess;
+
+import org.slf4j.Logger;
+
+import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import io.openems.edge.pytes.battery.PytesBattery;
+import io.openems.edge.pytes.dccharger.PytesDcCharger;
+import io.openems.edge.pytes.enums.EnableDisable;
+import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
+import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
+import io.openems.edge.pytes.enums.WorkState;
+
+public class ApplyPowerHandler {
+
+	// === Dependencies ===
+	private final PytesJs3Impl ess;
+	private final PytesBattery battery;
+	private final PytesDcCharger dcCharger;
+	private final Logger log;
+
+	// === Smoothing & state ===
+	private final AverageCalculator targetBatteryPowerAvg = new AverageCalculator(5);
+
+	public ApplyPowerHandler(PytesJs3Impl ess, PytesBattery battery, PytesDcCharger dcCharger) {
+		this.ess = ess;
+		this.battery = battery;
+		this.dcCharger = dcCharger;
+		this.log = ess.getLogger();
+	}
+
+	public void apply(int activePowerTarget, int reactivePower, int configuredMaxApparentPower, RemoteDispatchRealtimeControlSwitch essSetpoint)
+			throws OpenemsNamedException {
+
+		// --- Guards ---
+		if (!ess.isManaged()) {
+			log.debug("[ApplyPower] ReadOnly Mode enabled. Skip ApplyPower");
+			return;
+		}
+		
+		if (ess.getWorkState() != WorkState.NORMAL) {
+			log.warn("ESS not in normal mode. Skipping ApplyPower");
+			return;
+		}
+/*		
+		if (ess.internalControlMode()) {
+			this.writeInternalControlFlags();
+			log.debug("[ApplyPower] Internal Control Mode enabled.Setting grid feed-in to 0. Skip ApplyPower");
+			return;
+		}		
+*/
+		/*
+		 * ToDo if (ess.getWorkState() != WorkState.NORMAL) {
+		 * log.error("ESS not in normal state. Skipping ApplyPower"); return; }
+		 *
+		 */
+		Integer maxAllowedChargePower = this.ess.getAllowedChargePower().get();
+		Integer maxAllowedDischargePower = this.ess.getAllowedDischargePower().get(); // includes PV
+		int maxAllowedBatteryDischargePower = 0;
+		int sign = 1;
+
+		Integer maxApparentPower = this.ess.getMaxApparentPower().get();
+
+		int pvPower = this.dcCharger != null ? this.dcCharger.getActualPower().orElse(0) : 0; // Maybe no pv connected
+
+		Integer essActivePower = this.ess.getActivePower().get();
+		Integer essDcDischargePower = this.ess.getDcDischargePower().get();
+
+
+		Integer batteryPower = this.battery.getDcDischargePower().get();
+
+		int batteryPowerTarget = 0;
+
+		if (maxApparentPower == null) {
+			log.error("[ApplyPower] maxApparentPower is null. Skipping ApplyPower");
+			return;
+		}
+
+		if (maxAllowedChargePower == null) {
+			log.error("[ApplyPower] maxAllowedChargePower is null. Skipping ApplyPower");
+			return;
+		}
+
+		if (maxAllowedDischargePower == null) {
+			log.error("[ApplyPower] maxAllowedDischargePower is null. Skipping ApplyPower");
+			return;
+		}
+
+		if (batteryPower == null) {
+			log.error("[ApplyPower] batteryPower is null. Skipping ApplyPower");
+			return;
+		}
+
+		if (essActivePower == null) {
+			log.error("[ApplyPower] essActivePower is null. Skipping ApplyPower");
+			return;
+		}
+
+		if (essDcDischargePower == null) {
+			log.error("[ApplyPower] essDcDischargePower is null. Skipping ApplyPower");
+			return;
+		}
+
+
+		// guards for AC
+		maxApparentPower = Math.min(maxApparentPower, configuredMaxApparentPower);
+		if (activePowerTarget > 0) { // discharging
+			activePowerTarget = Math.min(activePowerTarget, maxApparentPower);
+		} else {
+			activePowerTarget = Math.max(activePowerTarget, -maxApparentPower);
+		}
+
+		if (essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL) {
+			// guards for DC
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);
+			batteryPowerTarget = activePowerTarget - pvPower;
+			sign = -1; // negative setpoint at batteryControl setpoint
+		} else {
+			batteryPowerTarget = activePowerTarget; // Testing
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);		// Testing
+		}
+
+
+
+		// DC-side clamp
+		if (batteryPowerTarget > 0) { // discharge
+			batteryPowerTarget = Math.min(batteryPowerTarget, maxAllowedBatteryDischargePower);
+		} else { // charge
+			batteryPowerTarget = Math.max(batteryPowerTarget, maxAllowedChargePower); // already negative
+		}
+
+		this.targetBatteryPowerAvg.addValue(batteryPowerTarget);
+
+		// int averageBatteryTargetPower = this.targetBatteryPowerAvg.getAverage();
+
+		int averageBatteryTargetPower = batteryPowerTarget; // Testing
+		
+		batteryPowerTarget = (int) Math.round(averageBatteryTargetPower / 10.0); // Applied value has to be diveded by
+																					// 10
+
+		this.writeExternalControlFlags();
+		/*
+		 * Definition is determined by44105 control switch 1->10W Default : 0W
+		 * • When 44105=1, this register’s value is not effective
+		 * • When 44105=2, Negative value is battery discharge power, positive value is battery charge power.
+		 * Range: Negative maxcharge/discharge power* parallel unit number ~Positive max
+		 * charge/discharge power* parallelunit number
+		 * • When 44105=3, Negative value is Import power, positive value is Export power. Range:Negative inverter max
+		 * output power* parallelunit number ~ Positiveinverter max outputpower*
+		 * parallel unit number
+		 * • When 44105=4, Negative value is Import power, positive
+		 * value is Export power. Range:Negative inverter max output power* parallelunit
+		 * number ~ Positiveinverter max outputpower* parallel unit number
+		 *
+		 *
+		 */
+
+		//batteryPowerTarget = batteryPowerTarget * -1;
+		batteryPowerTarget = batteryPowerTarget * sign; // Testing
+
+		//batteryPowerTarget = 50;
+		
+		//ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.GRID_POINT_CONTROL); // Battery Charge/Discharge Control
+		ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); 
+		ess.setRemoteDispatchRealtimeControlPower(batteryPowerTarget);
+		
+		this.ess.debugLog(""
+				+ "\n[ApplyPower] TargetPower: " + activePowerTarget
+				+ "\n[ApplyPower] EssPower: " + essActivePower
+				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower
+				+ "\n[ApplyPower] ESS DC DischargePower: " + essDcDischargePower
+				+ "\n[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget
+				+ "\n[ApplyPower]   PV Power " + pvPower );		
+
+
+	}
+
+	// ========================= Helper =========================
+
+	/**
+	 * ToDo: Read before Write
+	 */
+	private void writeExternalControlFlags() throws OpenemsNamedException {
+		//ess.setRemoteControlMode(0);		
+		
+		/*
+		if (ess.getRemoteDispatchSwitch() != EnableDisable.ENABLE) { // 44100
+			ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);	
+		}
+		
+		
+		if (ess.getRemoteDispatchFailsafeSetting().get() != 5) {
+			ess.setRemoteDispatchFailsafeSetting(5); // in Minutes	
+		}
+		
+		if (ess.getRemoteDispatchSystemLimitSwitch() != RemoteDispatchSystemLimitSwitch.DISABLE ) {
+			ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0			
+		}
+		
+		if (ess.getRemoteDispatchRealtimeControlSwitch() != RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL ) {
+			ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL ); // Battery Charge/Discharge Control
+		}
+
+		if (ess.getPvShutdownSwitch() != EnableDisable.DISABLE || ess.getDoControl()  != EnableDisable.DISABLE || ess.getGridChargeAllowed() != EnableDisable.ENABLE || ess.getOffGridBatteryStandby() != EnableDisable.DISABLE ) {
+			// ToDo: make configurable
+			ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby			
+		}
+		 */
+		
+		//ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); 
+		ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);	
+		ess.setRemoteDispatchFailsafeSetting(5); // in Minutes
+		ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0
+		// ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL ); // 44105
+		
+			
+
+	}
+	
+	private void writeInternalControlFlags() throws OpenemsNamedException {
+		ess.setRemoteDispatchSwitch(EnableDisable.ENABLE); // reg 44100
+		ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.AC_GRID_POINT_CONTROL); // 44105 
+		ess.setRemoteDispatchRealtimeControlPower(0);
+	}
+
+}

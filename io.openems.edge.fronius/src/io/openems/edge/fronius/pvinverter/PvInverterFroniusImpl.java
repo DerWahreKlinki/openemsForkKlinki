@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.osgi.service.cm.ConfigurationAdmin;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -62,12 +62,14 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 		property = { //
 				"type=PRODUCTION" //
 		})
+
+
 @EventTopics({ //
-		EdgeEventConstants.TOPIC_CYCLE_BEFORE_WRITE //
-// EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE, //
-// EdgeEventConstants.TOPIC_CYCLE_EXECUTE_WRITE //
+    EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE, //
+    EdgeEventConstants.TOPIC_CYCLE_BEFORE_WRITE //
 })
 
+@GenerateTargetsFromReferences("modbus")
 public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 		implements PvInverterFronius, SunSpecPvInverter, ManagedSymmetricPvInverter, ElectricityMeter, ModbusComponent,
 		OpenemsComponent, EventHandler, ModbusSlave, TimedataProvider {
@@ -86,8 +88,7 @@ public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 
 	private final Logger log = LoggerFactory.getLogger(PvInverterFroniusImpl.class);
 
-	@Reference
-	private ConfigurationAdmin cm;
+
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	private volatile Timedata timedata = null;
@@ -98,9 +99,14 @@ public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 
 	private int numberOfModules = 0;
 
-	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
+	@Override
+	@Reference(//
+	        policy = ReferencePolicy.STATIC, //
+	        policyOption = ReferencePolicyOption.GREEDY, //
+	        cardinality = ReferenceCardinality.MANDATORY, //
+	        target = "(&(id=${config.modbus_id})(enabled=true))")
 	protected void setModbus(BridgeModbus modbus) {
-		super.setModbus(modbus);
+	    super.setModbus(modbus);
 	}
 
 	public PvInverterFroniusImpl() {
@@ -117,21 +123,16 @@ public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
+	    this.config = config;
 
-		this.config = config;
-		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.readOnly(),
-				config.modbusUnitId(), this.cm, "Modbus", config.modbus_id(), READ_FROM_MODBUS_BLOCK,
-				SingleOrAllPhase.ALL)) {
-			return;
-		}
+	    super.activate(context, config.id(), config.alias(), config.enabled(), config.readOnly(),
+	            config.modbusUnitId(), READ_FROM_MODBUS_BLOCK, SingleOrAllPhase.ALL);
 
-		// No need fetching number of modules if 0 is configured
-		if (this.config.modbusBaseAddress() > 0) {
-			this.addInitialModbusTask(this.getModbusProtocol());
-		}
-
+	    // No need fetching number of modules if 0 is configured
+	    if (this.config.modbusBaseAddress() > 0) {
+	        this.addInitialModbusTask(this.getModbusProtocol());
+	    }
 	}
-
 	private int BASE_ADDRESS;
 	private int MODULE_START_ADDRESS;
 	private static final int REGISTER_OFFSET = 20; // Number of registers per module

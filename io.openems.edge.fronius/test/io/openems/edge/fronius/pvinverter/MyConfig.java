@@ -10,7 +10,9 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private boolean readOnly;
 		private String modbusId = null;
 		private int modbusUnitId;
-
+		private boolean debugMode;
+		private int modbusBaseAddress;
+		
 		private Builder() {
 		}
 
@@ -33,7 +35,17 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			this.modbusUnitId = modbusUnitId;
 			return this;
 		}
+		
+		public Builder debugMode(boolean debugMode) {
+			this.debugMode = debugMode;
+			return this;
+		}		
 
+		public Builder modbusBaseAddress(int modbusBaseAddress) {
+			this.modbusBaseAddress = modbusBaseAddress;
+			return this;
+		}		
+		
 		public MyConfig build() {
 			return new MyConfig(this);
 		}
@@ -72,13 +84,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	@Override
 	public boolean debugMode() {
-		// TODO Auto-generated method stub
-		return false;
+		return this.builder.debugMode;
 	}
 
 	@Override
 	public int modbusBaseAddress() {
-		// TODO Auto-generated method stub
-		return 0;
+		return this.builder.modbusBaseAddress;
 	}
 }

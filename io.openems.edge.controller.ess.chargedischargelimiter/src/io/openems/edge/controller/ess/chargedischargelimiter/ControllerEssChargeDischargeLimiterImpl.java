@@ -80,7 +80,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private int energyBetweenBalancingCycles = 0;
 	private int balancingHysteresisTime = 0;
 	private State state = State.UNDEFINED;
-	private BalancingDescision balanceDescision = BalancingDescision.UNDEFINED;
+	private BalancingDecision balanceDecision = BalancingDecision.UNDEFINED;
 
 	private boolean debugMode = false;
 	private Integer slowChargePower = null;
@@ -290,7 +290,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 
 		this.updateUsableSocAndCapacity(this.currentSoc);
-		balanceDescision = this.shouldBalance();
+		balanceDecision = this.shouldBalance();
 
 		float taperFactor = 0f;
 		float lin = 0f;
@@ -321,7 +321,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			} else if (this.currentSoc.equals(this.minSoc)) {
 				this.changeState(State.MIN_SOC_REACHED);
 				break;
-			} else if (this.balanceDescision != BalancingDescision.NO) {
+			} else if (this.balanceDecision != BalancingDecision.NO) {
 				this.changeState(State.BALANCING_WANTED);
 				break;
 			} else if (this.currentSoc > this.maxSoc) {
@@ -440,12 +440,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			// force charge with forceChargePower
 			// Charge battery with desired power
 			// Check wether it has reached desired SOC
-			if (balanceDescision == BalancingDescision.NO) {
+			if (balanceDecision == BalancingDecision.NO) {
 				this.changeState(State.NORMAL);
 				break;
 			}
 
-			if (balanceDescision == BalancingDescision.YES_DEFERRED) {
+			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
 				this.changeState(State.BALANCING_WANTED);
 				break;
 			}
@@ -467,13 +467,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				// ToDo: channel for balancing remaining time needed for UI modal
 			}
 
-			if (balanceDescision == BalancingDescision.NO) {
+			if (balanceDecision == BalancingDecision.NO) {
 				this.resetBalancingTimers(false);
 				this.changeState(State.NORMAL);
 				break;
 			}
 
-			if (balanceDescision == BalancingDescision.YES_DEFERRED) {
+			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
 				this.resetBalancingTimers(false);
 				this.changeState(State.BALANCING_WANTED);				
 				break;
@@ -515,12 +515,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 			calculatedPower = null;
 			// Check again if balancing is necessary
-			if (balanceDescision == BalancingDescision.NO) {
+			if (balanceDecision == BalancingDecision.NO) {
 				this.changeState(State.NORMAL);
 				break;
 			}
 
-			if (balanceDescision == BalancingDescision.YES_DEFERRED) {
+			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
 				// Avoid discharge below minSoc
 				if (this.currentSoc <= this.minSoc) { // min guard
 					calculatedPower = 0;
@@ -537,7 +537,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 
-			if (balanceDescision == BalancingDescision.YES) {
+			if (balanceDecision == BalancingDecision.YES) {
 				this.changeState(State.FORCE_CHARGE_ACTIVE);
 			}
 			break;
@@ -722,19 +722,19 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * 
 	 * @return if battery should be balanced
 	 */
-	private BalancingDescision shouldBalance() {
+	private BalancingDecision shouldBalance() {
 
 		Integer chargedEnergy = this.getChargedEnergy().get();
 
 		if (chargedEnergy == null) {
 			this.logDebug(this.log, "ERROR: Cannot determine charged energy");
-			return BalancingDescision.NO;
+			return BalancingDecision.NO;
 		}
 
 		// balancing is not desired
 		if (this.config.energyBetweenBalancingCycles() == 0) {
 			this.logDebug(this.log, "Balancing is deactivated due to config setting");
-			return BalancingDescision.NO;
+			return BalancingDecision.NO;
 		}
 		/*
 		 * if (this.state == State.BALANCING_ACTIVE) { this.logDebug(this.log,
@@ -745,20 +745,20 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			// are there any peakshavers active
 			if (this.isPeakshavingActive() == true) {
 				this.logDebug(this.log, "Balancing is deferred due to active peakshaving");
-				return BalancingDescision.YES_DEFERRED;
+				return BalancingDecision.YES_DEFERRED;
 			}
 
 			if (!this.isWithinPriceLimit()) {
 				this.logDebug(this.log, "Balancing is deferred due to high energy costs");
-				return BalancingDescision.YES_DEFERRED;
+				return BalancingDecision.YES_DEFERRED;
 			}
 
-			return BalancingDescision.YES;
+			return BalancingDecision.YES;
 
 		}
 
 		this.logDebug(this.log, "No Balancing necessary");
-		return BalancingDescision.NO;
+		return BalancingDecision.NO;
 	}
 
 	/**

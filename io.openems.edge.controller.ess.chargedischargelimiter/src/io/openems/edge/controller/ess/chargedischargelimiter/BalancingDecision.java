@@ -2,7 +2,7 @@ package io.openems.edge.controller.ess.chargedischargelimiter;
 
 import io.openems.common.types.OptionsEnum;
 
-public enum BalancingDescision implements OptionsEnum {
+public enum BalancingDecision implements OptionsEnum {
 	UNDEFINED(-1, "Undefined"), //
 	NO(0, "No balancing needed"), // SoC in range between min and max
 	YES(1, "Balancing necessary and allowed"), //
@@ -13,7 +13,7 @@ public enum BalancingDescision implements OptionsEnum {
 	private final int value;
 	private final String name;
 
-	private BalancingDescision(int value, String name) {
+	private BalancingDecision(int value, String name) {
 		this.value = value;
 		this.name = name;
 	}

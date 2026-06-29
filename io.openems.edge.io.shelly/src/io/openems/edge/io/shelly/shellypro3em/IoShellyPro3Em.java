@@ -1,10 +1,11 @@
 package io.openems.edge.io.shelly.shellypro3em;
 
 import io.openems.edge.common.channel.Doc;
+import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.io.shelly.common.component.ShellyEnergyMeter;
 import io.openems.edge.io.shelly.common.gen2.IoGen2ShellyBase;
 
-public interface IoShellyPro3Em extends IoGen2ShellyBase, ShellyEnergyMeter {
+public interface IoShellyPro3Em extends IoGen2ShellyBase, ShellyEnergyMeter, ModbusSlave {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		//

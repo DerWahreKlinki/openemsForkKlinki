@@ -1,8 +1,9 @@
-package io.openems.edge.solaredge.pvinverter;
+package io.openems.edge.solaredge.hybrid.ess;
 
 import io.openems.common.test.AbstractComponentConfig;
 import io.openems.common.utils.ConfigUtils;
 import io.openems.edge.common.type.Phase.SingleOrAllPhase;
+import io.openems.edge.solaredge.enums.SetPointMode;
 
 @SuppressWarnings("all")
 public class MyConfig extends AbstractComponentConfig implements Config {
@@ -14,6 +15,15 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private String modbusId;
 		private int modbusUnitId;
 		private SingleOrAllPhase phase;
+		private boolean debugMode;
+		private boolean readOnlyMode;
+		private int chargePowerLimit;
+		private int dischargePowerLimit;
+		private int feedToGridPowerLimit;
+		private int maxPvProductionPowerLimit;
+		
+		private String meterId;
+		private String coreTarget;
 
 		private Builder() {
 		}
@@ -22,11 +32,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			this.id = id;
 			return this;
 		}
-
+		
 		public Builder setHybrid(boolean hybrid) {
 			this.hybrid = hybrid;
 			return this;
-		}
+		}		
+		
+		public Builder setMeterId(String meterId) {
+			this.meterId = meterId;
+			return this;
+		}			
 
 		public Builder setReadOnly(boolean readOnly) {
 			this.readOnly = readOnly;
@@ -47,6 +62,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			this.phase = phase;
 			return this;
 		}
+		
+		public Builder setCoreTarget(String coreTarget) {
+			this.coreTarget = coreTarget;
+			return this;
+		}		
 
 		public MyConfig build() {
 			return new MyConfig(this);
@@ -69,30 +89,80 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		this.builder = builder;
 	}
 
+
+
 	@Override
 	public String modbus_id() {
 		return this.builder.modbusId;
 	}
 
-	@Override
-	public String Modbus_target() {
-		return ConfigUtils.generateReferenceTargetFilter(this.id(), this.modbus_id());
-	}
+
 
 	@Override
 	public int modbusUnitId() {
 		return this.builder.modbusUnitId;
 	}
 
-	@Override
-	public SingleOrAllPhase phase() {
-		return this.builder.phase;
-	}
+
 
 	@Override
-	public boolean readOnly() {
-		return this.builder.readOnly;
-
+	public boolean debugMode() {
+		return this.builder.debugMode;
 	}
+
+
+
+
+
+
+	@Override
+	public boolean readOnlyMode() {
+		return this.builder.readOnlyMode;
+	}
+
+
+
+	@Override
+	public int chargePowerLimit() {
+		return this.builder.chargePowerLimit;
+	}
+
+
+
+	@Override
+	public int dischargePowerLimit() {
+		return this.builder.dischargePowerLimit;
+	}
+
+
+
+	@Override
+	public int feedToGridPowerLimit() {
+		return this.builder.feedToGridPowerLimit;
+	}
+
+
+
+	@Override
+	public int maxPvProductionPowerLimit() {
+		return this.builder.maxPvProductionPowerLimit;
+	}
+
+
+
+	@Override
+	public String meter_id() {
+		return this.builder.meterId;
+	}
+
+
+
+	@Override
+	public SetPointMode setPointMode() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+
 
 }

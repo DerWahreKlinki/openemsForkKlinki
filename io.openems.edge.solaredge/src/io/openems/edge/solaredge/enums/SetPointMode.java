@@ -2,22 +2,15 @@ package io.openems.edge.solaredge.enums;
 
 import io.openems.common.types.OptionsEnum;
 
-public  enum BatteryStatus implements OptionsEnum {
+public  enum SetPointMode implements OptionsEnum {
 	UNDEFINED(-1, "Undefined"), //
-	SE_BATT_STATUS_OFF(0, "Off"), //
-	SE_BATT_STATUS_STBY(1, "Standby"), //
-	SE_BATT_STATUS_INIT(2, "Init"), //
-	SE_BATT_STATUS_CHARGE(3, "Charge"), //
-	SE_BATT_STATUS_DISCHARGE(4, "Discharge"), //
-	SE_BATT_STATUS_FAULT(5, "Fault"), //
-	// 6 doesn´t exist
-	SE_BATT_STATUS_IDLE(7, "Idle"); //
-			
+	AC_SETPOINT(0, "AC Setpoint. Includes PV power"), //
+	DC_SETPOINT(1, "DC Setpoint. Control battery directly"); //
 
 	private final int value;
 	private final String name;
 
-	private BatteryStatus(int value, String name) {
+	private SetPointMode(int value, String name) {
 		this.value = value;
 		this.name = name;
 	}
@@ -37,4 +30,3 @@ public  enum BatteryStatus implements OptionsEnum {
 		return UNDEFINED;
 	}
 }
-

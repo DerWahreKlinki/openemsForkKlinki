@@ -15,6 +15,8 @@ import { SohStatusBannerComponent } from "./common/soh/components/soh-status-ban
 import { StorageLiveModule } from "./common/storage/storage.module";
 import { WeatherModule } from "./common/weather/weather.module";
 import { Controller_ChannelthresholdComponent } from "./Controller/Channelthreshold/Channelthreshold";
+import { Controller_ChpCostOptimizationComponent } from "./Controller/ChpCostOptimization/ChpCostOptimization";
+import { Controller_ChpCostOptimizationModalComponent } from "./Controller/ChpCostOptimization/modal/modal.component";
 import { Controller_ChpSocComponent } from "./Controller/ChpSoc/ChpSoc";
 import { Controller_ChpSocModalComponent } from "./Controller/ChpSoc/modal/modal.component";
 import { Controller_EnerixControl } from "./Controller/EnerixControl/EnerixControl";
@@ -36,6 +38,8 @@ import { Controller_Asymmetric_PeakShavingComponent } from "./Controller/PeakSha
 import { Controller_Asymmetric_PeakShavingModalComponent } from "./Controller/PeakShaving/Asymmetric/modal/modal.component";
 import { Controller_Symmetric_PeakShavingModalComponent } from "./Controller/PeakShaving/Symmetric/modal/modal.component";
 import { Controller_Symmetric_PeakShavingComponent } from "./Controller/PeakShaving/Symmetric/Symmetric";
+import { Controller_Symmetric_Threshold_PeakShavingModalComponent } from "./Controller/PeakShaving/Symmetric_Threshold/modal/modal.component";
+import { Controller_Symmetric_Threshold_PeakShavingComponent } from "./Controller/PeakShaving/Symmetric_Threshold/Symmetric_Threshold";
 import { Controller_Symmetric_TimeSlot_PeakShavingModalComponent } from "./Controller/PeakShaving/Symmetric_TimeSlot/modal/modal.component";
 import { Controller_Symmetric_TimeSlot_PeakShavingComponent } from "./Controller/PeakShaving/Symmetric_TimeSlot/Symmetric_TimeSlot";
 import { DelayedSellToGridComponent } from "./delayedselltogrid/delayedselltogrid.component";
@@ -91,12 +95,16 @@ import { SystemOutageInfoComponent } from "./system-outage-info/oe-system-outage
         Controller_ChannelthresholdComponent,
         Controller_ChpSocComponent,
         Controller_ChpSocModalComponent,
+    Controller_ChpCostOptimizationComponent,
+    Controller_ChpCostOptimizationModalComponent,        
         Controller_Io_ChannelSingleThresholdComponent,
         Controller_Io_ChannelSingleThresholdModalComponent,
         Controller_Symmetric_PeakShavingComponent,
         Controller_Symmetric_PeakShavingModalComponent,
         Controller_Symmetric_TimeSlot_PeakShavingComponent,
         Controller_Symmetric_TimeSlot_PeakShavingModalComponent,
+    Controller_Symmetric_Threshold_PeakShavingComponent,
+    Controller_Symmetric_Threshold_PeakShavingModalComponent,        
         DelayedSellToGridComponent,
         DelayedSellToGridModalComponent,
         EvcsClusterApiFlatComponent,

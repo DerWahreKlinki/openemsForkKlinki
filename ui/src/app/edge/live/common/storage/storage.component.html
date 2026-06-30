@@ -7,18 +7,42 @@
         <oe-flat-widget-line [name]="component.alias">
         </oe-flat-widget-line>
       }
-      <!-- Shown if a Emergency-Capacity-Reserve-Controller is assigned to this ess -->
-      @if (this.emergencyReserveComponents[component.id]; as reserve) {
+      <!-- SoC bar with markers: EmergencyReserve + ChargeDischargeLimiter -->
+      @if (this.emergencyReserveComponents[component.id] || this.chargeDischargeLimiterComponents?.[component.id]) {
         <oe-flat-widget-percentagebar [channelAddress]="component.id + '/Soc'">
-          <!-- Shown if emergencyReserve is enabled for this ess -->
-          @if (isEmergencyReserveEnabled[component.id]) {
-            @if (reserve['currentReserveSoc']; as reserveSoc) {
-              <svg>
-                <rect y="2" rx="0" ry="0" width="1%" height="18"
-                  [style]="'x: calc(' + (reserveSoc > 98 ? 98 : reserveSoc) + '% + 2px); fill: #0008;'" />
-              </svg>
+          <svg>
+            <!-- EmergencyReserve marker, if assigned and enabled -->
+            @if (this.emergencyReserveComponents[component.id]; as reserve) {
+              @if (isEmergencyReserveEnabled[component.id]) {
+                @if (reserve['currentReserveSoc']; as reserveSoc) {
+                  <rect y="2" rx="0" ry="0" width="1%" height="18"
+                    [style]="'x: calc(' + (reserveSoc > 98 ? 98 : reserveSoc) + '% + 2px); fill: #0008;'" />
+                }
+              }
             }
-          }
+
+            <!-- ChargeDischargeLimiter markers, if assigned -->
+            @if (this.chargeDischargeLimiterComponents?.[component.id]; as limiter) {
+              <!-- Min SOC -->
+              @if (limiter['minSoc'] !== undefined) {
+                <rect y="2" rx="0" ry="0" width="1%" height="18"
+                  [style]="'x: calc(' + (limiter['minSoc'] > 98 ? 98 : limiter['minSoc']) + '% + 2px); fill: #3c383888;'" />
+              }
+
+              <!-- Force SOC for ForceCharge/Balancing/PriceLimit states (6..9), otherwise Max SOC -->
+              @if (limiter['state'] >= 6 && limiter['state'] <= 9) {
+                @if (limiter['balancingSoc'] !== undefined) {
+                  <rect y="2" rx="0" ry="0" width="1%" height="18"
+                    [style]="'x: calc(' + (limiter['balancingSoc'] > 98 ? 98 : limiter['balancingSoc']) + '% + 2px); fill: #88000088;'" />
+                }
+              } @else {
+                @if (limiter['maxSoc'] !== undefined) {
+                  <rect y="2" rx="0" ry="0" width="1%" height="18"
+                    [style]="'x: calc(' + (limiter['maxSoc'] > 98 ? 98 : limiter['maxSoc']) + '% + 2px); fill: #3c383888;'" />
+                }
+              }
+            }
+          </svg>
         </oe-flat-widget-percentagebar>
       } @else {
         <oe-flat-widget-percentagebar [channelAddress]="component.id + '/Soc'">

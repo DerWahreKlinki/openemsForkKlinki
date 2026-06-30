@@ -21,9 +21,10 @@ export class StorageComponent extends AbstractFlatWidget {
     public storageIconStyle: string | null = null;
     public isHybridEss: boolean[] = [];
     public emergencyReserveComponents: { [essId: string]: EdgeConfig.Component } = {};
+    public chargeDischargeLimiterComponents: { [essId: string]: EdgeConfig.Component } = {};
     public currentSoc: number[] = [];
     public isEmergencyReserveEnabled: boolean[] = [];
-
+    public isChargeDischargeLimiterEnabled: boolean[] = [];
     protected possibleBatteryExtensionMessage: Map<string, { color: string, text: string }> = new Map();
     protected modalComponent: Modal | null = null;
     private prepareBatteryExtensionCtrl: { [key: string]: EdgeConfig.Component };
@@ -141,6 +142,34 @@ export class StorageComponent extends AbstractFlatWidget {
                 new ChannelAddress(component.id, "_PropertyIsReserveSocEnabled"),
             );
         }
+
+        //console.log("Starting chargeDischargeLimiterComponents");
+        // Get chargeDischargeLimiters
+        this.chargeDischargeLimiterComponents = this.config
+            .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+            .filter(component => component.isEnabled)
+            .reduce((result, component) => {
+                return {
+                    ...result,
+                    [component.properties["ess.id"]]: component,
+                };
+            }, {});
+        for (const component of Object.values(this.chargeDischargeLimiterComponents)) {
+            //console.log("Verarbeite chargeDischargeLimiter Component:", component);
+            //console.log("Component Properties:", component.properties);
+            channelAddresses.push(
+                new ChannelAddress(component.id, "_PropertyMinSoc"),
+                new ChannelAddress(component.id, "_PropertyMaxSoc"),
+                new ChannelAddress(component.id, "BalancingSoc"),
+                new ChannelAddress(component.id, "_PropertyEnergyBetweenBalancingCycles"),
+                new ChannelAddress(component.id, "StateMachine"),
+                new ChannelAddress(component.id, "BalancingRemainingSeconds"),
+                new ChannelAddress(component.id, "ChargedEnergy"),
+                new ChannelAddress(component.id, "_PropertyDebugMode"),
+            );
+        }
+        //console.log("chargeDischargeLimiterComponents geladen:", this.chargeDischargeLimiterComponents);
+
         // Get Chargers
         // TODO should be moved to Modal
         this.chargerComponents = this.config
@@ -211,6 +240,17 @@ export class StorageComponent extends AbstractFlatWidget {
             const controller = this.emergencyReserveComponents[essId];
             controller["currentReserveSoc"] = currentData.allComponents[controller.id + "/_PropertyReserveSoc"];
             this.isEmergencyReserveEnabled[essId] = currentData.allComponents[controller.id + "/_PropertyIsReserveSocEnabled"] == 1 ? true : false;
+        }
+
+        for (const essId in this.chargeDischargeLimiterComponents) {
+            //console.log("Current Data for chargeDischargeLimiter:", currentData);
+            const controller = this.chargeDischargeLimiterComponents[essId];
+            controller["debugMode"] = currentData.allComponents[controller.id + "/_PropertyDebugMode"];
+            controller["minSoc"] = currentData.allComponents[controller.id + "/_PropertyMinSoc"];
+            controller["maxSoc"] = currentData.allComponents[controller.id + "/_PropertyMaxSoc"];
+            controller["balancingSoc"] = currentData.allComponents[controller.id + "/BalancingSoc"];
+            controller["state"] = currentData.allComponents[controller.id + "/StateMachine"]; // State 6 is Balancing active
+            controller["chargedEnergy"] = currentData.allComponents[controller.id + "/ChargedEnergy"];
         }
     }
 

@@ -136,6 +136,105 @@
       </ng-container>
     </ng-container>
 
+    <!-- ================================ -->
+    <!-- ChargeDischargeLimiterController  -->
+    <!-- ================================ -->
+    <ng-container [formGroupName]="'chargeDischargeLimiterController'"
+      *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']">
+      <ion-item
+        [color]="getBackgroundClass(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateNumber)">
+        <ion-label>
+          <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="
+                      ('INSTALLATION.CHARGE_DISCHARGE_STATE.' +
+                        (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey ?? 'UNDEFINED')
+                      ) | translate
+                    "></oe-modal-line>
+
+          <ng-container
+            *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
+            <oe-modal-line [name]="'INSTALLATION.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
+              [value]="
+                        formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds
+                          | formatSecondsToDuration
+                      "></oe-modal-line>
+          </ng-container>
+        </ion-label>
+      </ion-item>
+
+      <ion-item lines="none">
+        <ion-icon slot="start" name="information-outline" size="large"></ion-icon>
+        <ion-note class="ion-text-wrap">
+          <ion-text>
+            <small translate>EDGE.INDEX.CHARGE_DISCHARGE_LIMITER.INFO_FOR_CHARGE_DISCHARGE_LIMITER_SLIDER</small>
+          </ion-text>
+        </ion-note>
+      </ion-item>
+
+      <table class="full_width" style="margin-top: 2%;">
+        <tr>
+          <ion-item-divider color="light">
+            <td style="width: 70%;" translate>
+              INSTALLATION.CHARGE_DISCHARGE_STATE.CHARGED_ENERGY_SINCE_LAST_BALANCING
+            </td>
+            <td style="width: 15%;" class="align_right">
+              {{ (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargedEnergy ?? 0) | unitvalue:'kWh' }}
+            </td>
+
+          </ion-item-divider>
+        </tr>
+      </table>
+
+      <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.['minSoc']">
+
+
+        <!-- FIRST Line -> MIN SOC VALUE -->
+        <ion-item-divider color="light">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+
+            <div style="width: 25%;">
+              <oe-modal-line [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MIN_SOC_VALUE' | translate"
+                [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.minSoc + ' %'">
+              </oe-modal-line>
+            </div>
+
+            <div style="width: 75%;">
+              <ion-range formControlName="minSoc" pin color="primary" min="5" max="80">
+                <ion-label slot="start">
+                  {{ 5 | unitvalue:'%' }}
+                </ion-label>
+                <ion-label slot="end">
+                  {{ 80 | unitvalue:'%' }}
+                </ion-label>
+              </ion-range>
+            </div>
+          </div>
+        </ion-item-divider>
+
+        <!-- FIRST Line -> MAX SOC VALUE -->
+        <ion-item-divider color="light">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="width: 25%;">
+              <oe-modal-line [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MAX_SOC_VALUE' | translate"
+                [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.maxSoc + ' %'">
+              </oe-modal-line>
+            </div>
+
+            <div style="width: 75%;">
+              <ion-range formControlName="maxSoc" pin color="primary" min="80" max="100">
+                <ion-label slot="start">
+                  {{ 80 | unitvalue:'%' }}
+                </ion-label>
+                <ion-label slot="end">
+                  {{ 100 | unitvalue:'%' }}
+                </ion-label>
+              </ion-range>
+            </div>
+          </div>
+        </ion-item-divider>
+      </ng-container>
+    </ng-container>
+
+
     <ng-container [formGroupName]="'prepareBatteryExtensionController'"
       *ngIf="formGroup.value[component.id]?.['prepareBatteryExtensionController']?.hasOwnProperty('isRunning') && isAtLeastInstaller">
 
@@ -459,6 +558,110 @@
                           </ion-label>
                         </ion-range>
                       </ng-container>
+                    </ng-container>
+                  </ng-container>
+
+
+                  <!-- ================================ -->
+                  <!-- ChargeDischargeLimiterController  -->
+                  <!-- ================================ -->
+                  <ng-container [formGroupName]="'chargeDischargeLimiterController'"
+                    *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']">
+                    <ion-item
+                      [color]="getBackgroundClass(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateNumber)">
+                      <ion-label>
+                        <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="
+                      ('INSTALLATION.CHARGE_DISCHARGE_STATE.' +
+                        (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey ?? 'UNDEFINED')
+                      ) | translate
+                    "></oe-modal-line>
+
+                        <ng-container
+                          *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
+                          <oe-modal-line
+                            [name]="'INSTALLATION.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
+                            [value]="
+                        formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds
+                          | formatSecondsToDuration
+                      "></oe-modal-line>
+                        </ng-container>
+                      </ion-label>
+                    </ion-item>
+
+                    <ion-item lines="none">
+                      <ion-icon slot="start" name="information-outline" size="large"></ion-icon>
+                      <ion-note class="ion-text-wrap">
+                        <ion-text>
+                          <small
+                            translate>EDGE.INDEX.CHARGE_DISCHARGE_LIMITER.INFO_FOR_CHARGE_DISCHARGE_LIMITER_SLIDER</small>
+                        </ion-text>
+                      </ion-note>
+                    </ion-item>
+
+                    <table class="full_width" style="margin-top: 2%;">
+                      <tr>
+                        <ion-item-divider color="light">
+                          <td style="width: 70%;" translate>
+                            INSTALLATION.CHARGE_DISCHARGE_STATE.CHARGED_ENERGY_SINCE_LAST_BALANCING
+                          </td>
+                          <td style="width: 15%;" class="align_right">
+                            {{ (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargedEnergy ?? 0) | unitvalue:'kWh' }}
+                          </td>
+
+                        </ion-item-divider>
+                      </tr>
+                    </table>
+
+                    <ng-container
+                      *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.['minSoc']">
+
+
+                      <!-- FIRST Line -> MIN SOC VALUE -->
+                      <ion-item-divider color="light">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+
+                          <div style="width: 25%;">
+                            <oe-modal-line
+                              [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MIN_SOC_VALUE' | translate"
+                              [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.minSoc + ' %'">
+                            </oe-modal-line>
+                          </div>
+
+                          <div style="width: 75%;">
+                            <ion-range formControlName="minSoc" pin color="primary" min="5" max="80">
+                              <ion-label slot="start">
+                                {{ 5 | unitvalue:'%' }}
+                              </ion-label>
+                              <ion-label slot="end">
+                                {{ 80 | unitvalue:'%' }}
+                              </ion-label>
+                            </ion-range>
+                          </div>
+                        </div>
+                      </ion-item-divider>
+
+                      <!-- FIRST Line -> MAX SOC VALUE -->
+                      <ion-item-divider color="light">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                          <div style="width: 25%;">
+                            <oe-modal-line
+                              [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MAX_SOC_VALUE' | translate"
+                              [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.maxSoc + ' %'">
+                            </oe-modal-line>
+                          </div>
+
+                          <div style="width: 75%;">
+                            <ion-range formControlName="maxSoc" pin color="primary" min="80" max="100">
+                              <ion-label slot="start">
+                                {{ 80 | unitvalue:'%' }}
+                              </ion-label>
+                              <ion-label slot="end">
+                                {{ 100 | unitvalue:'%' }}
+                              </ion-label>
+                            </ion-range>
+                          </div>
+                        </div>
+                      </ion-item-divider>
                     </ng-container>
                   </ng-container>
 

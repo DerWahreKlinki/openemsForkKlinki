@@ -23,6 +23,7 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.ChannelAddress;
@@ -32,6 +33,10 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.type.TypeUtils;
+import io.openems.edge.common.modbusslave.ModbusSlave;
+import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
+import io.openems.edge.common.modbusslave.ModbusSlaveTable;
+import io.openems.edge.common.modbusslave.ModbusType;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
@@ -44,7 +49,7 @@ import io.openems.edge.timedata.api.utils.CalculateActiveTime;
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
 public class ControllerIoChannelSingleThresholdImpl extends AbstractOpenemsComponent
-		implements ControllerIoChannelSingleThreshold, Controller, OpenemsComponent, TimedataProvider {
+		implements ControllerIoChannelSingleThreshold, Controller, OpenemsComponent, TimedataProvider, ModbusSlave {
 
 	private final Logger log = LoggerFactory.getLogger(ControllerIoChannelSingleThresholdImpl.class);
 	private final Set<ChannelAddress> outputChannelAdresses = new HashSet<>();
@@ -242,7 +247,8 @@ public class ControllerIoChannelSingleThresholdImpl extends AbstractOpenemsCompo
 			/*
 			 * Still Undefined -> use configured fallback output
 			 */
-			this.setOutputs(outputChannels, this.config.fallbackOutput());
+			this.setOutputs(outputChannels, false);
+			this._setRegulationActive(false);
 			break;
 
 		case BELOW_THRESHOLD:
@@ -250,6 +256,7 @@ public class ControllerIoChannelSingleThresholdImpl extends AbstractOpenemsCompo
 			 * Value is below threshold -> always OFF (or invert)
 			 */
 			this.setOutputs(outputChannels, false ^ this.config.invert());
+			this._setRegulationActive(false);
 			break;
 
 		case ABOVE_THRESHOLD:
@@ -257,6 +264,7 @@ public class ControllerIoChannelSingleThresholdImpl extends AbstractOpenemsCompo
 			 * Value is above threshold -> always ON (or invert)
 			 */
 			this.setOutputs(outputChannels, true ^ this.config.invert());
+			this._setRegulationActive(true);
 			break;
 		}
 	}
@@ -311,4 +319,16 @@ public class ControllerIoChannelSingleThresholdImpl extends AbstractOpenemsCompo
 	public Timedata getTimedata() {
 		return this.timedata;
 	}
+
+	@Override
+	public ModbusSlaveTable getModbusSlaveTable(AccessMode accessMode) {
+
+		return new ModbusSlaveTable(
+				OpenemsComponent.getModbusSlaveNatureTable(accessMode), //
+				ModbusSlaveNatureTable.of(ControllerIoChannelSingleThreshold.class, accessMode, 100) //
+						.channel(0, ControllerIoChannelSingleThreshold.ChannelId.REGULATION_ACTIVE, ModbusType.UINT16)
+						.build());
+
+	}
+
 }

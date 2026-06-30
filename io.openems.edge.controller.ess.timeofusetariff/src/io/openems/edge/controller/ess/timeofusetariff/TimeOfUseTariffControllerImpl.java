@@ -28,6 +28,7 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.jscalendar.JSCalendar.Tasks.OneTask;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
@@ -37,6 +38,8 @@ import io.openems.edge.common.jsonapi.ComponentJsonApi;
 import io.openems.edge.common.jsonapi.JsonApiBuilder;
 import io.openems.edge.common.meta.GridBuySoftLimit;
 import io.openems.edge.common.meta.Meta;
+import io.openems.edge.common.modbusslave.ModbusSlave;
+import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.common.sum.Sum;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.controller.ess.emergencycapacityreserve.ControllerEssEmergencyCapacityReserve;
@@ -302,4 +305,14 @@ public class TimeOfUseTariffControllerImpl extends AbstractOpenemsComponent impl
 	public EnergyScheduleHandlerV1 getEnergyScheduleHandlerV1() {
 		return this.energyScheduleHandlerV1;
 	}
+	
+
+	@Override
+	public ModbusSlaveTable getModbusSlaveTable(AccessMode accessMode) {
+		return new ModbusSlaveTable(//
+				this.getModbusSlaveNatureTable(accessMode)
+		);
+	}
+	
+		
 }

@@ -87,8 +87,7 @@ public class SolaredgeDcChargerImpl extends AbstractSunSpecDcCharger implements 
 	@Reference(//
 	        policy = ReferencePolicy.STATIC, //
 	        policyOption = ReferencePolicyOption.GREEDY, //
-	        cardinality = ReferenceCardinality.MANDATORY, //
-	        target = "(&(id=${config.ess_id})(enabled=true))")
+	        cardinality = ReferenceCardinality.MANDATORY)
 	private SolarEdgeHybridEss ess;	
 
 	public PvMode currentState = PvMode.UNDEFINED; // Default state
@@ -123,7 +122,7 @@ public class SolaredgeDcChargerImpl extends AbstractSunSpecDcCharger implements 
 	void activate(ComponentContext context, Config config) throws OpenemsException {
 	    this.config = config;
 
-	    super.activate(context, config.id(), config.alias(), config.enabled(), this.ess.getUnitId(),
+	    super.activate(context, config.id(), config.alias(), config.enabled(),
 	            READ_FROM_MODBUS_BLOCK);
 
 	    this.ess.addCharger(this);

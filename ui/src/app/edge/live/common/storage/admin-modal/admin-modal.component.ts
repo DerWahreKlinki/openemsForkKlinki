@@ -173,7 +173,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     new ChannelAddress(controller.id, "_PropertyReserveSoc"),
                 );
             }
-            
+
             for (const ctrl of chargeDischargeLimiterCtrl as EdgeConfig.Component[]) {
                 channelAddresses.push(
                     new ChannelAddress(ctrl.id, "_PropertyMinSoc"),
@@ -185,7 +185,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     new ChannelAddress(ctrl.id, "BalancingRemainingSeconds"),
                     new ChannelAddress(ctrl.id, "ChargedEnergy"),
                 );
-            }            
+            }
 
             for (const essId in essSohCycleCtrl) {
                 const controller = essSohCycleCtrl[essId];
@@ -221,6 +221,20 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                         const controllers = components[essId];
 
                         const controllerFrmGrp: FormGroup = new FormGroup({});
+                        for (const controller of (controllers as EdgeConfig.Component[])) {
+
+                            if (controller.factoryId == "Controller.Ess.EmergencyCapacityReserve") {
+                                const reserveSoc = currentData.channel[controller.id + "/_PropertyReserveSoc"] ?? 20 /* default Reserve-Soc */;
+                                const isReserveSocEnabled = currentData.channel[controller.id + "/_PropertyIsReserveSocEnabled"] == 1;
+
+                                controllerFrmGrp.addControl("emergencyReserveController",
+                                    this.formBuilder.group({
+                                        controllerId: new FormControl(controller["id"]),
+                                        isReserveSocEnabled: new FormControl(isReserveSocEnabled),
+                                        reserveSoc: new FormControl(reserveSoc),
+                                    }),
+                                );
+
                             } else if (controller.factoryId == "Controller.Ess.ChargeDischargeLimiter") {
                                 enum ChargeDischargeControllerState {
                                     UNDEFINED = -1,             // Undefined / initial state
@@ -262,7 +276,6 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                                         chargedEnergy: new FormControl(chargedEnergy),
                                     }),
                                 );
-
                             } else if (controller.factoryId == "Controller.Ess.PrepareBatteryExtension") {
 
                                 const isRunning = currentData.channel[controller.id + "/_PropertyIsRunning"] == 1;
@@ -325,7 +338,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
         );
 
     }
-    
+
     getBackgroundClass(state: number): string {
         switch (state) {
             case -1: // UNDEFINED
@@ -356,7 +369,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
             default:
                 return ""; // no color
         }
-    }    
+    }
 
     async applyChanges() {
         if (this.edge == null) {
@@ -415,6 +428,8 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     }
                 }
             }
+
+
             const prepareBatteryExtensionController = (essGroups.get("prepareBatteryExtensionController") as FormGroup)?.controls ?? {};
             for (const essGroup of Object.keys(prepareBatteryExtensionController)) {
                 if (prepareBatteryExtensionController[essGroup].dirty) {

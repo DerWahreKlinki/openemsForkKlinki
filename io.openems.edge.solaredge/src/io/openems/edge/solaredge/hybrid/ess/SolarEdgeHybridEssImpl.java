@@ -62,7 +62,6 @@ import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 import io.openems.edge.solaredge.enums.AcChargePolicy;
-import io.openems.edge.solaredge.enums.SetPointMode;
 import io.openems.edge.solaredge.enums.ChargeDischargeMode;
 import io.openems.edge.solaredge.charger.SolaredgeDcCharger;
 import io.openems.edge.solaredge.common.AbstractSunSpecEss;
@@ -147,8 +146,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	@Reference(//
 	        policy = ReferencePolicy.STATIC, //
 	        policyOption = ReferencePolicyOption.GREEDY, //
-	        cardinality = ReferenceCardinality.OPTIONAL, //
-	        target = "(&(id=${config.meter_id})(enabled=true))")
+	        cardinality = ReferenceCardinality.OPTIONAL)
 	private ElectricityMeter meter;
 
 	public SolarEdgeHybridEssImpl() throws OpenemsException {
@@ -254,8 +252,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	@Reference(//
 	        policy = ReferencePolicy.STATIC, //
 	        policyOption = ReferencePolicyOption.GREEDY, //
-	        cardinality = ReferenceCardinality.MANDATORY, //
-	        target = "(&(id=${config.modbus_id})(enabled=true))")
+	        cardinality = ReferenceCardinality.MANDATORY)
 	protected void setModbus(BridgeModbus modbus) {
 	    super.setModbus(modbus);
 	}	
@@ -397,29 +394,10 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 			return;
 		}
 
-		Integer pvPower = null;
-		
-		/*
-		 * First approach for using AC setpoint like it´s intended from OpenEMS
-		 * 
-		 * */
-		
-		if (this.config.setPointMode() == SetPointMode.AC_SETPOINT) {
-			pvPower = this.getPvProductionPower();
-		} 
-		
 		this.originalActivePowerWanted = chargePower;
 		this.activePowerWantedAverageCalculator.addValue(chargePower);
 		chargePower = adjustChargePowerBasedOnAverage(chargePower);
-		
-		this.logDebug(this.log, "Apply->AC Target Power/PvPower " + chargePower + "W/"
-				+ pvPower +  "W");		
-		
-		if (this.config.setPointMode() == SetPointMode.AC_SETPOINT && pvPower != null) {
-			chargePower -= pvPower;
-		}
-		
-		
+
 		try {
 
 			setChargeDischargeModes();
@@ -617,7 +595,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	}
 
 
-/*
+
 	public void _setMyActivePower() {
 
 		// ActivePower is the actual AC output including battery discharging
@@ -656,58 +634,8 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		}
 
 	}
-*/	
-	public void _setMyActivePower() {
 
-		int acPower = this.getAcPower().orElse(0);
-		int acPowerScale = this.getAcPowerScale().orElse(0);
-		double acPowerValue = acPower * Math.pow(10, acPowerScale);
 
-		int dcPower = this.getDcPower().orElse(0);
-		int dcPowerScale = this.getDcPowerScale().orElse(0);
-		double dcPowerValue = dcPower * Math.pow(10, dcPowerScale);
-
-		// DC_DISCHARGE_POWER: battery power
-		this._setDcDischargePower((int) dcPowerValue);
-
-		double activePowerValue;
-
-		switch (this.config.setPointMode()) {
-		case AC_SETPOINT -> {
-			// Hybrid model:
-			// ACTIVE_POWER = AC hybrid output = PV + battery
-			activePowerValue = acPowerValue;
-
-			// Fallback: SolarEdge AC power does not become negative during charging
-			if (activePowerValue == 0 && dcPowerValue < 0) {
-				activePowerValue = dcPowerValue;
-			}
-		}
-
-		case DC_SETPOINT -> {
-			// Battery model:
-			// ACTIVE_POWER = battery power, PV is represented separately by charger/PV
-			activePowerValue = dcPowerValue;
-		}
-
-		default -> {
-			activePowerValue = acPowerValue;
-		}
-		}
-
-		if (DEBUG_MODE == true) {
-			activePowerValue = 333;
-			this._setReactivePower(123);
-			this._setMaxApparentPower(HW_MAX_APPARENT_POWER);
-			this._setDcDischargePower(666);
-		}
-
-		acPowerAverageCalculator.addValue((int) activePowerValue);
-
-		if (Math.abs(acPowerAverageCalculator.getAverage() - activePowerValue) < 1000) {
-			this._setActivePower((int) activePowerValue);
-		}
-	}	
 
 	/**
 	 * Adds static modbus tasks.
@@ -1062,20 +990,15 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		int maxChargeContinuesPower = determineMaxChargeContinuesPower(); // Hardware or configured limit
 		int maxDischargeContinuesPower = determineMaxDischargeContinuesPower(); // Hardware or configured limit
 
-		
+		// PV-Production
+		var pvProduction = Math.max(//
+				TypeUtils.orElse(//
+						TypeUtils.subtract(this.getActivePower().get(), this.getDcDischargePower().get()), //
+						0),
+				0);
+
 		int maxChargePower = maxChargeContinuesPower * -1;
-		int maxDischargePower = maxDischargeContinuesPower;
-
-		if (this.config.setPointMode() == SetPointMode.AC_SETPOINT) {
-			var pvProduction = Math.max(
-					TypeUtils.orElse(
-							TypeUtils.subtract(this.getActivePower().get(), this.getDcDischargePower().get()),
-							0),
-					0);
-
-			maxDischargePower += pvProduction;
-		}		
-		
+		int maxDischargePower = maxDischargeContinuesPower + pvProduction;
 
 		this.logDebug(this.log, "SetLimits->MaxChargePower/MaxDischargePower " + maxChargeContinuesPower + "/"
 				+ maxChargePower + "/" + maxDischargePower + "W");

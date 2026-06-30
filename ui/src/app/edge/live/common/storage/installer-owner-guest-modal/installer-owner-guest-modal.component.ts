@@ -80,9 +80,10 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
 
             this.isAtLeastInstaller = this.edge.roleIsAtLeast(Role.INSTALLER);
             const emergencyReserveCtrl = this.config.getComponentsByFactory("Controller.Ess.EmergencyCapacityReserve");
+            const chargeDischargeLimiterCtrl = this.config.getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter");
             const prepareBatteryExtensionCtrl = this.config.getComponentsByFactory("Controller.Ess.PrepareBatteryExtension");
             this.hasRequiredEdgeVersion = this.edge.isVersionAtLeast("2024.12.3");
-            const components = [...prepareBatteryExtensionCtrl, ...emergencyReserveCtrl].filter(component => component.isEnabled).reduce((result, component) => {
+            const components = [...prepareBatteryExtensionCtrl, ...emergencyReserveCtrl, ...chargeDischargeLimiterCtrl].filter(component => component.isEnabled).reduce((result, component) => {
                 const essId = component.properties["ess.id"];
                 if (result[essId] == null) {
                     result[essId] = [];
@@ -109,7 +110,19 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                     new ChannelAddress(controller.id, "ExpectedStartEpochSeconds"),
                 );
             }
-
+            // ChargeDischargeLimiter: subscribe channels
+            for (const ctrl of chargeDischargeLimiterCtrl as EdgeConfig.Component[]) {
+                channelAddresses.push(
+                    new ChannelAddress(ctrl.id, "_PropertyMinSoc"),
+                    new ChannelAddress(ctrl.id, "_PropertyMaxSoc"),
+                    //new ChannelAddress(ctrl.id, "_PropertyForceChargeSoc"),
+                    new ChannelAddress(ctrl.id, "_PropertyEnergyBetweenBalancingCycles"),
+                    new ChannelAddress(ctrl.id, "BalancingSoc"),
+                    new ChannelAddress(ctrl.id, "StateMachine"),
+                    new ChannelAddress(ctrl.id, "BalancingRemainingSeconds"),
+                    new ChannelAddress(ctrl.id, "ChargedEnergy"),
+                );
+            }
             for (const essId in emergencyReserveCtrl) {
                 const controller = emergencyReserveCtrl[essId];
                 channelAddresses.push(
@@ -144,6 +157,47 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                                         controllerId: new FormControl(controller["id"]),
                                         isReserveSocEnabled: new FormControl(isReserveSocEnabled),
                                         reserveSoc: new FormControl(reserveSoc),
+                                    }),
+                                );
+                            } else if (controller.factoryId == "Controller.Ess.ChargeDischargeLimiter") {
+                                enum ChargeDischargeControllerState {
+                                    UNDEFINED = -1,             // Undefined / initial state
+                                    NORMAL = 0,                 // Normal operation
+                                    ERROR = 1,                  //
+                                    BELOW_MIN_SOC = 2,          // ESS SoC is below configured minimum
+                                    ABOVE_MAX_SOC = 3,          // Above configured Max-SoC")
+                                    MIN_SOC_REACHED = 4,        // balancing procedure is desired
+                                    MAX_SOC_REACHED = 5,        // balancing is active
+                                    FORCE_CHARGE_ACTIVE = 6,    // ESS is charging to configured balancing point
+                                    BALANCING_WANTED = 7,       // balancing procedure is desired
+                                    BALANCING_ACTIVE = 8,       // balancing is active
+                                    PRICE_LIMIT = 9,            // balancing delayed due to high price
+                                    APPROACHING_MIN_SOC = 10,   // reduced power
+                                    APPROACHING_MAX_SOC = 11,   // reduced power
+                                }
+                                const minSoc = currentData.channel[controller.id + "/_PropertyMinSoc"];
+                                const maxSoc = currentData.channel[controller.id + "/_PropertyMaxSoc"];
+                                //const forceChargeSoc = currentData.channel[controller.id + "/_PropertyForceChargeSoc"];
+                                const balancingSoc = currentData.channel[controller.id + "/BalancingSoc"];
+                                const energyBetweenBalancingCycles = currentData.channel[controller.id + "/_PropertyEnergyBetweenBalancingCycles"];
+                                const stateNumber = currentData.channel[controller.id + "/StateMachine"];
+                                const balancingRemainingSeconds = currentData.channel[controller.id + "/BalancingRemainingSeconds"];
+                                const chargedEnergy = currentData.channel[controller.id + "/ChargedEnergy"];
+                                const stateKey = (ChargeDischargeControllerState[Number(stateNumber)] as keyof typeof ChargeDischargeControllerState) ?? "UNDEFINED";
+                                //console.log("Current Data:", currentData);
+
+                                controllerFrmGrp.addControl("chargeDischargeLimiterController",
+                                    this.formBuilder.group({
+                                        controllerId: new FormControl(controller["id"]),
+                                        minSoc: new FormControl(minSoc),
+                                        maxSoc: new FormControl(maxSoc),
+                                        balancingSoc: new FormControl(balancingSoc),
+                                        energyBetweenBalancingCycles: new FormControl(energyBetweenBalancingCycles),
+                                        //state: new FormControl(state),
+                                        stateKey: new FormControl(stateKey),
+                                        stateNumber: new FormControl(stateNumber),
+                                        balancingRemainingSeconds: new FormControl(balancingRemainingSeconds),
+                                        chargedEnergy: new FormControl(chargedEnergy),
                                     }),
                                 );
                             } else if (controller.factoryId == "Controller.Ess.PrepareBatteryExtension") {
@@ -206,6 +260,37 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
 
     }
 
+    getBackgroundClass(state: number): string {
+        switch (state) {
+            case -1: // UNDEFINED
+            case 1:  // ERROR
+                return "danger"; // Red -> Error or Undefined
+            case 0:  // NORMAL
+                return "success"; // Green -> normal
+            case 2:  // BELOW_MIN_SOC
+                return "warning";
+            case 3:  // ABOVE_MAX_SOC
+                return "warning";
+            case 4:  // Min Soc reached
+                return "success"; // blinking orange -> active Balancing
+            case 5:  // Max Soc reached
+                return "success"; // blinking orange -> active Balancing
+            case 6:  // FORCE_CHARGE_ACTIVE
+                return "warning";
+            case 7:  // BALANCING_WANTED
+                return "warning"; // Light orange -> Soc warnings
+            case 8:  // BALANCING_ACTIVE
+                return "primary"; // blinking orange -> active Balancing
+            case 9:  // PRICE_LIMIT
+                return "warning"; // blinking orange -> active Balancing
+            case 10:  // approaching min SoC. Reduce power
+                return "warning"; // blinking orange -> active Balancing
+            case 11:  // approaching max SoC. Reduce power
+                return "warning"; // blinking orange -> active Balancing
+            default:
+                return ""; // no color
+        }
+    }
     async applyChanges() {
         if (this.edge == null) {
             return;
@@ -234,6 +319,17 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                         updateArray.get(emergencyReserveController["controllerId"].value).push(new Map().set(essGroup, emergencyReserveController[essGroup].value));
                     } else {
                         updateArray.set(emergencyReserveController["controllerId"].value, [new Map().set(essGroup, emergencyReserveController[essGroup].value)]);
+                    }
+                }
+
+            }
+            const chargeDischargeLimiterController = (essGroups.get("chargeDischargeLimiterController") as FormGroup)?.controls ?? {};
+            for (const essGroup of Object.keys(chargeDischargeLimiterController)) {
+                if (chargeDischargeLimiterController[essGroup].dirty) {
+                    if (updateArray.get(chargeDischargeLimiterController["controllerId"].value)) {
+                        updateArray.get(chargeDischargeLimiterController["controllerId"].value).push(new Map().set(essGroup, chargeDischargeLimiterController[essGroup].value));
+                    } else {
+                        updateArray.set(chargeDischargeLimiterController["controllerId"].value, [new Map().set(essGroup, chargeDischargeLimiterController[essGroup].value)]);
                     }
                 }
 

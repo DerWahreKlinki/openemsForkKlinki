@@ -122,8 +122,7 @@ public class SolaredgeDcChargerImpl extends AbstractSunSpecDcCharger implements 
 	void activate(ComponentContext context, Config config) throws OpenemsException {
 	    this.config = config;
 
-	    super.activate(context, config.id(), config.alias(), config.enabled(),
-	            READ_FROM_MODBUS_BLOCK);
+	    super.activate(context, config.id(), config.alias(), config.enabled(),this.ess.getUnitId(), READ_FROM_MODBUS_BLOCK);
 
 	    this.ess.addCharger(this);
 

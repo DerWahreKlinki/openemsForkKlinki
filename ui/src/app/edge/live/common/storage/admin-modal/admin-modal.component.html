@@ -145,14 +145,14 @@
         [color]="getBackgroundClass(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateNumber)">
         <ion-label>
           <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="
-                      ('INSTALLATION.CHARGE_DISCHARGE_STATE.' +
+                      ('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.' +
                         (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey ?? 'UNDEFINED')
                       ) | translate
                     "></oe-modal-line>
 
           <ng-container
             *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
-            <oe-modal-line [name]="'INSTALLATION.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
               [value]="
                         formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds
                           | formatSecondsToDuration
@@ -174,7 +174,7 @@
         <tr>
           <ion-item-divider color="light">
             <td style="width: 70%;" translate>
-              INSTALLATION.CHARGE_DISCHARGE_STATE.CHARGED_ENERGY_SINCE_LAST_BALANCING
+              EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.CHARGED_ENERGY_SINCE_LAST_BALANCING
             </td>
             <td style="width: 15%;" class="align_right">
               {{ (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargedEnergy ?? 0) | unitvalue:'kWh' }}
@@ -192,7 +192,7 @@
           <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
 
             <div style="width: 25%;">
-              <oe-modal-line [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MIN_SOC_VALUE' | translate"
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MIN_SOC_VALUE' | translate"
                 [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.minSoc + ' %'">
               </oe-modal-line>
             </div>
@@ -214,7 +214,7 @@
         <ion-item-divider color="light">
           <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <div style="width: 25%;">
-              <oe-modal-line [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MAX_SOC_VALUE' | translate"
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MAX_SOC_VALUE' | translate"
                 [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.maxSoc + ' %'">
               </oe-modal-line>
             </div>
@@ -571,7 +571,7 @@
                       [color]="getBackgroundClass(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateNumber)">
                       <ion-label>
                         <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="
-                      ('INSTALLATION.CHARGE_DISCHARGE_STATE.' +
+                      ('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.' +
                         (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey ?? 'UNDEFINED')
                       ) | translate
                     "></oe-modal-line>
@@ -579,7 +579,7 @@
                         <ng-container
                           *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
                           <oe-modal-line
-                            [name]="'INSTALLATION.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
+                            [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
                             [value]="
                         formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds
                           | formatSecondsToDuration
@@ -602,7 +602,7 @@
                       <tr>
                         <ion-item-divider color="light">
                           <td style="width: 70%;" translate>
-                            INSTALLATION.CHARGE_DISCHARGE_STATE.CHARGED_ENERGY_SINCE_LAST_BALANCING
+                            EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.CHARGED_ENERGY_SINCE_LAST_BALANCING
                           </td>
                           <td style="width: 15%;" class="align_right">
                             {{ (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargedEnergy ?? 0) | unitvalue:'kWh' }}
@@ -622,7 +622,7 @@
 
                           <div style="width: 25%;">
                             <oe-modal-line
-                              [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MIN_SOC_VALUE' | translate"
+                              [name]="'EDGE.INDEX.WIDGETS.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MIN_SOC_VALUE' | translate"
                               [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.minSoc + ' %'">
                             </oe-modal-line>
                           </div>
@@ -645,7 +645,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                           <div style="width: 25%;">
                             <oe-modal-line
-                              [name]="'INSTALLATION.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MAX_SOC_VALUE' | translate"
+                              [name]="'EDGE.INDEX.WIDGETS.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.MAX_SOC_VALUE' | translate"
                               [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.maxSoc + ' %'">
                             </oe-modal-line>
                           </div>

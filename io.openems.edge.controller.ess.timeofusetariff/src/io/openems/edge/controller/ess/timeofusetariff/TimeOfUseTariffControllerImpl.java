@@ -68,7 +68,7 @@ import io.openems.edge.timeofusetariff.api.TariffManager;
 )
 @SuppressWarnings("deprecation")
 public class TimeOfUseTariffControllerImpl extends AbstractOpenemsComponent implements TimeOfUseTariffController,
-		EnergySchedulable, Controller, OpenemsComponent, TimedataProvider, ComponentJsonApi {
+		EnergySchedulable, Controller, OpenemsComponent, TimedataProvider, ComponentJsonApi, ModbusSlave {
 
 	private final Logger log = LoggerFactory.getLogger(TimeOfUseTariffControllerImpl.class);
 

@@ -31,6 +31,7 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.types.MeterType;
 import io.openems.edge.common.channel.calculate.CalculateIntegerSum;
@@ -38,6 +39,9 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
+import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
+import io.openems.edge.common.modbusslave.ModbusSlaveTable;
+import io.openems.edge.common.modbusslave.ModbusType;
 import io.openems.edge.common.sum.Sum;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
@@ -613,4 +617,15 @@ public class EvcsClusterPeakShavingImpl extends AbstractOpenemsComponent impleme
 			};
 		}
 	}
+	
+	@Override
+	public ModbusSlaveTable getModbusSlaveTable(AccessMode accessMode) {
+		return new ModbusSlaveTable(OpenemsComponent.getModbusSlaveNatureTable(accessMode), //
+				ModbusSlaveNatureTable.of(EvcsClusterPeakShaving.class, accessMode, 100) //
+						.channel(0, EvcsClusterPeakShaving.ChannelId.EVCS_BLOCKED_CHARGE_POWER, ModbusType.FLOAT32)
+						.build());
+
+	}
+	
+	
 }

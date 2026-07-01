@@ -82,4 +82,22 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		return this.builder.phase;
 	}
 
+	@Override
+	public boolean debugMode() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public int modbusBaseAddress() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public String Modbus_target() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 }

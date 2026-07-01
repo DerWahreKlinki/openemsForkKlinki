@@ -63,6 +63,7 @@ import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 import io.openems.edge.solaredge.enums.AcChargePolicy;
 import io.openems.edge.solaredge.enums.ChargeDischargeMode;
+import io.openems.edge.solaredge.enums.SetPointMode;
 import io.openems.edge.solaredge.charger.SolaredgeDcCharger;
 import io.openems.edge.solaredge.common.AbstractSunSpecEss;
 import io.openems.edge.solaredge.common.AverageCalculator;
@@ -269,43 +270,57 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		}
 
 		this.limitPvPower();
-
-		/**
-		 * version to limit according to configured limit // Get the grid power and ess
-		 * power int gridPower = this.meter.getActivePower().getOrError(); // current
-		 * buy-from/sell-to grid
-		 * 
-		 * // Checking if the grid power is above the maximum feed-in if (gridPower * -1
-		 * > this.config.feedToGridPowerLimit()) {
-		 * 
-		 * // Calculate actual limit for Ess var essPowerLimit = gridPower +
-		 * this.getActivePower().getOrError() + this.config.feedToGridPowerLimit();
-		 * this.logDebug(this.log, "Ess power limit: " + essPowerLimit + "W");
-		 * 
-		 * // Apply limit int powerPerCharger = (int) Math.round(Math.abs(essPowerLimit)
-		 * / this.chargers.size()); for (SolaredgeDcCharger charger : this.chargers) {
-		 * charger._calculateAndSetPvPowerLimit(powerPerCharger);
-		 * this.logDebug(this.log, "Limit per Charger Wanted: " + powerPerCharger +
-		 * "W");
-		 * 
-		 * }
-		 * 
-		 * }
-		 * 
-		 * if (surplusPower != null && surplusPower > activePowerTarget) { // Apply
-		 * limit int powerPerCharger = (int) Math.round(Math.abs(activePowerTarget) /
-		 * this.chargers.size()); for (SolaredgeDcCharger charger : this.chargers) {
-		 * powerPerCharger = 10000;
-		 * charger._calculateAndSetPvPowerLimit(powerPerCharger);
-		 * this.logDebug(this.log, "Limit per Charger Wanted: " + powerPerCharger +
-		 * "W");
-		 * 
-		 * } }
-		 **/
-
 		this.applyChargePower(activePowerTarget);
 
 	}
+	
+	/**
+	 * Applies charge power to the battery.
+	 */
+	public void applyChargePower(Integer chargePower) {
+		if (this.config.readOnlyMode()) {
+			switchToAutomaticMode();
+			return;
+		}
+
+		this.originalActivePowerWanted = chargePower;
+		this.activePowerWantedAverageCalculator.addValue(chargePower);
+		chargePower = adjustChargePowerBasedOnAverage(chargePower);
+
+		try {
+			setChargeDischargeModes();
+		} catch (OpenemsNamedException e) {
+
+		}
+		int maxDischargePower = determineMaxDischargeContinuesPower();
+		int maxChargePower = determineMaxChargeContinuesPower();
+		// Discharge-Power is hardware- or config-limit + PV-Production
+		// Integer pvProductionPower = this.getPvProductionPower();
+
+		if (DEBUG_MODE == true) {
+			maxDischargePower = 1234;
+			maxChargePower = 2345;
+			// pvProductionPower = 456;
+
+		}
+
+		// When using AC-Setpoint Mode the setpoint includes pv-production 
+		if (this.config.setPointMode() == SetPointMode.AC_SETPOINT) {
+			var pvProduction = this.getPvProductionPower();
+			if (pvProduction != null) {
+				
+				chargePower -= pvProduction;
+				
+			} else {
+				log.warn("Could not determine PV production");
+			}
+		}
+		
+
+		this.logDebug(this.log, "Apply->ChargePower/MaxChargePower/MaxDischargePower " + chargePower + "W/"
+				+ maxChargePower + "W/" + maxDischargePower + "W");
+		applyDcPowerSettings(chargePower, maxChargePower, maxDischargePower);
+	}	
 
 	protected void limitPvPower() {
 
@@ -385,45 +400,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		}
 	}
 
-	/**
-	 * Applies charge power to the battery.
-	 */
-	public void applyChargePower(Integer chargePower) {
-		if (this.config.readOnlyMode()) {
-			switchToAutomaticMode();
-			return;
-		}
 
-		this.originalActivePowerWanted = chargePower;
-		this.activePowerWantedAverageCalculator.addValue(chargePower);
-		chargePower = adjustChargePowerBasedOnAverage(chargePower);
-
-		try {
-
-			setChargeDischargeModes();
-		} catch (OpenemsNamedException e) {
-
-		}
-		int maxDischargePower = determineMaxDischargeContinuesPower();
-		int maxChargePower = determineMaxChargeContinuesPower();
-		// Discharge-Power is hardware- or config-limit + PV-Production
-		// Integer pvProductionPower = this.getPvProductionPower();
-
-		if (DEBUG_MODE == true) {
-			maxDischargePower = 1234;
-			maxChargePower = 2345;
-			// pvProductionPower = 456;
-
-		}
-
-		// if (pvProductionPower != null) {
-		// maxDischargePower += pvProductionPower;
-		// }
-
-		this.logDebug(this.log, "Apply->ChargePower/MaxChargePower/MaxDischargePower " + chargePower + "W/"
-				+ maxChargePower + "W/" + maxDischargePower + "W");
-		applyDcPowerSettings(chargePower, maxChargePower, maxDischargePower);
-	}
 
 	private void setChargeDischargeModes() throws OpenemsNamedException {
 		this.setControlMode(ControlMode.SE_CTRL_MODE_REMOTE); // enable device' remote control mode
@@ -493,7 +470,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	 * target power. This is directly written to the device
 	 */
 	private void applyDischargeMode(Integer chargePower) throws OpenemsNamedException {
-		this.setRemoteControlCommandMode(ChargeDischargeMode.SE_CHARGE_POLICY_MAX_EXPORT);
+ 		this.setRemoteControlCommandMode(ChargeDischargeMode.SE_CHARGE_POLICY_MAX_EXPORT);
 		this.setMaxDischargePower(chargePower);
 		this.setMaxChargePower(0);
 	}
@@ -663,7 +640,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 		protocol.addTask(//
 				// new FC3ReadRegistersTask(0xE142, Priority.LOW, //
-				new FC3ReadRegistersTask(0xE144, Priority.LOW, //
+				new FC3ReadRegistersTask(0xE144, Priority.HIGH, //
 
 						// m(HybridEss.ChannelId.DC_DISCHARGE_ENERGY, //
 						// new FloatDoublewordElement(0xE142).wordOrder(WordOrder.LSWMSW)),
@@ -985,7 +962,48 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		}
 
 	}
+	private void setLimits() {
+	    int maxChargeContinuesPower = determineMaxChargeContinuesPower();
+	    int maxDischargeContinuesPower = determineMaxDischargeContinuesPower();
 
+	    int maxChargePower = maxChargeContinuesPower * -1;
+	    int maxDischargePower;
+
+	    switch (this.config.setPointMode()) {
+	    case AC_SETPOINT -> {
+	        var pvProduction = Math.max(
+	                TypeUtils.orElse(
+	                        TypeUtils.subtract(this.getActivePower().get(), this.getDcDischargePower().get()),
+	                        0),
+	                0);
+
+	        maxDischargePower = maxDischargeContinuesPower + pvProduction;
+	    }
+
+	    case DC_SETPOINT -> {
+	        maxDischargePower = maxDischargeContinuesPower;
+	    }
+
+	    default -> {
+	        maxDischargePower = maxDischargeContinuesPower;
+	    }
+	    }
+
+	    this.logDebug(this.log, "SetLimits->Mode/MaxChargePower/MaxDischargePower "
+	            + this.config.setPointMode() + "/"
+	            + maxChargePower + "/"
+	            + maxDischargePower + "W");
+
+	    setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER, maxChargePower);
+	    this._setAllowedDischargePower(maxDischargePower);
+
+	    this._setMaxApparentPower(HW_MAX_APPARENT_POWER);
+	}	
+	
+
+	
+	
+/*
 	private void setLimits() {
 		int maxChargeContinuesPower = determineMaxChargeContinuesPower(); // Hardware or configured limit
 		int maxDischargeContinuesPower = determineMaxDischargeContinuesPower(); // Hardware or configured limit
@@ -1005,12 +1023,12 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 		// Apply AllowedChargePower and AllowedDischargePower
 		// ToDo 2026 03 27
-		//this._setAllowedChargePower(maxChargePower/* inverted charge power */);
+		//this._setAllowedChargePower(maxChargePower);
 		
 		setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,maxChargePower);
 		this._setAllowedDischargePower(maxDischargePower);
 
 		this._setMaxApparentPower(HW_MAX_APPARENT_POWER);
 	}
-
+*/
 }

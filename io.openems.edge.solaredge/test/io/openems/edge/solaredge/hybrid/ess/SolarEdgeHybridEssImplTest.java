@@ -35,7 +35,7 @@ public class SolarEdgeHybridEssImplTest {
         @Override
         protected void handleEvent(String topic) throws Exception {
             if (topic.equals(EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS)) {
-                ((SolarEdgeHybridEssImpl) this.getSut()).limitPvPower();
+                ((SolarEdgeHybridEssImpl) this.getSut()).limitPvPower(1);
             }
             super.handleEvent(topic);
         }

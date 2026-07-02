@@ -11,6 +11,7 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferencePolicy;
@@ -156,17 +157,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		super.deactivate();
 	}
 
-	/* ToDo 2026 03 27
-	@Override
-	protected void modified(ComponentContext context, String id, String alias, boolean enabled) {
-		super.modified(context, id, alias, enabled);
-		this.updateConfig(this.config);
-		if (this.energyScheduleHandler != null) {
-			this.energyScheduleHandler.triggerReschedule("ControllerEssChargeDischargeLimiterImpl::modified()");
-		}
-	}
-	 */
-	
+	/*  2026 07 02
+	 * changed to Modified Annotation
+
 	@Override
 	protected void modified(ComponentContext context, String id, String alias, boolean enabled) {
 		super.modified(context, id, alias, enabled);
@@ -175,7 +168,20 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.energyScheduleHandler.triggerReschedule("ControllerEssChargeDischargeLimiterImpl::modified()", RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
 		}
 	}	
+	 */
 	
+	@Modified
+	private void modified(ComponentContext context, Config config) {
+		super.modified(context, config.id(), config.alias(), config.enabled());
+
+		this.updateConfig(config);
+
+		if (this.energyScheduleHandler != null) {
+			this.energyScheduleHandler.triggerReschedule(
+					"ControllerEssChargeDischargeLimiterImpl::modified()",
+					RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
+		}
+	}	
 	
 	
 	private void updateConfig(Config config) {
@@ -316,19 +322,23 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			// check if charge energy is below the next balancing cycle. Only balance if
 			// this is desired
 			if (this.currentSoc < this.minSoc) {
-				this.changeState(State.BELOW_MIN_SOC);
+				this.changeState(State.BELOW_MIN_SOC, true);
+				calculatedPower = 0;
 				break;
 			} else if (this.currentSoc.equals(this.minSoc)) {
 				this.changeState(State.MIN_SOC_REACHED);
+				calculatedPower =0;					
 				break;
-			} else if (this.balanceDecision != BalancingDecision.NO) {
+			} else if (this.balanceDecision == BalancingDecision.YES) {
 				this.changeState(State.BALANCING_WANTED);
 				break;
 			} else if (this.currentSoc > this.maxSoc) {
-				this.changeState(State.ABOVE_MAX_SOC);
+				this.changeState(State.ABOVE_MAX_SOC, true);
+				calculatedPower = 0;
 				break;
 			} else if (this.currentSoc.equals(this.maxSoc)) {
 				this.changeState(State.MAX_SOC_REACHED);
+				calculatedPower =0;	
 				break;
 			}
 			// Tapering logic: Gradual power reduction as we approach maxSoc
@@ -355,10 +365,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				this.changeState(State.NORMAL);
 				break;
 			}
-			if (this.currentSoc <= this.minSoc) {
+			if (this.currentSoc.equals(this.minSoc)) {
 				this.changeState(State.MIN_SOC_REACHED);
+				calculatedPower = 0;				
 				break;
 			}
+			if (this.currentSoc < this.minSoc) {
+				this.changeState(State.BELOW_MIN_SOC,true);
+				calculatedPower = 0;
+				break;
+			}			
 			if (currentActivePower == null || currentActivePower <= 0) {
 				this.changeState(State.NORMAL);
 				break;
@@ -373,9 +389,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		case MIN_SOC_REACHED:
 			if (this.currentSoc > this.minSoc) {
 				this.changeState(State.NORMAL);
+				calculatedPower =0;	
 				break;
 			} else if (this.currentSoc < this.minSoc) {
-				this.changeState(State.BELOW_MIN_SOC);
+				this.changeState(State.BELOW_MIN_SOC,true);
+				calculatedPower =0;				
 				break;
 			}
 			calculatedPower = 0;
@@ -386,10 +404,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				this.changeState(State.NORMAL);
 				break;
 			}
-			if (this.currentSoc >= this.maxSoc) {
+			if (this.currentSoc.equals(this.maxSoc)) {
 				this.changeState(State.MAX_SOC_REACHED);
+				calculatedPower = 0;				
 				break;
 			}
+			if (this.currentSoc > this.maxSoc) {
+				this.changeState(State.ABOVE_MAX_SOC,true);
+				calculatedPower =0;
+				break;
+			}			
 			// wenn nicht mehr geladen wird, kein Grund für diesen State
 			if (currentActivePower == null || currentActivePower >= 0) {
 				this.changeState(State.NORMAL);
@@ -402,28 +426,52 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			calculatedPower = Math.min(calculatedPower, this.slowChargePower);
 			break;
 		case MAX_SOC_REACHED:
+			
+			// 
+			if (this.balanceDecision == BalancingDecision.YES) {
+				if (!this.changeState(State.BALANCING_WANTED)) {
+					calculatedPower = 0;
+				}
+				break;
+			}			
 
 			if (this.currentSoc < this.maxSoc) {
 				this.changeState(State.NORMAL);
+				calculatedPower = 0;
 				break;
 			} else if (this.currentSoc > this.maxSoc) {
-				this.changeState(State.ABOVE_MAX_SOC);
+				this.changeState(State.ABOVE_MAX_SOC,true);
+				calculatedPower = 0;
 				break;
 			}
-
-			calculatedPower = 0;
+			calculatedPower =0;
+			
 			break;
 		case BELOW_MIN_SOC:
 			// block discharging and slowly charge
-			calculatedPower = this.slowChargePower != null ? this.slowChargePower : calculatedPower;
+			if (this.currentSoc < this.minSoc) {
+				calculatedPower = this.slowChargePower != null ? this.slowChargePower : 0;
+				break;
+			}
+
 			if (this.currentSoc == this.minSoc) {
 				this.changeState(State.MIN_SOC_REACHED);
-			} else if (this.currentSoc > this.minSoc) {
-				this.changeState(State.NORMAL);
+				calculatedPower = 0;
+				break;
 			}
+
+			this.changeState(State.NORMAL);
+			calculatedPower = 0;
 			break;
 		case ABOVE_MAX_SOC:
 
+			if (this.balanceDecision == BalancingDecision.YES) {
+				if (!this.changeState(State.BALANCING_WANTED)) {
+					calculatedPower = 0;
+				}
+				break;
+			}			
+			
 			if (this.slowDischargePower != null && this.autoDischarge) {
 				calculatedPower = this.slowDischargePower; // discharge slowly if autoDischarge is configured
 			} else {
@@ -432,6 +480,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 			if (this.currentSoc == this.maxSoc) {
 				this.changeState(State.MAX_SOC_REACHED);
+				calculatedPower = 0;
 			} else if (this.currentSoc < this.maxSoc) {
 				this.changeState(State.NORMAL);
 			}
@@ -587,10 +636,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * @param calculatedPower as constraint
 	 */
 	void applyActivePowerConstraint(Integer calculatedPower) {
-		if (calculatedPower == null) {
-			this.logDebug(this.log, "No constraints have to be set");
-			return; // No constraints to set
-		}
+
 
 		if (this.ess == null) {
 			this.logDebug(this.log, "ERROR. No Ess to apply constraints to");
@@ -598,6 +644,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 
 		try {
+			
+			if (calculatedPower == null) {
+				this.logDebug(this.log, "CalculatedPower is null. No constraints will be set");
+				return; // No constraints to set
+			}
+			
 			switch (this.state) {
 			case MAX_SOC_REACHED, ABOVE_MAX_SOC -> { // Block further charging
 				this.ess.setActivePowerGreaterOrEquals(calculatedPower);
@@ -760,6 +812,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		this.logDebug(this.log, "No Balancing necessary");
 		return BalancingDecision.NO;
 	}
+	
+	private boolean changeState(State nextState) {
+		return this.changeState(nextState, false);
+	}
 
 	/**
 	 * Changes the state if hysteresis time passed, to avoid too quick changes.
@@ -767,13 +823,15 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * @param nextState the target state
 	 * @return whether the state was changed
 	 */
-	private boolean changeState(State nextState) {
-		this.logDebug(this.log, "Change state " + this.state + "->" + nextState);
+	private boolean changeState(State nextState, boolean skipHysteresis) {
+		this.logDebug(this.log, "Change state " + this.state + "->" + nextState
+				+ (skipHysteresis ? " without hysteresis" : ""));
 		if (this.state == nextState) {
 			this._setAwaitingHysteresisValue(false);
 			return false;
 		}
-		if (Duration.between(//
+		
+		if (skipHysteresis || Duration.between(//
 				this.lastStateChangeTime, //
 				Instant.now(this.componentManager.getClock()) //
 		).toSeconds() >= HYSTERESIS) {

@@ -82,4 +82,10 @@ public class MyConfigTcp extends AbstractComponentConfig implements ConfigTcp {
 		return this.builder.invalidateElementsAfterReadErrors;
 	}
 
+	@Override
+	public int intervalBetweenAccesses() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
 }

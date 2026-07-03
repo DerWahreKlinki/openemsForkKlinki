@@ -226,7 +226,9 @@
 	bnd.identity;id='io.openems.edge.deye',\
 	bnd.identity;id='io.openems.edge.chp.ecpower',\
 	bnd.identity;id='io.openems.edge.pytes',\
-	bnd.identity;id='io.openems.edge.generator.api'
+	bnd.identity;id='io.openems.edge.generator.api',\
+	bnd.identity;id='io.openems.edge.controller.ess.chargedischargelimiter',\
+	bnd.identity;id='io.openems.edge.predictor.pv.weather.forecast'
 -runbundles: \
 	bcpkix;version='[1.84.0,1.84.1)',\
 	bcprov;version='[1.84.0,1.84.1)',\
@@ -510,4 +512,7 @@
 	io.openems.edge.deye;version=snapshot,\
 	io.openems.edge.chp.ecpower;version=snapshot,\
 	io.openems.edge.pytes;version=snapshot,\
-	io.openems.edge.generator.api;version=snapshot
+	io.openems.edge.generator.api;version=snapshot,\
+	io.openems.edge.controller.ess.chargedischargelimiter;version=snapshot,\
+	io.openems.edge.controller.symmetric.thresholdpeakshaver;version=snapshot,\
+	io.openems.edge.predictor.pv.weather.forecast;version=snapshot

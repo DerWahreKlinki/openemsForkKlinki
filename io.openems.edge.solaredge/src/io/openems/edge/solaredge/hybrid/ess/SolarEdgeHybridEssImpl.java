@@ -528,7 +528,10 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		pvPowerSetPoint = Math.max(0, pvPowerSetPoint);
 
 		// Log the calculated or default pv power set point
-		this.logDebug(this.log, "Final PV Power Setpoint: " + pvPowerSetPoint);
+		this.logDebug(this.log,
+				"PV Hybrid Balance: BatteryTarget " + batteryPowerTarget + "W, "
+						+ "HybridLimit " + hybridBalanceLimit + "W, "
+						+ "CalculatedPvSetpoint " + pvPowerSetPoint + "W");
 
 		distributePowerToCharger(pvPowerSetPoint);
 	}

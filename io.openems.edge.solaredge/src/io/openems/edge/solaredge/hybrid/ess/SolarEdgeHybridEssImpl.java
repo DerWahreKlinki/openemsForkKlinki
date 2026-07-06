@@ -93,17 +93,14 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	// Hardware-Limits
 	// ToDo: make configurable
 	protected static final int HW_MAX_APPARENT_POWER = 10000;
-	protected static final int HW_ALLOWED_CHARGE_POWER = -5000;
-	protected static final int HW_ALLOWED_DISCHARGE_POWER = 5000;
-
+	
 	// Threshold used for smoothing controller power targets.
 	// This is intentionally not used for charge/discharge mode selection.
 	protected static final int HW_TOLERANCE = 500; 
 	
-	// Safety margin below the inverter AC limit when calculating PV limits.
-	// This prevents the inverter from operating exactly at the AC clipping boundary.
-	private static final int PV_LIMIT_MARGIN = 500;
-
+	private static final int EFFECTIVELY_FULL_SOC = 98;
+	private static final int MIN_SURPLUS_POWER = 100;	
+	
 	// AC-side
 	// private final CalculateEnergyFromPower calculateAcChargeEnergyCalculated =
 	// new CalculateEnergyFromPower(this,
@@ -136,11 +133,16 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	// Negative values mean charging, positive values mean discharging.
 	private int originalActivePowerWanted;
 	
-	// Battery power target after internal adjustments.
-	// This value is used by the PV limitation logic so battery control and PV control
-	// are based on the same effective target.
-	private int effectiveChargePowerTarget = 0;
-
+	/*
+	 * Current effective battery limits calculated in setLimits().
+	 *
+	 * Positive values:
+	 *   currentMaxChargePower     = max battery charge power in W
+	 *   currentMaxDischargePower  = max battery discharge power in W
+	 */
+	private int currentMaxChargePower = 0;
+	private int currentMaxDischargePower = 0;
+	
 	@Reference
 	private Power power;
 
@@ -273,13 +275,12 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	
 	@Override
 	public void applyPower(int activePowerTarget, int reactivePowerWanted) throws OpenemsNamedException {
-		
 
 		if (this.config.readOnlyMode()) {
 			// In read-only mode no remote control commands or PV limits should be applied.
 			switchToAutomaticMode();
 			return;
-		}		
+		}
 
 		Integer surplusPower = this.getSurplusPower(); // is NULL if battery´s not fully charged yet
 
@@ -288,40 +289,14 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 			this.logDebug(this.log, "ESS 	Surplus Power: " + surplusPower + "W\n");
 		}
 
-		// Apply the battery command first.
-		// This updates effectiveChargePowerTarget after smoothing and AC/DC setpoint conversion.
 		this.applyChargePower(activePowerTarget);
 
-		// Limit PV power afterwards using the same effective battery target.
-		// This prevents SolarEdge from using the battery as an unintended sink
-		// when PV production exceeds the inverter AC output capability.
-		this.limitPvPower(this.effectiveChargePowerTarget);
-
-	}	
-
-/*
-	@Override
-	public void applyPower(int activePowerTarget, int reactivePowerWanted) throws OpenemsNamedException {
-
-		Integer surplusPower = this.getSurplusPower(); // is NULL if battery´s not fully charged yet
-
-		this.logDebug(this.log, "ApplyPower Target: " + activePowerTarget + "W\n");
-		if (surplusPower != null) {
-			this.logDebug(this.log, "ESS 	Surplus Power: " + surplusPower + "W\n");
-		}
-
+		// Limit PV power based on feed-to-grid limit only.
+		// Battery charge/discharge target is intentionally not considered here.
 		this.limitPvPower();
-		this.applyChargePower(activePowerTarget);
-
 	}
-*/	
-	/**
-	 * Applies the battery power target.
-	 *
-	 * Negative values mean battery charging.
-	 * Positive values mean battery discharging.
-	 * Zero means idle: neither charge nor discharge should be requested.
-	 */
+
+
 	public void applyChargePower(Integer chargePower) {
 		if (this.config.readOnlyMode()) {
 			switchToAutomaticMode();
@@ -338,200 +313,129 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 			this.logError(this.log, "Could not set SolarEdge charge/discharge modes: " + e.getMessage());
 			return;
 		}
-		
-		
-		int maxDischargePower = determineMaxDischargeContinuesPower();
-		int maxChargePower = determineMaxChargeContinuesPower();
-		// Discharge-Power is hardware- or config-limit + PV-Production
-		// Integer pvProductionPower = this.getPvProductionPower();
+
+		int maxChargePower = this.currentMaxChargePower;
+		int maxDischargePower = this.currentMaxDischargePower;
 
 		if (DEBUG_MODE == true) {
 			maxDischargePower = 1234;
 			maxChargePower = 2345;
-			// pvProductionPower = 456;
-
 		}
 
-		// In AC setpoint mode the controller target includes PV production.
-		// Convert the AC-side target into a battery-side target by subtracting PV production.
+		/*
+		 * In AC setpoint mode the controller target includes PV production.
+		 * Convert the AC-side target into a battery-side target by subtracting PV production.
+		 */
 		if (this.config.setPointMode() == SetPointMode.AC_SETPOINT) {
 			var pvProduction = this.getPvProductionPower();
 			if (pvProduction != null) {
-				
 				chargePower -= pvProduction;
-				
 			} else {
 				log.warn("Could not determine PV production");
 			}
 		}
-		
-		// Store the final battery target used for both battery control and PV limitation.
-		this.effectiveChargePowerTarget = chargePower;		
 
-		this.logDebug(this.log, "Apply->ChargePower/MaxChargePower/MaxDischargePower " + chargePower + "W/"
-				+ maxChargePower + "W/" + maxDischargePower + "W");
+		this.logDebug(this.log,
+				"Apply->ChargePower/MaxChargePower/MaxDischargePower "
+						+ chargePower + "W/"
+						+ maxChargePower + "W/"
+						+ maxDischargePower + "W");
+
 		applyDcPowerSettings(chargePower, maxChargePower, maxDischargePower);
-	}	
+	}
 
-	/*
+
+
+	/**
+	 * Limits PV production based on the configured feed-to-grid limit.
+	 *
+	 * This method intentionally does not include any battery charge/discharge target.
+	 */
 	protected void limitPvPower() {
 
 		if (this.charger == null) {
-			return; // Exit early if no chargers are connected
-		}
-
-		if (this.meter == null) {
-		    this.logDebug(this.log, "No meter available for PV limitation.");
-		    return;
-		}		
-		
-		int tolerance = 500;
-		// Safely fetch values and handle potential nulls
-		Integer gridPower = this.meter.getActivePower().get(); // could be null. negative while feed to grid
-
-		Integer maxPvProductionPowerLimit = this.config.maxPvProductionPowerLimit(); // could be null, Positive value
-
-		Integer feedToGridPowerLimit = this.config.feedToGridPowerLimit(); // could be null, Positive value
-		// Integer essActivePower = this.getActivePower().get(); // could be null
-		Integer currentPvProductionPower = this.getPvProductionPower(); // always positive
-
-		this.charger.getPvMode();
-
-		if (currentPvProductionPower == null) {
-			this.logDebug(this.log, "PV Power NULL or ");
 			return;
 		}
 
-		int pvPowerSetPoint = currentPvProductionPower; // initial SetPoint
+		if (this.meter == null) {
+			this.logDebug(this.log, "No meter available for PV limitation.");
+			return;
+		}
 
-		// If limitation is active we have to control the limitation.
-		// Reason: If feed to grid exceeds limit we have to decrease limitation, too.
-		if (gridPower != null && feedToGridPowerLimit != null && -gridPower > feedToGridPowerLimit
-				|| this.charger.getPvMode() == PvMode.LIMIT_ACTIVE) {
+		final int tolerance = 500;
+
+		Integer currentPvProductionPower = this.getPvProductionPower();
+		if (currentPvProductionPower == null) {
+			this.logDebug(this.log, "PV Power NULL");
+			return;
+		}
+
+		int maxPvProductionPowerLimit = this.config.maxPvProductionPowerLimit();
+		int feedToGridPowerLimit = this.config.feedToGridPowerLimit();
+
+		if (maxPvProductionPowerLimit < 0) {
+			this.logDebug(this.log,
+					"Invalid max PV production power limit configured: " + maxPvProductionPowerLimit + "W");
+			return;
+		}
+
+		if (feedToGridPowerLimit < 0) {
+			this.logDebug(this.log,
+					"Invalid feed-to-grid power limit configured: " + feedToGridPowerLimit + "W");
+			distributePowerToCharger(maxPvProductionPowerLimit);
+			return;
+		}
+
+		PvMode pvMode = this.charger.getPvMode();
+		Integer gridPower = this.meter.getActivePower().get(); // negative while feed-to-grid
+
+		if (gridPower == null) {
+			int fallbackPvPowerSetPoint;
+
+			if (pvMode == PvMode.LIMIT_ACTIVE) {
+				/*
+				 * If PV limitation is already active but grid power is unavailable,
+				 * do not blindly release the limitation to maximum.
+				 */
+				fallbackPvPowerSetPoint = Math.min(currentPvProductionPower, maxPvProductionPowerLimit);
+			} else {
+				fallbackPvPowerSetPoint = maxPvProductionPowerLimit;
+			}
+
+			fallbackPvPowerSetPoint = Math.max(0, fallbackPvPowerSetPoint);
+
+			this.logDebug(this.log,
+					"Grid power NULL. Using fallback PV setpoint: " + fallbackPvPowerSetPoint + "W");
+
+			distributePowerToCharger(fallbackPvPowerSetPoint);
+			return;
+		}
+
+		int pvPowerSetPoint;
+
+		boolean limitationActive = -gridPower > feedToGridPowerLimit || pvMode == PvMode.LIMIT_ACTIVE;
+
+		if (limitationActive) {
 			feedToGridAverageCalculator.addValue(gridPower);
 
-			int feedToGrid = feedToGridAverageCalculator.getAverage(); // negative value
+			int feedToGrid = feedToGridAverageCalculator.getAverage(); // negative while feeding to grid
 			int pvProduction = pvProductionAverageCalculator.getAverage();
 
 			pvPowerSetPoint = pvProduction + feedToGrid + feedToGridPowerLimit - tolerance;
 
 			this.logDebug(this.log,
-					String.format("PV Setpoint Adjustment: FeedToGridAvg: %d ProductionAvg: %d, , Adjusted: %d",
+					String.format("PV Setpoint Adjustment: FeedToGridAvg: %dW ProductionAvg: %dW Adjusted: %dW",
 							feedToGrid, pvProduction, pvPowerSetPoint));
 
 			pvPowerSetPoint = Math.min(pvPowerSetPoint, maxPvProductionPowerLimit);
 
 		} else {
-			// If grid power is positive or does not exceed the feed-to-grid limit, maximize
-			// PV output
 			pvPowerSetPoint = maxPvProductionPowerLimit;
-		}
-
-		// Log the calculated or default pv power set point
-		this.logDebug(this.log, "final PV Power Setpoint: " + pvPowerSetPoint);
-
-		// Distribute power to chargers if the setpoint is above a minimal operational
-		// threshold
-		if (pvPowerSetPoint > 1000) {
-			distributePowerToCharger(pvPowerSetPoint);
-
-		} else {
-			this.logDebug(this.log, "PV power setpoint below operational threshold: " + pvPowerSetPoint);
-		}
-
-		this.logDebug(this.log, "Final PV Power Setpoint: " + pvPowerSetPoint);
-	}
-
-	// Method to distribute power directly to the single charger
-	private void distributePowerToCharger(int pvPowerSetPoint) {
-		if (charger != null) {
-			charger._calculateAndSetPvPowerLimit(pvPowerSetPoint);
-			this.logDebug(this.log, "<<<PV per Charger limit " + pvPowerSetPoint + "W>>>>>");
-		} else {
-			this.logDebug(this.log, "No charger available for setting power limit.");
-		}
-	}
-	*/
-	
-	/**
-	 * Limits PV production based on feed-to-grid limits and hybrid inverter balance.
-	 *
-	 * The SolarEdge inverter can use the battery as an internal sink if DC-side PV
-	 * production exceeds what the inverter can export on its AC side. Therefore the
-	 * PV limit must also consider the requested battery power.
-	 *
-	 * @param batteryPowerTarget effective battery power target in watts.
-	 *        Negative values mean charging, positive values mean discharging,
-	 *        zero means idle.
-	 */
-	protected void limitPvPower(int batteryPowerTarget) {
-
-		if (this.charger == null) {
-			return; // Exit early if no chargers are connected
-		}
-
-		if (this.meter == null) {
-		    this.logDebug(this.log, "No meter available for PV limitation.");
-		    return;
-		}		
-		
-		int tolerance = 500;
-		// Safely fetch values and handle potential nulls
-		Integer gridPower = this.meter.getActivePower().get(); // could be null. negative while feed to grid
-
-		Integer maxPvProductionPowerLimit = this.config.maxPvProductionPowerLimit(); // could be null, Positive value
-
-		Integer feedToGridPowerLimit = this.config.feedToGridPowerLimit(); // could be null, Positive value
-		// Integer essActivePower = this.getActivePower().get(); // could be null
-		Integer currentPvProductionPower = this.getPvProductionPower(); // always positive
-
-		this.charger.getPvMode();
-
-		if (currentPvProductionPower == null) {
-			this.logDebug(this.log, "PV Power NULL or ");
-			return;
-		}
-
-		int pvPowerSetPoint = currentPvProductionPower; // initial SetPoint
-
-		// If limitation is active we have to control the limitation.
-		// Reason: If feed to grid exceeds limit we have to decrease limitation, too.
-		if (gridPower != null && ((feedToGridPowerLimit != null && -gridPower > feedToGridPowerLimit)
-				|| this.charger.getPvMode() == PvMode.LIMIT_ACTIVE)) {
-			feedToGridAverageCalculator.addValue(gridPower);
-
-			int feedToGrid = feedToGridAverageCalculator.getAverage(); // negative value
-			int pvProduction = pvProductionAverageCalculator.getAverage();
-
-			pvPowerSetPoint = pvProduction + feedToGrid + feedToGridPowerLimit - tolerance;
-
-			this.logDebug(this.log,
-					String.format("PV Setpoint Adjustment: FeedToGridAvg: %d ProductionAvg: %d, , Adjusted: %d",
-							feedToGrid, pvProduction, pvPowerSetPoint));
-
-			pvPowerSetPoint = Math.min(pvPowerSetPoint, maxPvProductionPowerLimit);
-
-		} else {
-			// If grid power is positive or does not exceed the feed-to-grid limit, maximize
-			// PV output
-			pvPowerSetPoint = maxPvProductionPowerLimit;
-		}
-
-		int hybridBalanceLimit = getPvLimitFromHybridBalance(batteryPowerTarget);
-		if (pvPowerSetPoint > hybridBalanceLimit) {
-			this.logDebug(this.log,
-					"PV Hybrid Balance Limit: BatteryTarget " + batteryPowerTarget + "W, "
-							+ "Calculated " + pvPowerSetPoint + "W, Limited " + hybridBalanceLimit + "W");
-			pvPowerSetPoint = hybridBalanceLimit;
 		}
 
 		pvPowerSetPoint = Math.max(0, pvPowerSetPoint);
 
-		// Log the calculated or default pv power set point
-		this.logDebug(this.log,
-				"PV Hybrid Balance: BatteryTarget " + batteryPowerTarget + "W, "
-						+ "HybridLimit " + hybridBalanceLimit + "W, "
-						+ "CalculatedPvSetpoint " + pvPowerSetPoint + "W");
+		this.logDebug(this.log, "CalculatedPvSetpoint " + pvPowerSetPoint + "W");
 
 		distributePowerToCharger(pvPowerSetPoint);
 	}
@@ -576,30 +480,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		}
 	}
 
-	/**
-	 * Different modes for charging / discharging have to be applied
-	 
-	private void adjustChargePowerModes(Integer chargePower, Integer maxChargePower, Integer maxDischargePower)
-			throws OpenemsNamedException {
-		// chargePower =-1;
-		if (chargePower < 0) {
-			// Limit according to hardware or config values
-			if (chargePower < (maxChargePower * -1)) {
-				chargePower = maxChargePower * -1;
-			}
-			this.logDebug(this.log,
-					"Apply Charge Mode->ChargePower/MaxChargePower " + chargePower + "W/" + maxChargePower * -1 + "W");
-			applyChargeMode(chargePower);
-		} else {
-			if (chargePower > (maxDischargePower)) {
-				chargePower = maxDischargePower;
-			}
-			this.logDebug(this.log, "Apply Discharge Mode->DishargePower/MaxDishargePower " + chargePower + "W/"
-					+ maxDischargePower + "W");
-			applyDischargeMode(chargePower);
-		}
-	}
-	 */
+
 
 	private void adjustChargePowerModes(Integer chargePower, Integer maxChargePower, Integer maxDischargePower)
 			throws OpenemsNamedException {
@@ -607,6 +488,12 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		if (chargePower < 0) {
 			if (chargePower < (maxChargePower * -1)) {
 				chargePower = maxChargePower * -1;
+			}
+
+			if (chargePower == 0) {
+				this.logDebug(this.log, "Apply Idle Mode after charge power limiting");
+				applyIdleMode();
+				return;
 			}
 
 			this.logDebug(this.log,
@@ -616,6 +503,12 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		} else if (chargePower > 0) {
 			if (chargePower > maxDischargePower) {
 				chargePower = maxDischargePower;
+			}
+
+			if (chargePower == 0) {
+				this.logDebug(this.log, "Apply Idle Mode after discharge power limiting");
+				applyIdleMode();
+				return;
 			}
 
 			this.logDebug(this.log,
@@ -685,17 +578,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 		return acChargePolicy == AcChargePolicy.SE_CHARGE_DISCHARGE_MODE_ALWAYS;
 	}
-
-	/**
-	 * Comes from hardware. Positive value in Watts
-	 */
-	private int determineMaxDischargeContinuesPower() {
-		int maxDischargeContinuesPower = getMaxDischargeContinuesPower().orElse(0);
-		if (config.dischargePowerLimit() < maxDischargeContinuesPower) {
-			return config.dischargePowerLimit();
-		}
-		return maxDischargeContinuesPower;
-	}
+	
 	
 	private void applyIdleMode() throws OpenemsNamedException {
 		this.setRemoteControlCommandMode(ChargeDischargeMode.SE_CHARGE_POLICY_PV_AC);
@@ -703,22 +586,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		this.setMaxDischargePower(0);
 	}	
 
-	/**
-	 * Comes from hardware. Positive value in Watts
-	 */
-	private int determineMaxChargeContinuesPower() {
-		/*
-		 * int maxChargeContinuesPower = getMaxChargeContinuesPower().orElse(0) * -1; if
-		 * ((config.chargePowerLimit() * -1) > maxChargeContinuesPower) { return
-		 * (config.chargePowerLimit() * -1); }
-		 */
 
-		int maxChargeContinuesPower = getMaxChargeContinuesPower().orElse(0);
-		if ((config.chargePowerLimit()) < maxChargeContinuesPower) {
-			return (config.chargePowerLimit());
-		}
-		return maxChargeContinuesPower;
-	}
 
 	private void switchToAutomaticMode() {
 		try {
@@ -915,45 +783,45 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	@Override
 	public String debugLog() {
 		if (config.debugMode()) {
-			return "SoC:" + this.getSoc().asString() //
-					+ "|L:" + this.getActivePower().asString() //
-					+ "|ChargeEnergy:"
+			return "\nSoC:" + this.getSoc().asString() //
+					+ "\n|L:" + this.getActivePower().asString() //
+					+ "\n|ChargeEnergy:"
 					+ this.channel(SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY).value().asStringWithoutUnit()
-					+ "|DisChargeEnergy:"
+					+ "\n|DisChargeEnergy:"
 					+ this.channel(SymmetricEss.ChannelId.ACTIVE_DISCHARGE_ENERGY).value().asStringWithoutUnit()
 
-					+ "|DcDisChargePower:"
+					+ "\n|DcDisChargePower:"
 					+ this.channel(HybridEss.ChannelId.DC_DISCHARGE_POWER).value().asStringWithoutUnit()
-					+ "|DcDisChargeEnergy:"
+					+ "\n|DcDisChargeEnergy:"
 					+ this.channel(HybridEss.ChannelId.DC_DISCHARGE_ENERGY).value().asStringWithoutUnit()
-					+ "|DcChargeEnergy:"
+					+ "\n|DcChargeEnergy:"
 					+ this.channel(HybridEss.ChannelId.DC_CHARGE_ENERGY).value().asStringWithoutUnit()
 
-					+ ";" + "|ControlMode "
+					+ ";" + "\n|ControlMode "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.CONTROL_MODE).value().asStringWithoutUnit() //
-					+ "|ChargePolicy "
+					+ "\n|ChargePolicy "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.AC_CHARGE_POLICY).value().asStringWithoutUnit() //
-					+ "|DefaultMode "
+					+ "\n|DefaultMode "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.CHARGE_DISCHARGE_DEFAULT_MODE).value()
 							.asStringWithoutUnit() //
-					+ "|RemoteControlMode "
+					+ "\n|RemoteControlMode "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.REMOTE_CONTROL_COMMAND_MODE).value()
 							.asStringWithoutUnit() //
 					+ "\n|ChargePowerWantedAvg " + this.activePowerWantedAverageCalculator.getAverage()
-					+ "|ChargePowerWantedOriginal " + this.originalActivePowerWanted + "|ChargePowerWanted "
+					+ "\n|ChargePowerWantedOriginal " + this.originalActivePowerWanted + "\n|ChargePowerWanted "
 					+ this.getChargePowerWanted().asString()
 
-					+ "|Allowed Charge / Discharge Power " + this.getAllowedChargePower().asString() + " / "
+					+ "\n|Allowed Charge / Discharge Power " + this.getAllowedChargePower().asString() + " / "
 					+ this.getAllowedDischargePower().asString()
 
-					+ "\n|ChargePower "
+					+ "\n|Max ChargePower "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.MAX_CHARGE_POWER).value().asStringWithoutUnit() //
-					+ "|DischargePower "
+					+ "\n|Max DischargePower "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.MAX_DISCHARGE_POWER).value().asStringWithoutUnit() //
-					+ "|CommandTimeout "
+					+ "\n|CommandTimeout "
 					+ this.channel(SolarEdgeHybridEss.ChannelId.REMOTE_CONTROL_TIMEOUT).value().asStringWithoutUnit() //
 
-					+ "|" + this.getGridModeChannel().value().asOptionString() //
+					+ "\n|" + this.getGridModeChannel().value().asOptionString() //
 					+ "|Feed-In:";
 		} else
 			return "SoC:" + this.getSoc().asString() //
@@ -987,17 +855,76 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 	@Override
 	public Integer getSurplusPower() {
-		// TODO logic is insufficient
-		if (this.getSoc().orElse(0) < 98) { // SolarEdge holds on 98% a long time
-			return null;
-		}
-		var productionPower = this.getPvProductionPower();
-		if (productionPower == null || productionPower < 100) {
-			return null;
-		}
-		return productionPower + 200 /* discharge more than PV production to avoid PV curtail */;
-	}
+		/*
+		 * Surplus power is not grid feed-in power and not plain PV production.
+		 *
+		 * It is the PV power that is not or cannot be absorbed by the battery.
+		 *
+		 * For this SolarEdge implementation:
+		 * - if the battery is effectively full, use the actually measured battery charge power
+		 * - otherwise subtract the currently available battery charge capability
+		 */
 
+		if (this.charger == null) {
+			return null;
+		}
+
+		/*
+		 * If PV limitation is active, the measured PV production is already curtailed.
+		 * The real available uncurtailed PV surplus cannot be derived from the current
+		 * production value anymore.
+		 */
+		if (this.charger.getPvMode() == PvMode.LIMIT_ACTIVE) {
+			return null;
+		}
+
+		Integer pvProductionPower = this.getPvProductionPower();
+		if (pvProductionPower == null || pvProductionPower < MIN_SURPLUS_POWER) {
+			return null;
+		}
+
+		Integer dcBatteryPower = this.getDcDischargePower().get();
+		if (dcBatteryPower == null) {
+			return null;
+		}
+
+		/*
+		 * Sign convention:
+		 * DC_DISCHARGE_POWER > 0 means battery discharging.
+		 * DC_DISCHARGE_POWER < 0 means battery charging.
+		 */
+		int actualBatteryChargePower = Math.max(0, -dcBatteryPower);
+
+		int batteryAbsorptionPower;
+
+		if (this.getSoc().orElse(0) >= EFFECTIVELY_FULL_SOC) {
+			/*
+			 * SolarEdge-specific behavior:
+			 * At around 98 % SoC the battery can be effectively full even if the reported
+			 * SoC is not 100 %. In this state the actual measured charge power is the more
+			 * useful value.
+			 */
+			batteryAbsorptionPower = actualBatteryChargePower;
+		} else {
+			/*
+			 * If the battery is not effectively full, subtract the power that the battery
+			 * could still absorb. Otherwise we would report false surplus whenever the
+			 * controller is currently not charging.
+			 *
+			 * This value is calculated centrally in setLimits().
+			 */
+			batteryAbsorptionPower = Math.max(actualBatteryChargePower, this.currentMaxChargePower);
+		}
+
+		int surplusPower = pvProductionPower - batteryAbsorptionPower;
+
+		if (surplusPower < MIN_SURPLUS_POWER) {
+			return null;
+		}
+
+		return surplusPower;
+	}
+	
 	/**
 	 * Gets PV production power from charger.
 	 * 
@@ -1142,88 +1069,117 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 		}
 
 	}
+	
+	
 	private void setLimits() {
-	    int maxChargeContinuesPower = determineMaxChargeContinuesPower();
-	    int maxDischargeContinuesPower = determineMaxDischargeContinuesPower();
+		/*
+		 * Config limits are the final operator-defined limits.
+		 * They are positive values in Watt.
+		 */
+		int configChargeLimit = Math.max(0, this.config.chargePowerLimit());
+		int configDischargeLimit = Math.max(0, this.config.dischargePowerLimit());
 
-	    int maxChargePower = maxChargeContinuesPower * -1;
-	    int maxDischargePower;
+		/*
+		 * SolarEdge/SunSpec limits.
+		 * If the value is not available yet, use the configured limit.
+		 * If SolarEdge reports 0 or negative, treat it as 0.
+		 */
+		int inverterChargeLimit = Math.max(0, this.getMaxChargeContinuesPower().orElse(configChargeLimit));
+		int inverterDischargeLimit = Math.max(0, this.getMaxDischargeContinuesPower().orElse(configDischargeLimit));
 
-	    switch (this.config.setPointMode()) {
-	    case AC_SETPOINT -> {
-	        var pvProduction = Math.max(
-	                TypeUtils.orElse(
-	                        TypeUtils.subtract(this.getActivePower().get(), this.getDcDischargePower().get()),
-	                        0),
-	                0);
+		int batteryChargeLimit = Math.min(inverterChargeLimit, configChargeLimit);
+		int batteryDischargeLimit = Math.min(inverterDischargeLimit, configDischargeLimit);
 
-	        maxDischargePower = maxDischargeContinuesPower + pvProduction;
-	    }
+		boolean pvLimitActive = this.charger != null && this.charger.getPvMode() == PvMode.LIMIT_ACTIVE;
 
-	    case DC_SETPOINT -> {
-	        maxDischargePower = maxDischargeContinuesPower;
-	    }
+		Integer essActivePower = this.getActivePower().get();
+		Integer dcDischargePower = this.getDcDischargePower().get();
 
-	    default -> {
-	        maxDischargePower = maxDischargeContinuesPower;
-	    }
-	    }
-
-	    this.logDebug(this.log, "SetLimits->Mode/MaxChargePower/MaxDischargePower "
-	            + this.config.setPointMode() + "/"
-	            + maxChargePower + "/"
-	            + maxDischargePower + "W");
-
-	    setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER, maxChargePower);
-	    this._setAllowedDischargePower(maxDischargePower);
-
-	    this._setMaxApparentPower(HW_MAX_APPARENT_POWER);
-	}	
-	
-	private int getPvLimitFromHybridBalance(int batteryPowerTarget) {
-		int acLimit = HW_MAX_APPARENT_POWER;
-		int margin = PV_LIMIT_MARGIN;
-
-		if (batteryPowerTarget < 0) {
-			int allowedChargePower = Math.min(Math.abs(batteryPowerTarget), determineMaxChargeContinuesPower());
-			return Math.max(0, acLimit + allowedChargePower - margin);
-		}
-
-		if (batteryPowerTarget > 0) {
-			int allowedDischargePower = Math.min(batteryPowerTarget, determineMaxDischargeContinuesPower());
-			return Math.max(0, acLimit - allowedDischargePower - margin);
-		}
-
-		return Math.max(0, acLimit - margin);
-	}
-	
-	
-/*
-	private void setLimits() {
-		int maxChargeContinuesPower = determineMaxChargeContinuesPower(); // Hardware or configured limit
-		int maxDischargeContinuesPower = determineMaxDischargeContinuesPower(); // Hardware or configured limit
-
-		// PV-Production
-		var pvProduction = Math.max(//
-				TypeUtils.orElse(//
-						TypeUtils.subtract(this.getActivePower().get(), this.getDcDischargePower().get()), //
+		int pvPower = Math.max(
+				TypeUtils.orElse(
+						TypeUtils.subtract(essActivePower, dcDischargePower),
 						0),
 				0);
 
-		int maxChargePower = maxChargeContinuesPower * -1;
-		int maxDischargePower = maxDischargeContinuesPower + pvProduction;
+		int availableBatteryDischargePower = batteryDischargeLimit;
 
-		this.logDebug(this.log, "SetLimits->MaxChargePower/MaxDischargePower " + maxChargeContinuesPower + "/"
-				+ maxChargePower + "/" + maxDischargePower + "W");
+		if (pvLimitActive) {
+			/*
+			 * Observation:
+			 * SolarEdge does not discharge the battery while PV limitation is active.
+			 *
+			 * Publish this via AllowedDischargePower so other controllers see the real
+			 * current battery discharge capability.
+			 */
+			availableBatteryDischargePower = 0;
+		} else {
+			/*
+			 * ActivePower is the complete AC power of the hybrid inverter.
+			 * DcDischargePower is positive while discharging and negative while charging.
+			 *
+			 * PV ~= ActivePower - DcDischargePower
+			 *
+			 * Battery discharge is only possible as long as:
+			 *
+			 *   PV + battery discharge <= HW_MAX_APPARENT_POWER
+			 */
+			int maxDischargeByAcLimit = Math.max(0, HW_MAX_APPARENT_POWER - pvPower);
 
-		// Apply AllowedChargePower and AllowedDischargePower
-		// ToDo 2026 03 27
-		//this._setAllowedChargePower(maxChargePower);
-		
-		setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,maxChargePower);
-		this._setAllowedDischargePower(maxDischargePower);
+			availableBatteryDischargePower = Math.min(
+					batteryDischargeLimit,
+					maxDischargeByAcLimit);
+		}
+
+		this.currentMaxChargePower = batteryChargeLimit;
+		this.currentMaxDischargePower = availableBatteryDischargePower;
+
+		int allowedChargePower = this.currentMaxChargePower * -1;
+		int allowedDischargePower;
+
+		switch (this.config.setPointMode()) {
+		case AC_SETPOINT -> {
+			/*
+			 * AC_SETPOINT:
+			 * AllowedDischargePower represents possible total AC output of PV + battery.
+			 */
+			allowedDischargePower = Math.min(
+					HW_MAX_APPARENT_POWER,
+					pvPower + this.currentMaxDischargePower);
+		}
+
+		case DC_SETPOINT -> {
+			/*
+			 * DC_SETPOINT:
+			 * AllowedDischargePower represents real possible battery discharge power.
+			 */
+			allowedDischargePower = this.currentMaxDischargePower;
+		}
+
+		default -> {
+			allowedDischargePower = this.currentMaxDischargePower;
+		}
+		}
+
+		this.logDebug(this.log,
+				"SetLimits->Mode/AllowedChargePower/AllowedDischargePower "
+						+ this.config.setPointMode() + "/"
+						+ allowedChargePower + "W/"
+						+ allowedDischargePower + "W"
+						+ " | ConfigChargeLimit " + configChargeLimit + "W"
+						+ " | ConfigDischargeLimit " + configDischargeLimit + "W"
+						+ " | InverterChargeLimit " + inverterChargeLimit + "W"
+						+ " | InverterDischargeLimit " + inverterDischargeLimit + "W"
+						+ " | PvLimitActive " + pvLimitActive
+						+ " | EssActivePower " + essActivePower + "W"
+						+ " | DcDischargePower " + dcDischargePower + "W"
+						+ " | PvPower " + pvPower + "W"
+						+ " | CurrentMaxChargePower " + this.currentMaxChargePower + "W"
+						+ " | CurrentMaxDischargePower " + this.currentMaxDischargePower + "W");
+
+		setValue(this, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER, allowedChargePower);
+		this._setAllowedDischargePower(allowedDischargePower);
 
 		this._setMaxApparentPower(HW_MAX_APPARENT_POWER);
 	}
-*/
+
 }

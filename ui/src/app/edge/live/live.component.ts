@@ -55,6 +55,17 @@ export class LiveComponent implements OnDestroy {
             edge?.getFirstValidConfig(websocket)?.then(async config => {
                 this.config = config;
                 this.widgets = await navigationService.getWidgets(config.widgets, userService.currentUser(), edge);
+
+                console.table(
+                    this.widgets?.list
+                        .filter(w => w.name.includes("CHP") || w.name.includes("Cost"))
+                        .map(w => ({
+                            name: w.name,
+                            componentId: w.componentId,
+                            alias: w.alias,
+                            factoryId: config.components[w.componentId]?.factoryId,
+                        }))
+                );
             });
             this.checkIfRefreshNeeded();
         });

@@ -13,6 +13,7 @@ public enum State implements OptionsEnum {
 	IDLE(5, "Idle state e.g. power from grid too low"),
 	OVER_TEMPERATURE(6, "Idle state e.g. power from grid too low"),
 	CHP_NOT_READY(7, "Hardware is not ready to start"),
+	WARNING(8, "State Warning. Check CHP device(s)"),
 
 	;
 

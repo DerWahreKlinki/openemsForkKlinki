@@ -880,8 +880,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 		if (this.timeOfUseTariff.getPrices().isEmpty()) {
 			this.log.warn("Controller not ready. No prices available");
-			this.changeState(State.ERROR);
-			this.operationalValuesOk = false;
+			this.changeState(State.WARNING);
+			this.operationalValuesOk = true;
 			return;
 		}
 

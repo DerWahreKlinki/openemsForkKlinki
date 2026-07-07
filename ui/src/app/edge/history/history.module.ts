@@ -5,15 +5,14 @@ import { SharedModule } from "../../shared/shared.module";
 import { FlatComponent as StorageFlatComponent } from "../live/common/storage/history/flat/flat";
 import { ControllerHeatingElementChartComponent } from "../live/Controller/Io/HeatingElement/history/flat/flat";
 import { ControllerIoHeatpumpFlatHistoryComponent } from "../live/Controller/Io/Heatpump/history/flat/flat";
+import { ModbusTcpApiHistoryFlatComponent } from "../live/Controller/ModbusTcpApi/history/flat/flat";
+import { FlatComponent as AsymmetricPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Asymmetric/history/flat/flat";
+import { FlatComponent as SymmetricPeakshavingFlatComponent } from "../live/Controller/peak-shaving/symmetric/history/flat/flat";
+import { FlatComponent as TimeslotPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Symmetric_TimeSlot/history/flat/flat";
 import { ChpSocChartComponent } from "./chpsoc/chart.component";
 import { ChpSocWidgetComponent } from "./chpsoc/widget.component";
 import { Common } from "./common/common";
-import { FlatComponent as ChpCostOptimizationFlatComponent } from "./Controller/chp/CostOptimization/flat/flat";
 import { Controller } from "./Controller/controller.module";
-import { FlatComponent as AsymmetricPeakshavingFlatComponent } from "./Controller/peak-shaving/asymmetric/flat/flat";
-import { FlatComponent as SymmetricPeakshavingFlatComponent } from "./Controller/peak-shaving/symmetric/flat/flat";
-import { FlatComponent as ThresholdPeakshavingFlatComponent } from "./Controller/peak-shaving/threshold/flat/flat";
-import { FlatComponent as TimeslotPeakshavingFlatComponent } from "./Controller/peak-shaving/timeslot/flat/flat";
 import { DelayedSellToGridChartComponent } from "./delayedselltogrid/chart.component";
 import { DelayedSellToGridChartOverviewComponent } from "./delayedselltogrid/symmetricpeakshavingchartoverview/delayedselltogridchartoverview.component";
 import { DelayedSellToGridWidgetComponent } from "./delayedselltogrid/widget.component";
@@ -28,15 +27,14 @@ import { HistoryParentComponent } from "./historyparent.component";
         SharedModule,
         DomChangeDirective,
         StorageFlatComponent,
+        ModbusTcpApiHistoryFlatComponent,
     ],
     declarations: [
         ChpSocChartComponent,
         ChpSocWidgetComponent,
-        ChpCostOptimizationFlatComponent,
         DelayedSellToGridChartComponent,
         DelayedSellToGridChartOverviewComponent,
         DelayedSellToGridWidgetComponent,
-        ThresholdPeakshavingFlatComponent,
         ControllerIoHeatpumpFlatHistoryComponent,
         ControllerHeatingElementChartComponent,
         TimeslotPeakshavingFlatComponent,
@@ -46,4 +44,4 @@ import { HistoryParentComponent } from "./historyparent.component";
         HistoryParentComponent,
     ],
 })
-export class HistoryModule { }
+export class HistoryModule {}

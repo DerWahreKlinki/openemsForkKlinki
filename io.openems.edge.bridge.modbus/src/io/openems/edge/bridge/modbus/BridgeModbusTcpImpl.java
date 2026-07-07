@@ -2,6 +2,7 @@ package io.openems.edge.bridge.modbus;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Clock;
 
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -9,6 +10,7 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Modified;
+import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.event.EventHandler;
 import org.osgi.service.event.propertytypes.EventTopics;
 import org.osgi.service.metatype.annotations.Designate;
@@ -23,6 +25,7 @@ import io.openems.edge.bridge.modbus.api.AbstractModbusBridge;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.BridgeModbusTcp;
 import io.openems.edge.bridge.modbus.api.Config;
+import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.startstop.StartStoppable;
@@ -52,6 +55,9 @@ import java.util.Objects;
 })
 public class BridgeModbusTcpImpl extends AbstractModbusBridge
 		implements BridgeModbus, BridgeModbusTcp, OpenemsComponent, EventHandler, StartStoppable {
+
+	@Reference
+	private ComponentManager componentManager;
 
 	/** The configured IP address. */
 	private InetAddress ipAddress = null;
@@ -88,6 +94,11 @@ public class BridgeModbusTcpImpl extends AbstractModbusBridge
 				config.invalidateElementsAfterReadErrors()));
 		this.applyConfig(config);
 		this.closeModbusConnection();
+	}
+
+	@Override
+	public Clock getClock() {
+		return this.componentManager.getClock();
 	}
 
 	private void applyConfig(ConfigTcp config) {

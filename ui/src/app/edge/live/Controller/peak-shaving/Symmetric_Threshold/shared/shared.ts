@@ -115,6 +115,33 @@ export namespace SharedControllerThresholdPeakshaving {
                         unit: "W",
                     },
                 },
+                {
+                    type: "horizontal-line",
+                },
+                {
+                    type: "channel-line",
+                    name: "PeakShavingPower",
+                    channel: component.id + "/PeakShavingPower",
+                    converter: Converter.POWER_IN_KILO_WATT,
+                },
+                {
+                    type: "channel-line",
+                    name: "PeakShavingTargetPower",
+                    channel: component.id + "/PeakShavingTargetPower",
+                    converter: Converter.POWER_IN_KILO_WATT,
+                },
+                {
+                    type: "channel-line",
+                    name: "GridPowerWithoutPeakShaving",
+                    channel: component.id + "/GridPowerWithoutPeakShaving",
+                    converter: Converter.POWER_IN_KILO_WATT,
+                },
+                {
+                    type: "channel-line",
+                    name: "PeakShavingStateMachine",
+                    channel: component.id + "/PeakShavingStateMachine",
+                    converter: Converter.TO_STRING,
+                },
             );
         }
 
@@ -130,9 +157,14 @@ export namespace SharedControllerThresholdPeakshaving {
             ...(meterId == null
                 ? []
                 : [new ChannelAddress(meterId, "ActivePower")]),
+
             new ChannelAddress(component.id, "_PropertyPeakShavingPower"),
             new ChannelAddress(component.id, "_PropertyRechargePower"),
-            new ChannelAddress(component.id,"_PropertyPeakShavingThresholdPower"),
+            new ChannelAddress(
+                component.id,
+                "_PropertyPeakShavingThresholdPower",
+            ),
+
             new ChannelAddress(component.id, "PeakShavingPower"),
             new ChannelAddress(component.id, "PeakShavingTargetPower"),
             new ChannelAddress(component.id, "GridPowerWithoutPeakShaving"),

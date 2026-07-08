@@ -7,7 +7,7 @@ import { ChartComponentsModule } from "src/app/shared/components/chart/chart.mod
 import { HistoryDataErrorModule } from "src/app/shared/components/history-data-error/history-data-error.module";
 import { PickdateComponentModule } from "src/app/shared/components/pickdate/pickdate.module";
 import { Language } from "src/app/shared/type/language";
-import { ThresholdChartComponent } from "../chart/chart";
+import { ThresholdPeakshavingChartComponent } from "../chart/chart";
 
 @Component({
     selector: "overview",
@@ -20,7 +20,7 @@ import { ThresholdChartComponent } from "../chart/chart";
         ChartComponentsModule,
         PickdateComponentModule,
         HistoryDataErrorModule,
-        ThresholdChartComponent,
+        ThresholdPeakshavingChartComponent,
     ],
     providers: [
         {

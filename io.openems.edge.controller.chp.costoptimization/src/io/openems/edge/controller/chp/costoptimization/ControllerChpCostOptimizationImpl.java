@@ -283,6 +283,13 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			this.chp.applyPreparation(false);
 			this.setChpOff();
 			break;
+		case WARNING:
+			// Prices/TimeOfUseTariff became available again -> leave WARNING and resume full operation
+			if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
+				this.changeState(State.NORMAL);
+			}
+			// fall through: keep controlling the CHP using safe price defaults (0.0, i.e. "not above
+			// threshold") instead of freezing at the last applied power while prices are unavailable
 		case NORMAL:
 
 			if (this.config.mode() == Mode.MANUAL_ON) {
@@ -689,7 +696,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	private Double getCurrentCost(Integer power) {
 
 		Double currentPrice = 0.0;
-		if (!this.timeOfUseTariff.getPrices().isEmpty() && power != null && power > 0) {
+		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty() && power != null
+				&& power > 0) {
 			currentPrice = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
 		} else {
 			return 0.0;
@@ -697,64 +705,32 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		// this.logDebug(this.log, " CurrentPrice " + currentPrice + "€/MWh\n");
 		return Math.round((currentPrice * power / 1_000_000.0) * 1000.0) / 1000.0;
 	}
-	
+
 	private Double getCurrentPrice() {
 
 		Double currentPrice = 0.0;
-		if (!this.timeOfUseTariff.getPrices().isEmpty()) {
+		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
 			currentPrice = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
 		} else {
 			return 0.0;
 		}
 		// this.logDebug(this.log, " CurrentPrice " + currentPrice + "€/MWh\n");
 		return currentPrice;
-	}	
-	
+	}
+
 	private Double getFuturePrice() {
 	    var now = ZonedDateTime.now(this.componentManager.getClock());
 	    var target = now.plusSeconds(this.config.preparationHyteresis()); // z.B. +3600s
 
-	    if (!this.timeOfUseTariff.getPrices().isEmpty()) {
+	    if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
 	        var price = this.timeOfUseTariff.getPrices().getAt(target);
 	        return price != null ? price : 0.0;
 	    }
 
 	    return 0.0;
-	}	
-/*
-	private Double getFuturePrice() {
-		var from = ZonedDateTime.now(this.componentManager.getClock());
-		int qMin = (from.getMinute() / 15) * 15;
-		from = from.withMinute(qMin).withSecond(0).withNano(0);
+	}
 
-		var to = from.plusSeconds(this.config.preparationHyteresis()); // 3600s = 1h
 
-		if (!this.timeOfUseTariff.getPrices().isEmpty()) {
-			// this.futurePrice = this.timeOfUseTariff.getPrices().get
-
-			// Double[] arrFuturePrices = this.timeOfUseTariff.getPrices().asArray();
-			
-			// ToDo 2026 03 27
-			//var avgEurPerMWh = this.timeOfUseTariff.getPrices().getBetweenExclusive(from, to).mapToDouble(Double::doubleValue)
-			//		.average().orElse(0.0);
-
-			var avgEurPerMWh = this.timeOfUseTariff.getPrices()
-			        .getBetweenExclusive(from, to)
-			        .map(Map.Entry::getValue)
-			        .mapToDouble(Double::doubleValue)
-			        .average()
-			        .orElse(0.0);			
-			
-			return avgEurPerMWh;
-
-		} else {
-			return 0.0;
-		}
-
-	}	
-*/
-	
-	
 	private Double getFutureCost(Integer power) {
 		var from = ZonedDateTime.now(this.componentManager.getClock());
 		int qMin = (from.getMinute() / 15) * 15;
@@ -762,7 +738,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 		var to = from.plusSeconds(this.config.preparationHyteresis()); // 3600s = 1h
 
-		if (!this.timeOfUseTariff.getPrices().isEmpty() && power != null && power > 0) {
+		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty() && power != null
+				&& power > 0) {
 			// this.futurePrice = this.timeOfUseTariff.getPrices().get
 
 			// Double[] arrFuturePrices = this.timeOfUseTariff.getPrices().asArray();
@@ -864,22 +841,9 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			return;
 		}
 
-		if (this.timeOfUseTariff == null) {
-			this.log.warn("Controller not ready. No prices available because TimeOfUse Controller is NULL");
-			this.changeState(State.ERROR);
-			this.operationalValuesOk = false;
-			return;
-		}
-
-		if (this.chp.getGeneratorActivePower().get() == null) {
-			this.log.warn("Controller not ready. No value for ActivePower from generator(s)");
-			this.changeState(State.ERROR);
-			this.operationalValuesOk = false;
-			return;
-		}
-
-		if (this.timeOfUseTariff.getPrices().isEmpty()) {
-			this.log.warn("Controller not ready. No prices available");
+		if (this.timeOfUseTariff == null || this.timeOfUseTariff.getPrices().isEmpty()) {
+			this.log.warn(
+					"No electricity prices available (TimeOfUseTariff is null or has no price data). Continuing operation in WARNING state without price-based control.");
 			this.changeState(State.WARNING);
 			this.operationalValuesOk = true;
 			return;

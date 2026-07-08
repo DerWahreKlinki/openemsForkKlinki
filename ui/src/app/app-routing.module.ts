@@ -3,6 +3,7 @@ import { NoPreloading, RedirectFunction, RouterModule, Routes } from "@angular/r
 import { CookieService } from "ngx-cookie-service";
 import { environment } from "src/environments";
 import { EdgeComponent } from "./edge/edge.component";
+import { OverviewComponent as ChpCostOptimizationChartOverviewComponent } from "./edge/history/Controller/chp/CostOptimization/overview/overview";
 import { DelayedSellToGridChartOverviewComponent } from "./edge/history/delayedselltogrid/symmetricpeakshavingchartoverview/delayedselltogridchartoverview.component";
 import { HistoryComponent as EdgeHistoryComponent } from "./edge/history/history.component";
 import { HistoryDataService } from "./edge/history/historydataservice";
@@ -62,6 +63,10 @@ export const history: (/** Determines if titles in headers can be set */ customH
             {
                 path: ":componentId/asymmetricpeakshavingchart",
                 component: AsymmetricPeakshavingChartOverviewComponent,
+            },
+            {
+                path: ":componentId/chpcostoptimizationchart",
+                component: ChpCostOptimizationChartOverviewComponent,
             },
             {
                 path: ":componentId/delayedselltogridchart",

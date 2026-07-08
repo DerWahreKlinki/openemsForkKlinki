@@ -62,13 +62,11 @@ export class ChartComponent extends AbstractHistoryChart {
                 powerChannel: new ChannelAddress(component.id, "StateMachine"),
             },
         ];
-        //console.log("All Data/Input CHP Cost Optimization Chart:", input);
 
         return {
 
             input: input,
             output: (data: HistoryUtils.ChannelData) => {
-                //console.log("Alle Channel-Daten:", data);
                 return [
                     {
                         name: translate.instant("EDGE.INDEX.WIDGETS.GRID_CONSUMPTION"),
@@ -77,7 +75,7 @@ export class ChartComponent extends AbstractHistoryChart {
                         hideShadow: false,
                     },
                     {
-                        name: translate.instant("EDGE.INDEX.WIDGETS.CHP.ACTIVE_POWER_TARGERT"),
+                        name: translate.instant("EDGE.INDEX.WIDGETS.CHP.ACTIVE_POWER_TARGET"),
                         color: ChartConstants.Colors.SHADES_OF_YELLOW[0],
                         borderDash: [3, 3],
                         converter: () => data["ActivePowerTarget"],
@@ -87,7 +85,6 @@ export class ChartComponent extends AbstractHistoryChart {
                         name: translate.instant("EDGE.INDEX.WIDGETS.CHP.ACTIVE_POWER"),
                         color: ChartConstants.Colors.YELLOW,
                         converter: () => data["ChpActivePower"],
-                        nameSuffix: () => "bla",
                         hideShadow: true,
                     },
                     {

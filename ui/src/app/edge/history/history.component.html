@@ -139,6 +139,11 @@
                 <chpsocWidget [componentId]="widget.componentId" [period]="service.historyPeriod.value"> </chpsocWidget>
               </ion-col>
             }
+            @case ("Controller.CHP.CostOptimization") {
+              <ion-col size="12" size-md="6" size-lg="4" size-xl="3">
+                <oe-controller-chp-cost-optimization [componentId]="widget.componentId"> </oe-controller-chp-cost-optimization>
+              </ion-col>
+            }
           }
         }
       </ion-row>

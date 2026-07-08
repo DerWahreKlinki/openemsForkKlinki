@@ -1,19 +1,18 @@
-package io.openems.edge.controller.ess.chargedischargelimiter;
+package io.openems.edge.controller.ess.chargedischargelimiter.enums;
 
 import io.openems.common.types.OptionsEnum;
 
-public enum BalancingDecision implements OptionsEnum {
+public enum BalancingDeferralReason implements OptionsEnum {
 	UNDEFINED(-1, "Undefined"), //
-	NO(0, "No balancing needed"), // SoC in range between min and max
-	YES(1, "Balancing necessary and allowed"), //
-	YES_DEFERRED(2, "Balancing necessary but NOT allowed"), //
-;
-
+	NONE(0, "Balancing is not deferred"), //
+	PEAKSHAVING(1, "Balancing deferred due to active peakshaving"), //
+	PRICE_LIMIT(2, "Balancing deferred due to exceeded price limit"), //
+	;
 
 	private final int value;
 	private final String name;
 
-	private BalancingDecision(int value, String name) {
+	private BalancingDeferralReason(int value, String name) {
 		this.value = value;
 		this.name = name;
 	}

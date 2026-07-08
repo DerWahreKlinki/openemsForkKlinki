@@ -185,9 +185,15 @@
               [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.' + (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey ?? 'UNDEFINED')) | translate">
             </oe-modal-line>
             <ng-container
-              *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.state === 'BALANCING_ACTIVE'">
+              *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
                 [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds | formatSecondsToDuration">
+              </oe-modal-line>
+            </ng-container>
+            <ng-container
+              *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON_LABEL' | translate"
+                [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON.' + (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey ?? 'NONE')) | translate">
               </oe-modal-line>
             </ng-container>
 
@@ -690,9 +696,15 @@
                 </oe-modal-line>
 
                 <ng-container
-                  *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.state === 'BALANCING_ACTIVE'">
+                  *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
                   <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate"
                     [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds | formatSecondsToDuration">
+                  </oe-modal-line>
+                </ng-container>
+                <ng-container
+                  *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
+                  <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON_LABEL' | translate"
+                    [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON.' + (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey ?? 'NONE')) | translate">
                   </oe-modal-line>
                 </ng-container>
 

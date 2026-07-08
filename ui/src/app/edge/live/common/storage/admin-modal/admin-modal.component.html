@@ -158,6 +158,15 @@
                           | formatSecondsToDuration
                       "></oe-modal-line>
           </ng-container>
+          <ng-container
+            *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON_LABEL' | translate"
+              [value]="
+                        ('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON.' +
+                          (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey ?? 'NONE')
+                        ) | translate
+                      "></oe-modal-line>
+          </ng-container>
         </ion-label>
       </ion-item>
 
@@ -583,6 +592,16 @@
                             [value]="
                         formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds
                           | formatSecondsToDuration
+                      "></oe-modal-line>
+                        </ng-container>
+                        <ng-container
+                          *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
+                          <oe-modal-line
+                            [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON_LABEL' | translate"
+                            [value]="
+                        ('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON.' +
+                          (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey ?? 'NONE')
+                        ) | translate
                       "></oe-modal-line>
                         </ng-container>
                       </ion-label>

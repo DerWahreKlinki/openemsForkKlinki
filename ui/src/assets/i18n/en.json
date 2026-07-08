@@ -264,6 +264,14 @@
                     "OUTPUT": "Output",
                     "TITLE": "Channel threshold controller"
                 },
+                "CHARGE_DISCHARGE_STATE": {
+                    "BALANCING_DEFERRAL_REASON_LABEL": "Reason for delay",
+                    "BALANCING_DEFERRAL_REASON": {
+                        "NONE": "",
+                        "PEAKSHAVING": "Active peak shaving",
+                        "PRICE_LIMIT": "Electricity price too high"
+                    }
+                },
                 "CHP": {
                     "HIGH_THRESHOLD": "High Threshold",
                     "LOW_THRESHOLD": "Low Threshold"

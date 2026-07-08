@@ -14,6 +14,8 @@ import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.controller.api.Controller;
+import io.openems.edge.controller.ess.chargedischargelimiter.enums.BalancingDeferralReason;
+import io.openems.edge.controller.ess.chargedischargelimiter.enums.State;
 
 public interface ControllerEssChargeDischargeLimiter extends Controller, OpenemsComponent {
 
@@ -24,6 +26,9 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 
 		AWAITING_HYSTERESIS(Doc.of(Level.INFO) //
 				.text("Would change State, but hysteresis is active")),
+
+		BALANCING_DEFERRAL_REASON(Doc.of(BalancingDeferralReason.values()) //
+				.text("Reason why a wanted balancing is currently deferred").persistencePriority(HIGH)), //
 		/**
 		 * Holds the minimum SoC value configured.
 		 */
@@ -96,6 +101,35 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 	 */
 	public default void _setAwaitingHysteresisValue(boolean value) {
 		this.getAwaitingHysteresisChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#BALANCING_DEFERRAL_REASON}.
+	 *
+	 * @return the Channel
+	 */
+	public default Channel<BalancingDeferralReason> getBalancingDeferralReasonChannel() {
+		return this.channel(ChannelId.BALANCING_DEFERRAL_REASON);
+	}
+
+	/**
+	 * Gets the reason why a wanted balancing is currently deferred. See
+	 * {@link ChannelId#BALANCING_DEFERRAL_REASON}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default BalancingDeferralReason getBalancingDeferralReason() {
+		return this.getBalancingDeferralReasonChannel().value().asEnum();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#BALANCING_DEFERRAL_REASON} Channel.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setBalancingDeferralReason(BalancingDeferralReason value) {
+		this.getBalancingDeferralReasonChannel().setNextValue(value);
 	}
 
 	/**

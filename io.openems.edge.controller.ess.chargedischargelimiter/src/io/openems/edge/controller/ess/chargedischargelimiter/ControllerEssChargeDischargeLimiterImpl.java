@@ -42,6 +42,9 @@ import io.openems.edge.common.type.TypeUtils;
 
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.controller.symmetric.thresholdpeakshaver.ControllerEssThresholdPeakshaver;
+import io.openems.edge.controller.ess.chargedischargelimiter.enums.BalancingDecision;
+import io.openems.edge.controller.ess.chargedischargelimiter.enums.BalancingDeferralReason;
+import io.openems.edge.controller.ess.chargedischargelimiter.enums.State;
 import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 
 import io.openems.edge.energy.api.EnergySchedulable;
@@ -86,7 +89,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private boolean debugMode = false;
 	private Integer slowChargePower = null;
 	private Integer slowDischargePower = null;
-	private boolean autoDischarge = false;
 
 	static final int TAPER_PERCENT = 3; // decrease charge power during the last X percent before hitting the max. Soc
 	static final int BALANCING_SOC = 100;
@@ -134,8 +136,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled());
 
-		this.config = config;
-
 		this.updateConfig(config);
 
 		this.energyScheduleHandler = io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler
@@ -144,11 +144,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 								? new io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler.Config(
 										this.config.minSoc(), this.config.maxSoc())
 								: null);
-
-		if (OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "ess", config.ess_id())) {
-			return;
-		}
-
 	}
 
 	@Override
@@ -157,19 +152,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		super.deactivate();
 	}
 
-	/*  2026 07 02
-	 * changed to Modified Annotation
-
-	@Override
-	protected void modified(ComponentContext context, String id, String alias, boolean enabled) {
-		super.modified(context, id, alias, enabled);
-		this.updateConfig(this.config);
-		if (this.energyScheduleHandler != null) {
-			this.energyScheduleHandler.triggerReschedule("ControllerEssChargeDischargeLimiterImpl::modified()", RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
-		}
-	}	
-	 */
-	
 	@Modified
 	private void modified(ComponentContext context, Config config) {
 		super.modified(context, config.id(), config.alias(), config.enabled());
@@ -204,7 +186,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 */
 	private void initializeChargedEnergyFromTimedata() {
 
-		// ControllerEssChargeDischargeLimiter.ChannelId.STATE_MACHINE;
 		var timedata = this.getTimedata();
 
 		if (timedata == null) {
@@ -214,7 +195,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		this.logDebug(this.log, "Querying Timedata service for the latest energy value...");
 
-		this.timedata
+		timedata
 				.getLatestValue(new ChannelAddress(this.id(),
 						ControllerEssChargeDischargeLimiter.ChannelId.CHARGED_ENERGY.id()))
 				.thenAccept(chargedEnergy -> {
@@ -229,7 +210,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				});
 	}
 
-	private Object getTimedata() {
+	private Timedata getTimedata() {
 		return this.timedata;
 	}
 
@@ -426,14 +407,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			calculatedPower = Math.min(calculatedPower, this.slowChargePower);
 			break;
 		case MAX_SOC_REACHED:
-			
-			// 
+
+			//
 			if (this.balanceDecision == BalancingDecision.YES) {
-				if (!this.changeState(State.BALANCING_WANTED)) {
-					calculatedPower = 0;
-				}
+				this.changeState(State.BALANCING_WANTED);
+				calculatedPower = 0; // keep blocking further charge until BALANCING_WANTED takes over
 				break;
-			}			
+			}
 
 			if (this.currentSoc < this.maxSoc) {
 				this.changeState(State.NORMAL);
@@ -466,17 +446,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		case ABOVE_MAX_SOC:
 
 			if (this.balanceDecision == BalancingDecision.YES) {
-				if (!this.changeState(State.BALANCING_WANTED)) {
-					calculatedPower = 0;
-				}
+				this.changeState(State.BALANCING_WANTED);
+				calculatedPower = 0; // keep blocking further charge until BALANCING_WANTED takes over
 				break;
-			}			
-			
-			if (this.slowDischargePower != null && this.autoDischarge) {
-				calculatedPower = this.slowDischargePower; // discharge slowly if autoDischarge is configured
-			} else {
-				calculatedPower = 0; // do not charge any further
 			}
+
+			calculatedPower = 0; // do not charge any further
 
 			if (this.currentSoc == this.maxSoc) {
 				this.changeState(State.MAX_SOC_REACHED);
@@ -693,19 +668,19 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				this.logDebug(this.log,
 						"APPROACHING_MIN_SOC ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
 			}
-			case NORMAL -> {
-				if (calculatedPower < 0) { // ramp down charge power
-					this.ess.setActivePowerGreaterOrEquals(calculatedPower);
-					this.logDebug(this.log, "ApplyPowerMethod -> setActivePowerGreaterOrEquals " + calculatedPower);
-				}
+			case NORMAL -> { // no constraint needed in normal operation
 			}
 			case BALANCING_WANTED -> {
-				
+
 				if (this.currentSoc <= this.minSoc) {
 					this.ess.setActivePowerLessOrEquals(calculatedPower);
 					this.logDebug(this.log,
-							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);					
-				} 
+							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
+				} else if (this.currentSoc >= this.maxSoc) {
+					this.ess.setActivePowerGreaterOrEquals(calculatedPower);
+					this.logDebug(this.log,
+							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerGreaterOrEquals " + calculatedPower);
+				}
 			}
 			case UNDEFINED -> { // do nothing
 			}
@@ -751,8 +726,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.log.warn("TimeOfUseTariff service is null.");
 			return true; // Ignore check if no ToU controller is available and no price can be obtained
 		}
-		currentPrice = (int) Math.round(this.timeOfUseTariff.getPrices().getFirst() / 10); // Price in €/MWh. Divided to
-																							// ct/kWh
+
+		Double firstPrice = this.timeOfUseTariff.getPrices().getFirst();
+		if (firstPrice == null) {
+			this.log.warn("TimeOfUseTariff has no price data available.");
+			return true; // Ignore check if no price can be obtained
+		}
+		currentPrice = (int) Math.round(firstPrice / 10); // Price in €/MWh. Divided to ct/kWh
 		// balancing is not desired
 		if (currentPrice > this.config.maxPrice()) {
 			this.logDebug(this.log, "Balancing is deactivated due to high price. Configured limit: "
@@ -780,12 +760,14 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		if (chargedEnergy == null) {
 			this.logDebug(this.log, "ERROR: Cannot determine charged energy");
+			this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
 			return BalancingDecision.NO;
 		}
 
 		// balancing is not desired
 		if (this.config.energyBetweenBalancingCycles() == 0) {
 			this.logDebug(this.log, "Balancing is deactivated due to config setting");
+			this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
 			return BalancingDecision.NO;
 		}
 		/*
@@ -795,21 +777,25 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		if (chargedEnergy > this.energyBetweenBalancingCycles) {
 			this.logDebug(this.log, "Balancing necessary because charged energy between balancing cycles exceeded");
 			// are there any peakshavers active
-			if (this.isPeakshavingActive() == true) {
+			if (this.isPeakshavingActive()) {
 				this.logDebug(this.log, "Balancing is deferred due to active peakshaving");
+				this._setBalancingDeferralReason(BalancingDeferralReason.PEAKSHAVING);
 				return BalancingDecision.YES_DEFERRED;
 			}
 
 			if (!this.isWithinPriceLimit()) {
 				this.logDebug(this.log, "Balancing is deferred due to high energy costs");
+				this._setBalancingDeferralReason(BalancingDeferralReason.PRICE_LIMIT);
 				return BalancingDecision.YES_DEFERRED;
 			}
 
+			this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
 			return BalancingDecision.YES;
 
 		}
 
 		this.logDebug(this.log, "No Balancing necessary");
+		this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
 		return BalancingDecision.NO;
 	}
 	
@@ -865,6 +851,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// If it's the first time or if the lastEssActiveChargeEnergy is null,
 		// initialize it
 		if (this.lastEssActiveChargeEnergy == null) {
+			this.lastEssActiveChargeEnergy = currentEssActiveChargeEnergy;
+			return;
+		}
+
+		// The ESS/BMS cumulative counter can drop (e.g. after a device restart that
+		// resets its lifetime counter). Resync without applying a negative delta,
+		// instead of corrupting the balancing energy bookkeeping.
+		if (currentEssActiveChargeEnergy < this.lastEssActiveChargeEnergy) {
+			this.logDebug(this.log,
+					"ESS charge energy counter decreased (device reset?). Resyncing without adding a delta.");
 			this.lastEssActiveChargeEnergy = currentEssActiveChargeEnergy;
 			return;
 		}
@@ -999,26 +995,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 	}
 	
-	
-/*
-	private Integer getPvPower() {
-		if (this.ess instanceof HybridEss hss) {
-			var pv = ess.getActivePower().orElse(0) - hss.getDcDischargePower().orElse(0);
-			return pv;
-		} else {
-			return 0;
-		}
-	}	
-	
-	private Value<Integer> getEssChargePower() {
-		if (this.ess instanceof HybridEss hss) {
-			return hss.getDcDischargePower(); // DC Power for hybrid systems. negative values for Charge; positive for
-												// Discharge
-		} else {
-			return this.ess.getActivePower();
-		}
-	}
-*/
 	@Override
 	public EnergyScheduleHandler getEnergyScheduleHandler() {
 		return this.energyScheduleHandler;
@@ -1034,6 +1010,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				.channel(3, ControllerEssChargeDischargeLimiter.ChannelId.AWAITING_HYSTERESIS, ModbusType.UINT16)
 				.channel(4, ControllerEssChargeDischargeLimiter.ChannelId.STATE_MACHINE, ModbusType.UINT16)
 				.channel(5, ControllerEssChargeDischargeLimiter.ChannelId.BALANCING_REMAINING_SECONDS,
+						ModbusType.UINT16)
+				.channel(6, ControllerEssChargeDischargeLimiter.ChannelId.BALANCING_DEFERRAL_REASON,
 						ModbusType.UINT16)
 
 				.build());

@@ -291,9 +291,14 @@
           "BALANCING_ACTIVE": "Kalibrierung aktiv",
           "BALANCING_REMAINING_SECONDS": "Restzeit: ",
           "CHARGED_ENERGY_SINCE_LAST_BALANCING": "Geladene Energie seit der letzten Kalibrierung: ",
-          "PRICE_LIMIT": "Balancing verzögert weil Preis zu hoch",
           "APPROACHING_MIN_SOC": "Nahe min. SoC. Reduzierte Leistung",
-          "APPROACHING_MAX_SOC": "Nahe max. SoC. Reduzierte Leistung"
+          "APPROACHING_MAX_SOC": "Nahe max. SoC. Reduzierte Leistung",
+          "BALANCING_DEFERRAL_REASON_LABEL": "Grund für Verzögerung",
+          "BALANCING_DEFERRAL_REASON": {
+            "NONE": "",
+            "PEAKSHAVING": "Aktives Peak-Shaving",
+            "PRICE_LIMIT": "Strompreis zu hoch"
+          }
         },
         "CHP": {
           "CURRENT_CHP_STATE": "Status",

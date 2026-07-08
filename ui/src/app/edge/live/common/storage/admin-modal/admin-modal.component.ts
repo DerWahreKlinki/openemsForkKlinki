@@ -184,6 +184,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                     new ChannelAddress(ctrl.id, "StateMachine"),
                     new ChannelAddress(ctrl.id, "BalancingRemainingSeconds"),
                     new ChannelAddress(ctrl.id, "ChargedEnergy"),
+                    new ChannelAddress(ctrl.id, "BalancingDeferralReason"),
                 );
             }
 
@@ -247,9 +248,14 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                                     FORCE_CHARGE_ACTIVE = 6,    // ESS is charging to configured balancing point
                                     BALANCING_WANTED = 7,       // balancing procedure is desired
                                     BALANCING_ACTIVE = 8,       // balancing is active
-                                    PRICE_LIMIT = 9,            // balancing delayed due to high price
                                     APPROACHING_MIN_SOC = 10,   // reduced power
                                     APPROACHING_MAX_SOC = 11,   // reduced power
+                                }
+                                enum ChargeDischargeBalancingDeferralReason {
+                                    UNDEFINED = -1,
+                                    NONE = 0,
+                                    PEAKSHAVING = 1,
+                                    PRICE_LIMIT = 2,
                                 }
                                 const minSoc = currentData.channel[controller.id + "/_PropertyMinSoc"];
                                 const maxSoc = currentData.channel[controller.id + "/_PropertyMaxSoc"];
@@ -259,7 +265,9 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                                 const stateNumber = currentData.channel[controller.id + "/StateMachine"];
                                 const balancingRemainingSeconds = currentData.channel[controller.id + "/BalancingRemainingSeconds"];
                                 const chargedEnergy = currentData.channel[controller.id + "/ChargedEnergy"] ?? 0;
+                                const balancingDeferralReasonNumber = currentData.channel[controller.id + "/BalancingDeferralReason"];
                                 const stateKey = (ChargeDischargeControllerState[Number(stateNumber)] as keyof typeof ChargeDischargeControllerState) ?? "UNDEFINED";
+                                const balancingDeferralReasonKey = (ChargeDischargeBalancingDeferralReason[Number(balancingDeferralReasonNumber)] as keyof typeof ChargeDischargeBalancingDeferralReason) ?? "NONE";
 
                                 controllerFrmGrp.addControl("chargeDischargeLimiterController",
                                     this.formBuilder.group({
@@ -269,11 +277,11 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                                         //forceChargeSoc: new FormControl(forceChargeSoc),
 
                                         energyBetweenBalancingCycles: new FormControl(energyBetweenBalancingCycles),
-                                        //state: new FormControl(state),
                                         stateKey: new FormControl(stateKey),
                                         stateNumber: new FormControl(stateNumber),
                                         balancingRemainingSeconds: new FormControl(balancingRemainingSeconds),
                                         chargedEnergy: new FormControl(chargedEnergy),
+                                        balancingDeferralReasonKey: new FormControl(balancingDeferralReasonKey),
                                     }),
                                 );
                             } else if (controller.factoryId == "Controller.Ess.PrepareBatteryExtension") {
@@ -360,8 +368,6 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
                 return "warning"; // Light orange -> Soc warnings
             case 8:  // BALANCING_ACTIVE
                 return "primary"; // blinking orange -> active Balancing
-            case 9:  // PRICE_LIMIT
-                return "warning"; // blinking orange -> active Balancing
             case 10:  // approaching min SoC. Reduce power
                 return "warning"; // blinking orange -> active Balancing
             case 11:  // approaching max SoC. Reduce power

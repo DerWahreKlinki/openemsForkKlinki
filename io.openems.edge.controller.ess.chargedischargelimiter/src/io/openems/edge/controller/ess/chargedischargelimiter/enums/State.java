@@ -1,4 +1,4 @@
-package io.openems.edge.controller.ess.chargedischargelimiter;
+package io.openems.edge.controller.ess.chargedischargelimiter.enums;
 
 import io.openems.common.types.OptionsEnum;
 
@@ -13,7 +13,6 @@ public enum State implements OptionsEnum {
 	FORCE_CHARGE_ACTIVE(6, "Force-Charge-to-SoC"), // ESS is charging to configured balancing point
 	BALANCING_WANTED(7, "Balancing wanted"),
 	BALANCING_ACTIVE(8, "Balancing active"),
-	PRICE_LIMIT(9, "Price exceeds configured limit"),
 	APPROACHING_MIN_SOC(10, "SoC approaching minimum limit. Decreasing power"),
 	APPROACHING_MAX_SOC(11, "SoC approaching maximum limit. Decreasing power"),;
 

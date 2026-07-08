@@ -127,7 +127,11 @@ public class EseraOneWireThermometerImpl extends AbstractOpenemsModbusComponent
 		}
 
 		// only store values to target channel if no error occurs
-		this._setTemperature(getTemperatureOwdDebug().get());
+		// Use getNextValue() (not .value()), because this method runs on
+		// TOPIC_CYCLE_BEFORE_PROCESS_IMAGE - i.e. before nextValue is promoted to
+		// value - just like the OWD_STATUS check above. Reading .value() here would
+		// copy the previous cycle's stale temperature into the TEMPERATURE channel.
+		this._setTemperature(this.getTemperatureOwdDebugChannel().getNextValue().get());
 		this._setOwdReadFailed(false);
 
 	}

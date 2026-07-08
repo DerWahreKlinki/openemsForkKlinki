@@ -1,23 +1,36 @@
 package io.openems.edge.thermometer.esera.onewire;
 
-import io.openems.common.utils.ConfigUtils;
-import io.openems.edge.thermometer.esera.onewire.Config;
-import io.openems.edge.thermometer.esera.onewire.enums.LogVerbosity;
 import io.openems.common.test.AbstractComponentConfig;
+import io.openems.edge.thermometer.esera.onewire.enums.LogVerbosity;
+import io.openems.edge.thermometer.esera.onewire.enums.OneWireDevice;
 
 @SuppressWarnings("all")
 public class MyConfig extends AbstractComponentConfig implements Config {
 
 	protected static class Builder {
 		private String id;
+		private String alias = "";
+		private boolean enabled = true;
 		private String modbusId = null;
 		private int modbusUnitId;
+		private OneWireDevice oneWireDevice = OneWireDevice.OneWireThermometer1;
+		private LogVerbosity logVerbosity = LogVerbosity.NONE;
 
 		private Builder() {
 		}
 
 		public Builder setId(String id) {
 			this.id = id;
+			return this;
+		}
+
+		public Builder setAlias(String alias) {
+			this.alias = alias;
+			return this;
+		}
+
+		public Builder setEnabled(boolean enabled) {
+			this.enabled = enabled;
 			return this;
 		}
 
@@ -31,6 +44,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
+		public Builder setOneWireDevice(OneWireDevice oneWireDevice) {
+			this.oneWireDevice = oneWireDevice;
+			return this;
+		}
+
+		public Builder setLogVerbosity(LogVerbosity logVerbosity) {
+			this.logVerbosity = logVerbosity;
+			return this;
+		}
+
 		public MyConfig build() {
 			return new MyConfig(this);
 		}
@@ -38,7 +61,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	/**
 	 * Create a Config builder.
-	 * 
+	 *
 	 * @return a {@link Builder}
 	 */
 	public static Builder create() {
@@ -53,13 +76,23 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
+	public String alias() {
+		return this.builder.alias;
+	}
+
+	@Override
+	public boolean enabled() {
+		return this.builder.enabled;
+	}
+
+	@Override
 	public String modbus_id() {
 		return this.builder.modbusId;
 	}
 
 	@Override
 	public String Modbus_target() {
-		return ConfigUtils.generateReferenceTargetFilter(this.id(), this.modbus_id());
+		return "(enabled=true)";
 	}
 
 	@Override
@@ -68,22 +101,13 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public String alias() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-
-	@Override
-	public io.openems.edge.thermometer.esera.onewire.enums.OneWireDevice OneWireDevice() {
-		// TODO Auto-generated method stub
-		return null;
+	public OneWireDevice OneWireDevice() {
+		return this.builder.oneWireDevice;
 	}
 
 	@Override
 	public LogVerbosity logVerbosity() {
-		// TODO Auto-generated method stub
-		return null;
+		return this.builder.logVerbosity;
 	}
 
 }

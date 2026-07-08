@@ -1,0 +1,134 @@
+import { CommonModule } from "@angular/common";
+import { Component, inject } from "@angular/core";
+import { FormGroup, ReactiveFormsModule } from "@angular/forms";
+import { IonicModule } from "@ionic/angular";
+import { FormlyModule } from "@ngx-formly/core";
+import { TranslateModule, TranslateService } from "@ngx-translate/core";
+import { LiveDataService } from "src/app/edge/live/livedataservice";
+import { DataService } from "src/app/shared/components/shared/dataservice";
+import { AbstractFormlyComponent, OeFormlyView, } from "src/app/shared/components/shared/oe-formly-component";
+import { RouteService } from "src/app/shared/service/route.service";
+import { ChannelAddress, CurrentData, Edge, EdgeConfig, } from "src/app/shared/shared";
+import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
+import { SharedControllerThresholdPeakshaving } from "../shared/shared";
+
+@Component({
+    templateUrl:
+        "../../../../../../shared/components/formly/formly-field-modal/template.html",
+    standalone: true,
+    imports: [
+        CommonModule,
+        IonicModule,
+        ReactiveFormsModule,
+        FormlyModule,
+        TranslateModule,
+    ],
+    providers: [{ provide: DataService, useClass: LiveDataService }],
+})
+export class ControllerPeakShavingSymmetricThresholdSettingsComponent extends AbstractFormlyComponent {
+    protected override formlyWrapper:
+        | "formly-field-modal"
+        | "formly-field-navigation" = "formly-field-navigation";
+
+    private component: EdgeConfig.Component | null = null;
+    private readonly routeService: RouteService = inject(RouteService);
+
+    public static getFormlyGeneralView(
+        translate: TranslateService,
+        component: EdgeConfig.Component,
+        edge: Edge,
+    ): OeFormlyView {
+        return {
+            title: component.alias,
+            icon: SharedControllerThresholdPeakshaving.SHARED_ICON,
+            lines: SharedControllerThresholdPeakshaving.getFormlySettingsLines(
+                translate,
+                component,
+                edge,
+            ),
+            component: component,
+            edge: edge,
+        };
+    }
+
+    protected override generateView(): OeFormlyView {
+        const edge = this.service.currentEdge();
+        AssertionUtils.assertIsDefined(edge);
+        const config = edge.getCurrentConfig();
+        AssertionUtils.assertIsDefined(config);
+
+        this.component = config.getComponentSafely(
+            this.routeService.getRouteParam("componentId"),
+        );
+        AssertionUtils.assertIsDefined(this.component);
+        return ControllerPeakShavingSymmetricThresholdSettingsComponent.getFormlyGeneralView(
+            this.translate,
+            this.component,
+            edge,
+        );
+    }
+
+    protected override onCurrentData(currentData: CurrentData): void {
+        this.component ??= this.getComponent();
+
+        this.setFormControlSafelyWithChannel(
+            this.form,
+            "peakShavingPower",
+            currentData,
+            new ChannelAddress(this.component.id, "_PropertyPeakShavingPower"),
+        );
+        this.setFormControlSafelyWithChannel(
+            this.form,
+            "rechargePower",
+            currentData,
+            new ChannelAddress(this.component.id, "_PropertyRechargePower"),
+        );
+        this.setFormControlSafelyWithChannel(
+            this.form,
+            "peakShavingThresholdPower",
+            currentData,
+            new ChannelAddress(
+                this.component.id,
+                "_PropertyPeakShavingThresholdPower",
+            ),
+        );
+    }
+
+    protected override getFormGroup(): FormGroup {
+        return SharedControllerThresholdPeakshaving.getFormGroup();
+    }
+
+    protected override getChannelAddresses(): Promise<ChannelAddress[]> {
+        this.component ??= this.getComponent();
+
+        return Promise.resolve([
+            new ChannelAddress(
+                this.component.properties["meter.id"],
+                "ActivePower",
+            ),
+            new ChannelAddress(this.component.id, "_PropertyPeakShavingPower"),
+            new ChannelAddress(this.component.id, "_PropertyRechargePower"),
+            new ChannelAddress(
+                this.component.id,
+                "_PropertyPeakShavingThresholdPower",
+            ),
+            new ChannelAddress(this.component.id, "PeakShavingPower"),
+            new ChannelAddress(this.component.id, "PeakShavingTargetPower"),
+            new ChannelAddress(this.component.id, "GridPowerWithoutPeakShaving"),
+            new ChannelAddress(this.component.id, "PeakShavingStateMachine"),
+        ]);
+    }
+
+    private getComponent(): EdgeConfig.Component {
+        const edge = this.service.currentEdge();
+        AssertionUtils.assertIsDefined(edge);
+        const config = edge.getCurrentConfig();
+        AssertionUtils.assertIsDefined(config);
+        const component = config.getComponentSafely(
+            this.routeService.getRouteParam("componentId"),
+        );
+        AssertionUtils.assertIsDefined(component);
+
+        return component;
+    }
+}

@@ -8,16 +8,19 @@ import { ControllerIoHeatpumpFlatHistoryComponent } from "../live/Controller/Io/
 import { ModbusTcpApiHistoryFlatComponent } from "../live/Controller/ModbusTcpApi/history/flat/flat";
 import { FlatComponent as AsymmetricPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Asymmetric/history/flat/flat";
 import { FlatComponent as SymmetricPeakshavingFlatComponent } from "../live/Controller/peak-shaving/symmetric/history/flat/flat";
+import { FlatComponent as ThresholdPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Symmetric_Threshold/history/flat/flat";
 import { FlatComponent as TimeslotPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Symmetric_TimeSlot/history/flat/flat";
 import { ChpSocChartComponent } from "./chpsoc/chart.component";
 import { ChpSocWidgetComponent } from "./chpsoc/widget.component";
 import { Common } from "./common/common";
+import { FlatComponent as ChpCostOptimizationFlatComponent } from "./Controller/chp/CostOptimization/flat/flat";
 import { Controller } from "./Controller/controller.module";
 import { DelayedSellToGridChartComponent } from "./delayedselltogrid/chart.component";
 import { DelayedSellToGridChartOverviewComponent } from "./delayedselltogrid/symmetricpeakshavingchartoverview/delayedselltogridchartoverview.component";
 import { DelayedSellToGridWidgetComponent } from "./delayedselltogrid/widget.component";
 import { HistoryComponent } from "./history.component";
 import { HistoryParentComponent } from "./historyparent.component";
+
 
 @NgModule({
     imports: [
@@ -32,12 +35,14 @@ import { HistoryParentComponent } from "./historyparent.component";
     declarations: [
         ChpSocChartComponent,
         ChpSocWidgetComponent,
+	    ChpCostOptimizationFlatComponent,
         DelayedSellToGridChartComponent,
         DelayedSellToGridChartOverviewComponent,
         DelayedSellToGridWidgetComponent,
         ControllerIoHeatpumpFlatHistoryComponent,
         ControllerHeatingElementChartComponent,
         TimeslotPeakshavingFlatComponent,
+	ThresholdPeakshavingFlatComponent,
         SymmetricPeakshavingFlatComponent,
         AsymmetricPeakshavingFlatComponent,
         HistoryComponent,

@@ -82,6 +82,11 @@
                 <oe-controller-peakshaving-timeslot [componentId]="widget.componentId"> </oe-controller-peakshaving-timeslot>
               </ion-col>
             }
+            @case ("Controller.ThresholdPeakshaving") {
+              <ion-col size="12" size-md="6" size-lg="4" size-xl="3">
+                <oe-controller-peakshaving-threshold [componentId]="widget.componentId"> </oe-controller-peakshaving-threshold>
+              </ion-col>
+            }            
             @case ("Controller.Ess.DelayedSellToGrid") {
               <ion-col size="12" size-md="6" size-lg="4" size-xl="3">
                 <delayedSellToGridWidget [componentId]="widget.componentId"></delayedSellToGridWidget>

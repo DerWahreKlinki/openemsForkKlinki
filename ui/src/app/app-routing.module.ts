@@ -27,6 +27,7 @@ import { ControllerIoHeatingElementOverviewComponent } from "./edge/live/Control
 import { ControllerModbusTcpApiOverviewComponent as ModbusTcpApiOverviewComponent } from "./edge/live/Controller/ModbusTcpApi/history/overview/overview";
 import { ControllerPeakShavingAsymmetricOverviewComponent as AsymmetricPeakshavingChartOverviewComponent } from "./edge/live/Controller/peak-shaving/Asymmetric/history/overview/overview";
 import { ControllerPeakShavingSymmetricOverviewComponent as SymmetricPeakshavingChartOverviewComponent } from "./edge/live/Controller/peak-shaving/symmetric/history/overview/overview";
+import { ControllerPeakShavingThresholdOverviewComponent as ThresholdPeakshavingChartOverviewComponent } from "./edge/live/Controller/peak-shaving/Symmetric_Threshold/history/overview/overview";
 import { ControllerPeakShavingTimeslotOverviewComponent as TimeslotPeakshavingChartOverviewComponent } from "./edge/live/Controller/peak-shaving/Symmetric_TimeSlot/history/overview/overview";
 import { LiveDataService } from "./edge/live/livedataservice";
 import { LoginComponent } from "./index/login.component";
@@ -108,6 +109,10 @@ export const history: (/** Determines if titles in headers can be set */ customH
             {
                 path: ":componentId/timeslotpeakshavingchart",
                 component: TimeslotPeakshavingChartOverviewComponent,
+            },
+            {
+                path: ":componentId/thresholdpeakshavingchart",
+                component: ThresholdPeakshavingChartOverviewComponent,
             },
             {
                 path: "autarchychart",

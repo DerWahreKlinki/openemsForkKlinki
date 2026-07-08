@@ -63,6 +63,9 @@ import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateActiveTime;
 import io.openems.edge.timeofusetariff.api.TariffManager;
+import io.openems.edge.common.modbusslave.ModbusSlave;
+import io.openems.edge.common.modbusslave.ModbusSlaveTable;
+import io.openems.common.channel.AccessMode;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -72,7 +75,7 @@ import io.openems.edge.timeofusetariff.api.TariffManager;
 @GenerateTargetsFromReferences({ "ess", "CtrlGridOptimizedCharge" })
 @SuppressWarnings("deprecation")
 public class TimeOfUseTariffControllerImpl extends AbstractOpenemsComponent implements TimeOfUseTariffController,
-		EnergySchedulable, Controller, OpenemsComponent, TimedataProvider, ComponentJsonApi {
+		EnergySchedulable, Controller, OpenemsComponent, TimedataProvider, ComponentJsonApi, ModbusSlave {
 
 	private final Logger log = LoggerFactory.getLogger(TimeOfUseTariffControllerImpl.class);
 
@@ -387,5 +390,12 @@ public class TimeOfUseTariffControllerImpl extends AbstractOpenemsComponent impl
 		case CHARGE_GRID -> StateMachine.CHARGE_GRID;
 		default -> null;
 		};
+	}
+	
+	@Override
+	public ModbusSlaveTable getModbusSlaveTable(AccessMode accessMode) {
+		return new ModbusSlaveTable(//
+				this.getModbusSlaveNatureTable(accessMode)
+		);
 	}
 }

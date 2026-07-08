@@ -36,3 +36,4 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.edge.evse.api,\
 	io.openems.edge.heat.askoma,\
 	io.openems.edge.meter.api,\
+	io.openems.edge.braiinsos

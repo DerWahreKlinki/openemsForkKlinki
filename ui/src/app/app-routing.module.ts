@@ -166,6 +166,13 @@ export const history: (/** Determines if titles in headers can be set */ customH
                         (m) => m.CommonStorageOverviewComponent,
                     ),
             },
+            {
+                path: "storagechart/:componentId",
+                loadComponent: () =>
+                    import("./edge/live/common/storage/history/details/details.overview").then(
+                        (m) => m.DetailsOverviewComponent,
+                    ),
+            },
 
             // Controllers
             {

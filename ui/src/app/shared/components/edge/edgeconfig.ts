@@ -591,7 +591,8 @@ export class EdgeConfig {
         }
         const natureIds = this.getNatureIdsByFactoryId(component.factoryId);
         if (natureIds.includes("io.openems.edge.pvinverter.api.ManagedSymmetricPvInverter")
-            || natureIds.includes("io.openems.edge.ess.dccharger.api.EssDcCharger")) {
+            || natureIds.includes("io.openems.edge.ess.dccharger.api.EssDcCharger")
+            || natureIds.includes("io.openems.edge.generator.api.SymmetricGenerator")) {
             return true;
         }
         // TODO properties in OSGi Component annotations are not transmitted correctly with Apache Felix SCR

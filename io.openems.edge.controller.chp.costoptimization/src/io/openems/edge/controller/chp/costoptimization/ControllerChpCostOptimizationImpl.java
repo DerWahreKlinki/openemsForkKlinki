@@ -27,6 +27,9 @@ import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.meter.api.ElectricityMeter;
+import io.openems.edge.timedata.api.Timedata;
+import io.openems.edge.timedata.api.TimedataProvider;
+import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventHandler;
@@ -44,7 +47,7 @@ import io.openems.edge.generator.api.ManagedSymmetricGenerator;
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS //
 })
 public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
-		implements ControllerChpCostOptimization, Controller, OpenemsComponent, EventHandler {
+		implements ControllerChpCostOptimization, Controller, OpenemsComponent, EventHandler, TimedataProvider {
 
 	private Config config = null;
 	private final Logger log = LoggerFactory.getLogger(ControllerChpCostOptimizationImpl.class);
@@ -93,12 +96,23 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	@Reference
 	private ManagedSymmetricGenerator chp;
 
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
+	private volatile Timedata timedata = null;
+
+	private final CalculateEnergyFromPower calculateChpActiveProductionEnergy = new CalculateEnergyFromPower(this,
+			ControllerChpCostOptimization.ChannelId.CHP_ACTIVE_PRODUCTION_ENERGY);
+
 	public ControllerChpCostOptimizationImpl() {
 		super(//
 				OpenemsComponent.ChannelId.values(), //
 				ElectricityMeter.ChannelId.values(), Controller.ChannelId.values(), //
 				ManagedSymmetricGenerator.ChannelId.values(), ControllerChpCostOptimization.ChannelId.values() //
 		);
+	}
+
+	@Override
+	public Timedata getTimedata() {
+		return this.timedata;
 	}
 
 	@Activate
@@ -135,6 +149,12 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 	@Override
 	public void run() throws OpenemsNamedException {
+		// Integrate CHP power into the cumulated production energy channel every cycle,
+		// regardless of operational state (a null power value is handled gracefully and
+		// simply skips accumulation for this interval instead of corrupting the counter).
+		this.calculateChpActiveProductionEnergy
+				.update(this.chp != null ? this.chp.getGeneratorActivePower().get() : null);
+
 		this.updateOperationalValues();
 		if (this.operationalValuesOk == false) {
 			this.logError(this.log, "ERROR in Controller\n");

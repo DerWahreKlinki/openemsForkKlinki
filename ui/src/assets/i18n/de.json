@@ -317,6 +317,7 @@
           "HIGH_THERSHOLD": "Oberer Schwellenwert",
           "LOW_THRESHOLD": "Unterer Schwellenwert",
           "PRICE_THRESHOLD": "Schaltschwelle",
+          "PRODUCED_ENERGY": "Erzeugte Energie im Zeitraum",
           "START_CRITERION_LABEL": "Startkriterium",
           "START_CRITERION": {
             "PRICE_THRESHOLD": "Preisschwelle (Strompreis)",

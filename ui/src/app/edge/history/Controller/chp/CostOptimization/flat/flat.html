@@ -1,4 +1,9 @@
 <oe-flat-widget *ngIf="isInitialized" [title]="component.alias" button
   routerLink="/device/{{edge.id}}/history/{{componentId}}/chpcostoptimizationchart"
   [icon]="{name:'trending-down-outline', color: 'normal', size: 'large'}">
+
+  <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.CHP.PRODUCED_ENERGY' | translate"
+    [value]="producedEnergy | unitvalue:'kWh'">
+  </oe-flat-widget-line>
+
 </oe-flat-widget>

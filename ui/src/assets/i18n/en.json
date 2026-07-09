@@ -275,6 +275,7 @@
                 "CHP": {
                     "HIGH_THRESHOLD": "High Threshold",
                     "LOW_THRESHOLD": "Low Threshold",
+                    "PRODUCED_ENERGY": "Produced energy in this period",
                     "START_CRITERION_LABEL": "Start criterion",
                     "START_CRITERION": {
                         "PRICE_THRESHOLD": "Price threshold (electricity price)",

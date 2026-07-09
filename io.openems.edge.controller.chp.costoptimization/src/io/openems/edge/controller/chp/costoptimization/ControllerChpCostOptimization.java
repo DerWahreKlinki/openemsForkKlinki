@@ -13,6 +13,7 @@ import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.DoubleReadChannel;
 import io.openems.edge.common.channel.IntegerDoc;
 import io.openems.edge.common.channel.IntegerReadChannel;
+import io.openems.edge.common.channel.LongReadChannel;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
@@ -62,6 +63,10 @@ public interface ControllerChpCostOptimization extends Controller, OpenemsCompon
 
 		CHP_ACTIVE_POWER(new IntegerDoc() //
 				.unit(Unit.WATT) //
+				.persistencePriority(PersistencePriority.HIGH)), //
+
+		CHP_ACTIVE_PRODUCTION_ENERGY(Doc.of(OpenemsType.LONG) //
+				.unit(Unit.CUMULATED_WATT_HOURS) //
 				.persistencePriority(PersistencePriority.HIGH)), //
 		
 		TARGET_NOT_REACHED(Doc.of(OpenemsType.BOOLEAN) //
@@ -312,6 +317,16 @@ public interface ControllerChpCostOptimization extends Controller, OpenemsCompon
 
 	public default void _setChpActivePower(int value) {
 		this.getChpActivePowerChannel().setNextValue(value);
+	}
+
+	//
+	//
+	public default LongReadChannel getChpActiveProductionEnergyChannel() {
+		return this.channel(ChannelId.CHP_ACTIVE_PRODUCTION_ENERGY);
+	}
+
+	public default Value<Long> getChpActiveProductionEnergy() {
+		return this.getChpActiveProductionEnergyChannel().value();
 	}
 
 	//

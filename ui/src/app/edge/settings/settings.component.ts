@@ -50,4 +50,8 @@ export class SettingsComponent implements OnInit {
             );
         });
     }
+
+    public isEdgeBackend(): boolean {
+        return this.environment.backend === "OpenEMS Edge";
+    }
 }

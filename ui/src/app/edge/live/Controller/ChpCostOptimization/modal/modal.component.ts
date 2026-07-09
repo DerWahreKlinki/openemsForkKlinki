@@ -22,6 +22,7 @@ enum ChpState {
     IDLE = 5,                           // grid consumption too low
     OVER_TEMPERATURE = 6,               // buffer tank temperature too high
     CHP_NOT_READY = 7,                  // CHPs not ready due to hardware locks
+    WARNING = 8,                        // no electricity prices available, running on fallback price
 }
 
 enum HysteresisState {
@@ -185,6 +186,8 @@ export class Controller_ChpCostOptimizationModalComponent implements OnInit {
                 return "danger";
             case "CHP_NOT_READY":
                 return "danger";
+            case "WARNING":
+                return "warning";
             default:
                 return "default"; // Optional fallback if state doesn't match
         }

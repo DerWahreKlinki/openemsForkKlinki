@@ -329,6 +329,10 @@ public interface ControllerChpCostOptimization extends Controller, OpenemsCompon
 		return this.getChpActiveProductionEnergyChannel().value();
 	}
 
+	public default void _setChpActiveProductionEnergy(Long value) {
+		this.getChpActiveProductionEnergyChannel().setNextValue(value);
+	}
+
 	//
 	//
 	public default BooleanReadChannel getTemperatureAboveMaxChannel() {

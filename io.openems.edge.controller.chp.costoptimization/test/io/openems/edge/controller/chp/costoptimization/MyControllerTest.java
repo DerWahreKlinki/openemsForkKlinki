@@ -132,7 +132,8 @@ public class MyControllerTest {
 	 * below minBufferTankTemperature, so the unconditional temperature-driven
 	 * start does not apply), the CHP must still start purely because grid
 	 * consumption exceeds minGridPower - proving price is genuinely irrelevant in
-	 * this mode.
+	 * this mode. Missing price data must not even trigger WARNING here (unlike
+	 * PRICE_THRESHOLD mode) - it goes straight from UNDEFINED to NORMAL.
 	 */
 	@Test
 	public void testGridThresholdOnlyStartsWithoutPriceData() throws Exception {
@@ -164,8 +165,8 @@ public class MyControllerTest {
 						.setMaxActivePower(10000) //
 						.setStartCriterion(StartCriterion.GRID_THRESHOLD_ONLY) //
 						.build()) //
-				.next(new TestCase("No prices available -> WARNING, not ERROR") //
-						.output(STATE_MACHINE, State.WARNING)) //
+				.next(new TestCase("GRID_THRESHOLD_ONLY: no prices available, but that's irrelevant here -> NORMAL, not WARNING") //
+						.output(STATE_MACHINE, State.NORMAL)) //
 				.next(new TestCase(
 						"GRID_THRESHOLD_ONLY: grid consumption above minGridPower starts the CHP despite no price data") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
@@ -179,6 +180,59 @@ public class MyControllerTest {
 					"Expected CHP to be actively driven with target power 5000W under GRID_THRESHOLD_ONLY, but last applied power was: "
 							+ chp.getLastAppliedPower());
 		}
+	}
+
+	/**
+	 * Regression test: with no TimeOfUseTariff AND grid consumption below
+	 * minGridPower, updateOperationalValues() used to force a changeState(WARNING)
+	 * attempt on every single cycle, fighting with the WARNING-fallthrough logic
+	 * that legitimately moves the state machine to IDLE - once the 10s state
+	 * transition hysteresis expired, this flipped the state back to WARNING, which
+	 * then (after another 10s) fell through to IDLE again, forever. The state must
+	 * settle in IDLE and stay there, not oscillate back to WARNING.
+	 */
+	@Test
+	public void testNoOscillationBetweenWarningAndIdleWithoutPrices() throws Exception {
+		final var clock = createDummyClock();
+
+		var chp = new DummyManagedSymmetricGenerator("chp0") //
+				.withGeneratorActivePower(0) //
+				.withReadyForOperation(true) //
+				.withAverageBufferTankTemperature(650); // 65.0°C, within normal range
+
+		new ControllerTest(new ControllerChpCostOptimizationImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("chp", chp) //
+				.addReference("gridMeter", new DummyElectricityMeter("meter0") //
+						.withMeterType(MeterType.GRID) //
+						.withActivePower(500)) // below minGridPower
+				// no timeOfUseTariff reference added -> stays null
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setChpId("chp0") //
+						.setMeterId("meter0") //
+						.setMinGridPower(1000) //
+						.setMinBufferTankTemperature(60) //
+						.setThresholdBufferTankTemperature(70) //
+						.setMaxBufferTankTemperature(75) //
+						.setReducePowerThresholdTemperature(200) //
+						.setPriceThreshold(100) //
+						.setMaxActivePower(10000) //
+						.build()) //
+				.next(new TestCase("No prices available -> WARNING") //
+						.output(STATE_MACHINE, State.WARNING)) //
+				.next(new TestCase("Grid consumption below minGridPower -> falls through to IDLE") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.output(STATE_MACHINE, State.IDLE)) //
+				.next(new TestCase(
+						"State transition hysteresis expired again - must stay in IDLE, not flip back to WARNING") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.output(STATE_MACHINE, State.IDLE)) //
+				.next(new TestCase("Still IDLE one more hysteresis window later - confirms no oscillation") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.output(STATE_MACHINE, State.IDLE)) //
+				.deactivate();
 	}
 
 }

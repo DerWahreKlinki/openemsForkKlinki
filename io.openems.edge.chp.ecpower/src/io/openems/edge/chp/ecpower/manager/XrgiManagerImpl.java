@@ -158,6 +158,7 @@ public class XrgiManagerImpl extends AbstractOpenemsComponent implements XrgiMan
 			//this._setActivePower(this.xrgiRo.getActivePower().get());
 			//this.applyPower(19000);
 			this.updateGeneratorPowerSum();
+			this.updateGeneratorEnergySum();
 			this.updateReadyForOperation();
 			this.updateBufferTankTemperature();
 			break;
@@ -241,6 +242,18 @@ public class XrgiManagerImpl extends AbstractOpenemsComponent implements XrgiMan
                 .mapToInt(ro -> ro.getActivePower().orElse(0))
                 .sum();
         this._setGeneratorActivePower(total);
+    }
+
+    /**
+     * Sums the real hardware energy counter (ElectricityMeter ACTIVE_PRODUCTION_ENERGY, read from
+     * Modbus register 8 of each XRGI unit) across all bound ro devices, instead of approximating
+     * it in software from the power sum.
+     */
+    private void updateGeneratorEnergySum() {
+        long total = xrgiRos.values().stream()
+                .mapToLong(ro -> ro.getActiveProductionEnergy().orElse(0L))
+                .sum();
+        this._setGeneratorActiveProductionEnergy(total);
     }
     
     public void updateBufferTankTemperature() {

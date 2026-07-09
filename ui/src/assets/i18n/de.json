@@ -337,7 +337,8 @@
             "CHP_INACTIVE": "BHKW gestoppt",
             "CHP_PREPARING": "BHKW-Vorbereitung",
             "OVER_TEMPERATURE": "Übertemperatur",
-            "CHP_NOT_READY": "Hardware nicht bereit"
+            "CHP_NOT_READY": "Hardware nicht bereit",
+            "WARNING": "Keine Strompreise verfügbar (Fallback-Preis aktiv)"
           }
         },
         "AUTARCHY_INFO": "Die Autarkie gibt an zu wie viel Prozent die aktuell genutzte Leistung durch Erzeugung und Speicherentladung gedeckt wird.",

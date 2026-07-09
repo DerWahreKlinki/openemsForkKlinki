@@ -5,6 +5,7 @@ import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.channel.IntegerReadChannel;
+import io.openems.edge.common.channel.LongReadChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 
@@ -25,8 +26,12 @@ public interface SymmetricGenerator extends   OpenemsComponent {
 		
 		BUFFER_TANK_TEMPERATURE(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.DEZIDEGREE_CELSIUS) //
-				.persistencePriority(PersistencePriority.MEDIUM)), //		
-	
+				.persistencePriority(PersistencePriority.MEDIUM)), //
+
+		GENERATOR_ACTIVE_PRODUCTION_ENERGY(Doc.of(OpenemsType.LONG) //
+				.unit(Unit.CUMULATED_WATT_HOURS) //
+				.persistencePriority(PersistencePriority.HIGH)), //
+
 		;
 
 		private final Doc doc;
@@ -98,8 +103,41 @@ public interface SymmetricGenerator extends   OpenemsComponent {
 	 */
 	public default void _setGeneratorActivePower(int value) {
 		this.getGeneratorActivePowerChannel().setNextValue(value);
-	}		
-	
+	}
 
+	//
+	public default LongReadChannel getGeneratorActiveProductionEnergyChannel() {
+		return this.channel(ChannelId.GENERATOR_ACTIVE_PRODUCTION_ENERGY);
+	}
+
+	/**
+	 * Gets the cumulated, lifetime active production energy in [Wh]. See
+	 * {@link ChannelId#GENERATOR_ACTIVE_PRODUCTION_ENERGY}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Long> getGeneratorActiveProductionEnergy() {
+		return this.getGeneratorActiveProductionEnergyChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#GENERATOR_ACTIVE_PRODUCTION_ENERGY} Channel.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setGeneratorActiveProductionEnergy(Long value) {
+		this.getGeneratorActiveProductionEnergyChannel().setNextValue(value);
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#GENERATOR_ACTIVE_PRODUCTION_ENERGY} Channel.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setGeneratorActiveProductionEnergy(long value) {
+		this.getGeneratorActiveProductionEnergyChannel().setNextValue(value);
+	}
 
 }

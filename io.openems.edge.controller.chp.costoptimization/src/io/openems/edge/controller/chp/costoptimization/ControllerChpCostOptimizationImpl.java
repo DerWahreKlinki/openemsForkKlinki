@@ -27,9 +27,6 @@ import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.meter.api.ElectricityMeter;
-import io.openems.edge.timedata.api.Timedata;
-import io.openems.edge.timedata.api.TimedataProvider;
-import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventHandler;
@@ -47,7 +44,7 @@ import io.openems.edge.generator.api.ManagedSymmetricGenerator;
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS //
 })
 public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
-		implements ControllerChpCostOptimization, Controller, OpenemsComponent, EventHandler, TimedataProvider {
+		implements ControllerChpCostOptimization, Controller, OpenemsComponent, EventHandler {
 
 	private Config config = null;
 	private final Logger log = LoggerFactory.getLogger(ControllerChpCostOptimizationImpl.class);
@@ -96,23 +93,12 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	@Reference
 	private ManagedSymmetricGenerator chp;
 
-	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
-	private volatile Timedata timedata = null;
-
-	private final CalculateEnergyFromPower calculateChpActiveProductionEnergy = new CalculateEnergyFromPower(this,
-			ControllerChpCostOptimization.ChannelId.CHP_ACTIVE_PRODUCTION_ENERGY);
-
 	public ControllerChpCostOptimizationImpl() {
 		super(//
 				OpenemsComponent.ChannelId.values(), //
 				ElectricityMeter.ChannelId.values(), Controller.ChannelId.values(), //
 				ManagedSymmetricGenerator.ChannelId.values(), ControllerChpCostOptimization.ChannelId.values() //
 		);
-	}
-
-	@Override
-	public Timedata getTimedata() {
-		return this.timedata;
 	}
 
 	@Activate
@@ -149,11 +135,11 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 	@Override
 	public void run() throws OpenemsNamedException {
-		// Integrate CHP power into the cumulated production energy channel every cycle,
-		// regardless of operational state (a null power value is handled gracefully and
-		// simply skips accumulation for this interval instead of corrupting the counter).
-		this.calculateChpActiveProductionEnergy
-				.update(this.chp != null ? this.chp.getGeneratorActivePower().get() : null);
+		// Mirror the CHP's own cumulated production energy - a real hardware counter (e.g. read
+		// from the XRGI Modbus register), not a software approximation - onto this Controller's
+		// channel, same as CHP_ACTIVE_POWER already mirrors the live power.
+		this._setChpActiveProductionEnergy(
+				this.chp != null ? this.chp.getGeneratorActiveProductionEnergy().get() : null);
 
 		this.updateOperationalValues();
 		if (this.operationalValuesOk == false) {
@@ -895,11 +881,24 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			return;
 		}
 
-		if (this.timeOfUseTariff == null || this.timeOfUseTariff.getPrices().isEmpty()) {
-			this.log.warn(
-					"No electricity prices available (TimeOfUseTariff is null or has no price data). Continuing operation in WARNING state using configured fallback price of "
-							+ this.config.fallbackPrice() + " €/MWh.");
-			this.changeState(State.WARNING);
+		// Missing price data only matters in PRICE_THRESHOLD mode. Under GRID_THRESHOLD_ONLY,
+		// price is irrelevant to every decision this controller makes, so a missing/empty
+		// TimeOfUseTariff must not trigger WARNING at all.
+		if (this.config.startCriterion() == StartCriterion.PRICE_THRESHOLD
+				&& (this.timeOfUseTariff == null || this.timeOfUseTariff.getPrices().isEmpty())) {
+			// WARNING is only an entry point into "operating without price data". Once the
+			// state machine has already moved on from it (e.g. to IDLE/CHP_ACTIVE via
+			// WARNING's fallthrough into the NORMAL logic), do NOT force it back to WARNING
+			// every cycle - that fight between this forced transition and the fallthrough
+			// logic's own state changes caused a permanent WARNING<->IDLE oscillation
+			// whenever grid consumption stayed below minGridPower with no prices available.
+			if (!isOperatingWithoutPrices(this.state)) {
+				if (this.changeState(State.WARNING)) {
+					this.log.warn(
+							"No electricity prices available (TimeOfUseTariff is null or has no price data). Continuing operation in WARNING state using configured fallback price of "
+									+ this.config.fallbackPrice() + " €/MWh.");
+				}
+			}
 			this.operationalValuesOk = true;
 			return;
 		}
@@ -907,6 +906,30 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		this.operationalValuesOk = true;
 		return;
 
+	}
+
+	/**
+	 * Whether the given state already reflects operation without full price data
+	 * (i.e. was reached via {@link State#WARNING}'s fallthrough into the NORMAL
+	 * logic), so re-entering {@link State#WARNING} would just fight with the
+	 * state machine's own transitions instead of adding information.
+	 *
+	 * @param state the state to check
+	 * @return true if the state already operates without price data
+	 */
+	private static boolean isOperatingWithoutPrices(State state) {
+		switch (state) {
+		case WARNING:
+		case IDLE:
+		case CHP_ACTIVE:
+		case CHP_PREPARING:
+		case CHP_INACTIVE:
+		case OVER_TEMPERATURE:
+		case CHP_NOT_READY:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	private boolean chpReadyForOperation() {

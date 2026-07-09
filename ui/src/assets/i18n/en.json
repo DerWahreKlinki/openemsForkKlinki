@@ -280,6 +280,9 @@
                     "START_CRITERION": {
                         "PRICE_THRESHOLD": "Price threshold (electricity price)",
                         "GRID_THRESHOLD_ONLY": "Grid consumption only (no price)"
+                    },
+                    "CHP_STATE": {
+                        "WARNING": "No electricity prices available (fallback price active)"
                     }
                 },
                 "DELAYED_SELL_TO_GRID": {

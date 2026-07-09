@@ -166,6 +166,8 @@ export class Controller_ChpCostOptimizationComponent extends AbstractFlatWidget 
                 return this.translate.instant("EDGE.INDEX.WIDGETS.CHP.CHP_STATE.OVER_TEMPERATURE");
             case "7":
                 return this.translate.instant("EDGE.INDEX.WIDGETS.CHP.CHP_STATE.CHP_NOT_READY");
+            case "8":
+                return this.translate.instant("EDGE.INDEX.WIDGETS.CHP.CHP_STATE.WARNING");
             default:
                 return "-";
         }

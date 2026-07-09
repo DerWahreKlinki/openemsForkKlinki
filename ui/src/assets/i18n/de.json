@@ -318,6 +318,7 @@
           "LOW_THRESHOLD": "Unterer Schwellenwert",
           "PRICE_THRESHOLD": "Schaltschwelle",
           "HYSTERESIS_STATE": {
+            "UNDEFINED": "Undefiniert",
             "ACTIVE": "Aktiv",
             "INACTIVE": "Inaktiv"
           },

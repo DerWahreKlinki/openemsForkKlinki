@@ -101,8 +101,6 @@ export class Controller_ChpCostOptimizationComponent extends AbstractFlatWidget 
             new ChannelAddress(this.component.id, "AwaitingTransitionHysteresis"),
             new ChannelAddress(this.component.id, "AwaitingReducedPowerHysteresis"),
             new ChannelAddress(this.component.id, "AwaitingDeviceHysteresis"),
-            new ChannelAddress(this.component.id, "OverTemperature"),
-            new ChannelAddress(this.component.id, "UnderTemperature"),
             new ChannelAddress(this.component.id, "ActivePowerTarget"),
             new ChannelAddress(this.component.id, "ChpActivePower"),
             new ChannelAddress(this.component.id, "_PropertyPriceThreshold"),

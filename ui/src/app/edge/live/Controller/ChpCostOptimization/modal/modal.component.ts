@@ -52,14 +52,17 @@ export class Controller_ChpCostOptimizationModalComponent implements OnInit {
     private unitpipe: UnitvaluePipe;
     private highCostsThreshold: number;
     private priceThreshold: number;
-    // Variable to hold the current state of the PeakShavingState
-    private currentState: ChpState = ChpState.UNDEFINED; // Default value is UNDEFINED
-    private currentAwaitingStartHysteresis: HysteresisState = HysteresisState.UNDEFINED; // Default value is UNDEFINED
-    private currentAwaitingPreparationHysteresis: HysteresisState = HysteresisState.UNDEFINED; // Default value is UNDEFINED
-    private currentAwaitingRunHysteresis: HysteresisState = HysteresisState.UNDEFINED; // Default value is UNDEFINED
-    private currentAwaitingTransitionHysteresis: HysteresisState = HysteresisState.UNDEFINED; // Default value is UNDEFINED
-    private currentAwaitingDeviceHysteresis: HysteresisState = HysteresisState.UNDEFINED; // Default value is UNDEFINED
-    private currentAwaitingReducedPowerHysteresis: HysteresisState = HysteresisState.UNDEFINED; // Default value is UNDEFINED
+    // Holds the current state name (e.g. "UNDEFINED", "CHP_ACTIVE") used as i18n key suffix.
+    // Always a string - ChpState/HysteresisState are numeric enums, so bracket lookup
+    // (ChpState[value]) yields the name string via reverse mapping, while dot access
+    // (ChpState.UNDEFINED) yields the number. Mixing the two broke translation lookups.
+    private currentState: string = "UNDEFINED";
+    private currentAwaitingStartHysteresis: string = "UNDEFINED";
+    private currentAwaitingPreparationHysteresis: string = "UNDEFINED";
+    private currentAwaitingRunHysteresis: string = "UNDEFINED";
+    private currentAwaitingTransitionHysteresis: string = "UNDEFINED";
+    private currentAwaitingDeviceHysteresis: string = "UNDEFINED";
+    private currentAwaitingReducedPowerHysteresis: string = "UNDEFINED";
 
     constructor(
         unitpipe: UnitvaluePipe,
@@ -132,23 +135,22 @@ export class Controller_ChpCostOptimizationModalComponent implements OnInit {
         // Check if currentStateValue is not undefined or null and is a valid number
         if (isNaN(currentStateValue) || isNaN(currentAwaitingStartHysteresisValue) || isNaN(currentAwaitingPreparationHysteresisValue) || isNaN(currentAwaitingRunHysteresisValue) || isNaN(currentAwaitingTransitionHysteresisValue) || isNaN(currentAwaitingDeviceHysteresisValue) || isNaN(currentAwaitingReducedPowerHysteresisValue)) {
             console.warn(`States for ${controllerId} is undefined or null`);
-            this.currentAwaitingPreparationHysteresis = HysteresisState.UNDEFINED;
-            this.currentAwaitingStartHysteresis = HysteresisState.UNDEFINED;
-            this.currentAwaitingRunHysteresis = HysteresisState.UNDEFINED;
-            this.currentAwaitingTransitionHysteresis = HysteresisState.UNDEFINED;
-            this.currentAwaitingDeviceHysteresis = HysteresisState.UNDEFINED;
-            this.currentAwaitingReducedPowerHysteresis = HysteresisState.UNDEFINED;
-            this.currentState = ChpState.UNDEFINED;
+            this.currentAwaitingPreparationHysteresis = "UNDEFINED";
+            this.currentAwaitingStartHysteresis = "UNDEFINED";
+            this.currentAwaitingRunHysteresis = "UNDEFINED";
+            this.currentAwaitingTransitionHysteresis = "UNDEFINED";
+            this.currentAwaitingDeviceHysteresis = "UNDEFINED";
+            this.currentAwaitingReducedPowerHysteresis = "UNDEFINED";
+            this.currentState = "UNDEFINED";
         } else {
-            // Ensure currentStateValue is a valid enum value (number) before casting
-            this.currentAwaitingPreparationHysteresis = HysteresisState[currentAwaitingPreparationHysteresisValue as keyof typeof HysteresisState] ?? HysteresisState.UNDEFINED;
-            this.currentAwaitingStartHysteresis = HysteresisState[currentAwaitingStartHysteresisValue as keyof typeof HysteresisState] ?? HysteresisState.UNDEFINED;
-            this.currentAwaitingRunHysteresis = HysteresisState[currentAwaitingRunHysteresisValue as keyof typeof HysteresisState] ?? HysteresisState.UNDEFINED;
-            this.currentAwaitingTransitionHysteresis = HysteresisState[currentAwaitingTransitionHysteresisValue as keyof typeof HysteresisState] ?? HysteresisState.UNDEFINED;
-            this.currentAwaitingDeviceHysteresis = HysteresisState[currentAwaitingDeviceHysteresisValue as keyof typeof HysteresisState] ?? HysteresisState.UNDEFINED;
-            this.currentAwaitingReducedPowerHysteresis = HysteresisState[currentAwaitingReducedPowerHysteresisValue as keyof typeof HysteresisState] ?? HysteresisState.UNDEFINED;
-            this.currentState = ChpState[currentStateValue as keyof typeof ChpState] ?? ChpState.UNDEFINED;
-            //console.log("Mapped currentState:", this.currentState);
+            // Bracket lookup on a numeric enum reverse-maps the value to its name string.
+            this.currentAwaitingPreparationHysteresis = HysteresisState[currentAwaitingPreparationHysteresisValue] ?? "UNDEFINED";
+            this.currentAwaitingStartHysteresis = HysteresisState[currentAwaitingStartHysteresisValue] ?? "UNDEFINED";
+            this.currentAwaitingRunHysteresis = HysteresisState[currentAwaitingRunHysteresisValue] ?? "UNDEFINED";
+            this.currentAwaitingTransitionHysteresis = HysteresisState[currentAwaitingTransitionHysteresisValue] ?? "UNDEFINED";
+            this.currentAwaitingDeviceHysteresis = HysteresisState[currentAwaitingDeviceHysteresisValue] ?? "UNDEFINED";
+            this.currentAwaitingReducedPowerHysteresis = HysteresisState[currentAwaitingReducedPowerHysteresisValue] ?? "UNDEFINED";
+            this.currentState = ChpState[currentStateValue] ?? "UNDEFINED";
         }
     }
 

@@ -1,3 +1,74 @@
-= io.openems.edge.controller.chp.costoptimization
+= CHP Cost Optimization
 
-https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.chp.cost[Source Code icon:github[]]
+Controls a CHP device (Combined Heat and Power Unit, German: BHKW - Blockheizkraftwerk) based on grid demand, buffer tank temperature and (optionally) electricity price. It signals the CHP to start when it is economically or thermally sensible to run, and to stop again once that is no longer the case - while respecting hysteresis timers to avoid excessive on/off cycling and hardware locks reported by the CHP itself.
+
+Dispatch across multiple physical CHP units (e.g. which unit runs, percentage split) is *not* handled by this Controller - that responsibility sits one layer down, in the CHP device/manager component (e.g. `io.openems.edge.chp.ecpower`). This Controller only decides a target power for the aggregate CHP nature.
+
+== Requirements
+
+* `ManagedSymmetricGenerator`, a controllable CHP device (or manager aggregating several physical units)
+* `ElectricityMeter` of type `GRID`, the meter at the grid connection point
+* `TimeOfUseTariff` (optional) - only required when `startCriterion` is `PRICE_THRESHOLD` and dynamic prices should be used instead of `fallbackPrice`
+
+== Start criterion
+
+The `startCriterion` configuration parameter decides what triggers a demand-based CHP start once the buffer tank temperature and grid-consumption gates are satisfied:
+
+* `PRICE_THRESHOLD` (default) - starts the CHP once the current (or forecasted) electricity price exceeds `priceThreshold`. If no `TimeOfUseTariff` data is available, `fallbackPrice` is used instead - this also allows running the Controller purely as a fixed-price threshold when no dynamic tariff is configured at all.
+* `GRID_THRESHOLD_ONLY` - ignores price entirely; the CHP starts purely once grid consumption (without the CHP's own contribution) exceeds `minGridPower` and the temperature gates allow it.
+
+== State machine
+
+The Controller cycles through the following states (`StateMachine` channel):
+
+[cols="1,3"]
+|===
+| State | Meaning
+
+| `UNDEFINED`
+| Initial state, not yet evaluated.
+
+| `NORMAL`
+| Waiting; evaluates start conditions every cycle.
+
+| `WARNING`
+| No `TimeOfUseTariff` data available; the Controller keeps operating using `fallbackPrice` instead of freezing.
+
+| `ERROR`
+| A required reference (CHP, grid meter) or value is missing; CHP is forced off.
+
+| `CHP_NOT_READY`
+| The CHP reports a hardware lock and cannot be started.
+
+| `IDLE`
+| Grid consumption (without CHP) is below `minGridPower`.
+
+| `CHP_PREPARING`
+| An upcoming price spike (or a high buffer tank temperature) delays an immediate start; other heat sources should be throttled in preparation.
+
+| `CHP_ACTIVE`
+| CHP is running and actively power-controlled.
+
+| `CHP_INACTIVE`
+| CHP has been stopped and is waiting out the run hysteresis before returning to `NORMAL`.
+
+| `OVER_TEMPERATURE`
+| Buffer tank temperature is above `maxBufferTankTemperature`; CHP is kept off until it cools down.
+|===
+
+== Configuration
+
+* `Mode` - `AUTOMATIC` (state-machine controlled), `MANUAL_ON` (force full power), `MANUAL_OFF` (force off)
+* `Maximum Cost [€/MWh]` (`priceThreshold`) - price above which the CHP is started under `PRICE_THRESHOLD`
+* `Fallback/fixed price [€/MWh]` (`fallbackPrice`) - price used whenever no `TimeOfUseTariff` data is available
+* `Start criterion` (`startCriterion`) - see above
+* `Maximum CHP power [W]` (`maxActivePower`)
+* `Start Hysteresis [s]` (`startHyteresis`) - minimum time between a stop and the next start
+* `Run Hysteresis [s]` (`runHyteresis`) - minimum run time before the CHP is allowed to stop
+* `Preparation Hysteresis [s]` (`preparationHyteresis`) - how far ahead a future price spike is checked, and how long `CHP_PREPARING` is held
+* `Min./Threshold/Max. buffer tank temperature [°C]` - thermal safety envelope; below min forces a start, above max forces a stop
+* `Reduce power temperature threshold [°C]` - CHP output is halved while temperature is within this band below the max
+* `Min. grid power` (`minGridPower`) - minimum grid consumption (without the CHP's own contribution) required to leave `IDLE`
+* `Grid meter ID` / `CHP id` - references to the grid `ElectricityMeter` and the `ManagedSymmetricGenerator`
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.chp.costoptimization[Source Code icon:github[]]

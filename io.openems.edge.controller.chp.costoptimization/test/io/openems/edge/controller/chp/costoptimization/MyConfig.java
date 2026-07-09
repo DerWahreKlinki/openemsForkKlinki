@@ -13,6 +13,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private boolean debugMode = true;
 		private int priceThreshold = 100;
 		private int fallbackPrice = 0;
+		private StartCriterion startCriterion = StartCriterion.PRICE_THRESHOLD;
 		private int maxActivePower = 10000;
 		private int startHyteresis = 3600;
 		private int runHyteresis = 3600;
@@ -60,6 +61,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setFallbackPrice(int fallbackPrice) {
 			this.fallbackPrice = fallbackPrice;
+			return this;
+		}
+
+		public Builder setStartCriterion(StartCriterion startCriterion) {
+			this.startCriterion = startCriterion;
 			return this;
 		}
 
@@ -162,6 +168,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int fallbackPrice() {
 		return this.builder.fallbackPrice;
+	}
+
+	@Override
+	public StartCriterion startCriterion() {
+		return this.builder.startCriterion;
 	}
 
 	@Override

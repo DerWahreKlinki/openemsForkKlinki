@@ -35,6 +35,19 @@
             [color]="component.properties['mode'] === 'MANUAL_OFF' ? 'danger' : 'normal'"></ion-icon>
         </ion-segment-button>
       </ion-segment>
+
+      <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.START_CRITERION_LABEL' | translate"
+        [value]="'EDGE.INDEX.WIDGETS.CHP.START_CRITERION.' + (c.properties?.startCriterion ?? 'PRICE_THRESHOLD') | translate">
+      </oe-modal-line>
+      <ion-select [value]="c.properties?.startCriterion || 'PRICE_THRESHOLD'" (ionChange)="updateStartCriterion($event)"
+        interface="popover">
+        <ion-select-option value="PRICE_THRESHOLD">
+          {{ 'EDGE.INDEX.WIDGETS.CHP.START_CRITERION.PRICE_THRESHOLD' | translate }}
+        </ion-select-option>
+        <ion-select-option value="GRID_THRESHOLD_ONLY">
+          {{ 'EDGE.INDEX.WIDGETS.CHP.START_CRITERION.GRID_THRESHOLD_ONLY' | translate }}
+        </ion-select-option>
+      </ion-select>
     </ion-card-content>
 
 
@@ -102,31 +115,33 @@
             [value]="(currentData?.channel?.['_sum/GridActivePower'] >= 0 ? currentData?.channel?.['_sum/GridActivePower'] : 0) | unitvalue:'W'">
           </oe-modal-line>
 
-          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.PRICE_THRESHOLD' | translate"
-            [value]="formatPrice(component.properties['priceThreshold'])">
-          </oe-modal-line>
+          <ng-container *ngIf="!isGridThresholdOnly">
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.PRICE_THRESHOLD' | translate"
+              [value]="formatPrice(component.properties['priceThreshold'])">
+            </oe-modal-line>
 
-          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.CURRENT_ENERGY_PRICE' | translate"
-            [value]="formatPrice(currentData?.channel?.[controllerId + '/CurrentEnergyPrice'] >= 0 ? currentData?.channel?.[controllerId + '/CurrentEnergyPrice'] : 0)">
-          </oe-modal-line>
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.CURRENT_ENERGY_PRICE' | translate"
+              [value]="formatPrice(currentData?.channel?.[controllerId + '/CurrentEnergyPrice'] >= 0 ? currentData?.channel?.[controllerId + '/CurrentEnergyPrice'] : 0)">
+            </oe-modal-line>
 
-          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.CURRENT_ENERGY_COSTS_WITHOUT_CHP' | translate"
-            [value]="formatCosts(currentData?.channel?.[controllerId + '/EnergyCostsWithoutChp'])">
-          </oe-modal-line>
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.CURRENT_ENERGY_COSTS_WITHOUT_CHP' | translate"
+              [value]="formatCosts(currentData?.channel?.[controllerId + '/EnergyCostsWithoutChp'])">
+            </oe-modal-line>
 
-          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.CURRENT_ENERGY_COSTS' | translate"
-            [value]="formatCosts(currentData?.channel?.[controllerId + '/EnergyCosts'])">
-          </oe-modal-line>
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.CURRENT_ENERGY_COSTS' | translate"
+              [value]="formatCosts(currentData?.channel?.[controllerId + '/EnergyCosts'])">
+            </oe-modal-line>
 
-          <ion-range (ionChange)="updateThreshold()" pin color="dark" min="0" max="1000" [(ngModel)]="threshold"
-            debounce="500">
-            <ion-label slot="start">
-              {{ formatPrice(0) }}
-            </ion-label>
-            <ion-label slot="end">
-              {{ formatPrice(1000) }}
-            </ion-label>
-          </ion-range>
+            <ion-range (ionChange)="updateThreshold()" pin color="dark" min="0" max="1000" [(ngModel)]="threshold"
+              debounce="500">
+              <ion-label slot="start">
+                {{ formatPrice(0) }}
+              </ion-label>
+              <ion-label slot="end">
+                {{ formatPrice(1000) }}
+              </ion-label>
+            </ion-range>
+          </ng-container>
         </ion-card-content>
       </ng-container>
     </ng-container>

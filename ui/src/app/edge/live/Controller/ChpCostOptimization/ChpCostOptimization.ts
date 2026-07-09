@@ -68,6 +68,10 @@ export class Controller_ChpCostOptimizationComponent extends AbstractFlatWidget 
         }
         return Math.round((this.currentEnergyPrice / this.propertyPriceThreshold) * 100);
     }
+    get isGridThresholdOnly(): boolean {
+        return this.component?.properties["startCriterion"] === "GRID_THRESHOLD_ONLY";
+    }
+
     get barColor(): string {
         const p = this.currentEnergyCostsPercent;
         if (p > 90) { return "danger"; }

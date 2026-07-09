@@ -10,6 +10,7 @@ import { Currency, Edge, EdgeConfig, Service, Websocket } from "src/app/shared/s
 import { Language } from "src/app/shared/type/language";
 
 type mode = "MANUAL_ON" | "MANUAL_OFF" | "AUTOMATIC";
+type startCriterion = "PRICE_THRESHOLD" | "GRID_THRESHOLD_ONLY";
 
 enum ChpState {
     UNDEFINED = -1,                     // Undefined state
@@ -72,6 +73,10 @@ export class Controller_ChpCostOptimizationModalComponent implements OnInit {
         public translate: TranslateService,
         public modalCtrl: ModalController,
     ) { }
+
+    get isGridThresholdOnly(): boolean {
+        return this.component?.properties["startCriterion"] === "GRID_THRESHOLD_ONLY";
+    }
 
     get costsWithLabel(): string {
         if (this.highCostsThreshold == null) { return "-"; }
@@ -214,6 +219,28 @@ export class Controller_ChpCostOptimizationModalComponent implements OnInit {
                 this.service.toast(this.translate.instant("GENERAL.CHANGE_ACCEPTED"), "success");
             }).catch(reason => {
                 this.component.properties.mode = oldMode;
+                this.service.toast(this.translate.instant("GENERAL.CHANGE_FAILED") + "\n" + reason.error.message, "danger");
+                console.warn(reason);
+            });
+        }
+    }
+    /**
+    * Updates the start criterion (price threshold vs. grid consumption only)
+    *
+    * @param event
+    */
+    updateStartCriterion(event: CustomEvent) {
+        const oldValue = this.component.properties.startCriterion;
+        const newValue: startCriterion = event.detail.value;
+
+        if (this.edge != null) {
+            this.edge.updateComponentConfig(this.websocket, this.component.id, [
+                { name: "startCriterion", value: newValue },
+            ]).then(() => {
+                this.component.properties.startCriterion = newValue;
+                this.service.toast(this.translate.instant("GENERAL.CHANGE_ACCEPTED"), "success");
+            }).catch(reason => {
+                this.component.properties.startCriterion = oldValue;
                 this.service.toast(this.translate.instant("GENERAL.CHANGE_FAILED") + "\n" + reason.error.message, "danger");
                 console.warn(reason);
             });

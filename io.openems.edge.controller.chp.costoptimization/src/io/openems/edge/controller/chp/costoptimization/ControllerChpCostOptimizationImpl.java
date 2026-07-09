@@ -363,7 +363,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			}
 
 			// Costs are high. Start CHP but check hysteresis and temperatures
-			if (this.currentPrice > this.config.priceThreshold()) {
+			if (this.shouldStartNow()) {
 				this.logDebug(this.log, "Current price " + this.currentPrice + "€/MWh above configured value "
 						+ this.config.priceThreshold());
 				if (this.temperatureAboveThreshold) {
@@ -405,7 +405,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 			}
 
-			if (this.futurePrice > this.config.priceThreshold()) {
+			if (this.shouldPrepareForFuture()) {
 				if (this.changeState(State.CHP_PREPARING)) {
 					this.logDebug(this.log,
 							" Future price " + this.futurePrice + "€/MWh above configured value "
@@ -450,7 +450,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 			this.logDebug(this.log,
 					"Current/Future price " + this.currentPrice + "/" + this.futurePrice);
-			if ((this.futurePrice * 2) < this.config.priceThreshold()) {
+			if (this.shouldAbandonPreparation()) {
 				if (this.changeState(State.NORMAL)) {
 					this.chp.applyPreparation(false);
 					// Start Timer
@@ -556,7 +556,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 				this._setTargetNotReached(false);
 			}
 
-			if (this.currentPrice > this.config.priceThreshold()) {
+			if (this.shouldStartNow()) {
 				this.chp.applyPower(this.applyPowerTarget);
 				this.chp.applyPreparation(false);
 				this._setAwaitingPreparationHysteresis(false); // Preparation Hysteresis has to be stopped anyway
@@ -692,6 +692,51 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		
 		return chpTargetPower;
 	}	
+
+	/**
+	 * Decides whether the CHP should start right now, i.e. whether the configured
+	 * {@link StartCriterion} is currently satisfied. For {@link StartCriterion#GRID_THRESHOLD_ONLY}
+	 * price is irrelevant - the minGridPower/temperature gates preceding every call site of this
+	 * method (in {@code case NORMAL:} and {@code case CHP_ACTIVE:}) already decide whether we get
+	 * here at all.
+	 *
+	 * @return true if a price/demand-based CHP start is justified right now
+	 */
+	private boolean shouldStartNow() {
+		if (this.config.startCriterion() == StartCriterion.GRID_THRESHOLD_ONLY) {
+			return true;
+		}
+		return this.currentPrice > this.config.priceThreshold();
+	}
+
+	/**
+	 * Decides whether the CHP should pre-emptively prepare (see {@link State#CHP_PREPARING}) for an
+	 * upcoming price spike. Pure grid-threshold operation has no forward-looking signal, so this is
+	 * always false for {@link StartCriterion#GRID_THRESHOLD_ONLY}.
+	 *
+	 * @return true if preparation for a future price spike is justified
+	 */
+	private boolean shouldPrepareForFuture() {
+		if (this.config.startCriterion() == StartCriterion.GRID_THRESHOLD_ONLY) {
+			return false;
+		}
+		return this.futurePrice > this.config.priceThreshold();
+	}
+
+	/**
+	 * Decides whether an ongoing {@link State#CHP_PREPARING} should be abandoned (back to NORMAL).
+	 * Unlike {@link #shouldStartNow()}, the minGridPower gate has NOT necessarily run earlier in
+	 * {@code case CHP_PREPARING:} (it can be entered via the temperatureAboveThreshold branch in
+	 * NORMAL), so this re-checks grid consumption directly for {@link StartCriterion#GRID_THRESHOLD_ONLY}.
+	 *
+	 * @return true if preparation should be abandoned
+	 */
+	private boolean shouldAbandonPreparation() {
+		if (this.config.startCriterion() == StartCriterion.GRID_THRESHOLD_ONLY) {
+			return this.gridPowerWithoutChp < this.config.minGridPower();
+		}
+		return (this.futurePrice * 2) < this.config.priceThreshold();
+	}
 
 	private Double getCurrentCost(Integer power) {
 

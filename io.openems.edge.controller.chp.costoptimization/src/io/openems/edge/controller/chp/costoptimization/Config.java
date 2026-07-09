@@ -29,6 +29,9 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Fallback/fixed price [€/MWh]", description = "Used as the electricity price whenever no Time-of-Use-Tariff data is available - either temporarily (gap in prices) or permanently (no Time-of-Use-Tariff configured at all, effectively turning this into a fixed-price threshold controller). Default of 0 keeps price-based CHP starts disabled until a value is configured.")
 	int fallbackPrice() default 0;
 
+	@AttributeDefinition(name = "Start criterion", description = "Decides what triggers a demand-based CHP start in state NORMAL. PRICE_THRESHOLD (default) compares Time-of-Use price (or fallbackPrice) against priceThreshold. GRID_THRESHOLD_ONLY ignores price entirely and starts purely once the existing minGridPower/temperature gates allow it.")
+	StartCriterion startCriterion() default StartCriterion.PRICE_THRESHOLD;
+
 	@AttributeDefinition(name = "Maximum CHP power [W]", description = "Defines the over all rated electrical output power of the CHP system in watts.")
 	int maxActivePower() default 10000;
 

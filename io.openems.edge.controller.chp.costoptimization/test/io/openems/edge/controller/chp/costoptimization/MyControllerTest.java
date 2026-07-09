@@ -126,4 +126,59 @@ public class MyControllerTest {
 		test.deactivate();
 	}
 
+	/**
+	 * Regression test for {@link StartCriterion#GRID_THRESHOLD_ONLY}: with no
+	 * TimeOfUseTariff at all and a temperature within the normal range (i.e. NOT
+	 * below minBufferTankTemperature, so the unconditional temperature-driven
+	 * start does not apply), the CHP must still start purely because grid
+	 * consumption exceeds minGridPower - proving price is genuinely irrelevant in
+	 * this mode.
+	 */
+	@Test
+	public void testGridThresholdOnlyStartsWithoutPriceData() throws Exception {
+		final var clock = createDummyClock();
+
+		var chp = new DummyManagedSymmetricGenerator("chp0") //
+				.withGeneratorActivePower(0) //
+				.withReadyForOperation(true) //
+				.withAverageBufferTankTemperature(650); // 65.0°C, within normal range (not below min)
+
+		new ControllerTest(new ControllerChpCostOptimizationImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("chp", chp) //
+				.addReference("gridMeter", new DummyElectricityMeter("meter0") //
+						.withMeterType(MeterType.GRID) //
+						.withActivePower(5000)) //
+				// no timeOfUseTariff reference added -> stays null; fallbackPrice stays default 0
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setChpId("chp0") //
+						.setMeterId("meter0") //
+						.setMinGridPower(1000) //
+						.setMinBufferTankTemperature(60) //
+						.setThresholdBufferTankTemperature(70) //
+						.setMaxBufferTankTemperature(75) //
+						.setReducePowerThresholdTemperature(200) // disable unrelated near-max power reduction
+						.setPriceThreshold(100) //
+						.setMaxActivePower(10000) //
+						.setStartCriterion(StartCriterion.GRID_THRESHOLD_ONLY) //
+						.build()) //
+				.next(new TestCase("No prices available -> WARNING, not ERROR") //
+						.output(STATE_MACHINE, State.WARNING)) //
+				.next(new TestCase(
+						"GRID_THRESHOLD_ONLY: grid consumption above minGridPower starts the CHP despite no price data") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.output(STATE_MACHINE, State.CHP_ACTIVE)) //
+				.next(new TestCase("CHP is actively driven with a real target power, not frozen") //
+						.output(STATE_MACHINE, State.CHP_ACTIVE)) //
+				.deactivate();
+
+		if (chp.getLastAppliedPower() == null || chp.getLastAppliedPower() != 5000) {
+			throw new AssertionError(
+					"Expected CHP to be actively driven with target power 5000W under GRID_THRESHOLD_ONLY, but last applied power was: "
+							+ chp.getLastAppliedPower());
+		}
+	}
+
 }

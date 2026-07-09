@@ -317,6 +317,11 @@
           "HIGH_THERSHOLD": "Oberer Schwellenwert",
           "LOW_THRESHOLD": "Unterer Schwellenwert",
           "PRICE_THRESHOLD": "Schaltschwelle",
+          "START_CRITERION_LABEL": "Startkriterium",
+          "START_CRITERION": {
+            "PRICE_THRESHOLD": "Preisschwelle (Strompreis)",
+            "GRID_THRESHOLD_ONLY": "Nur Netzbezug (ohne Preis)"
+          },
           "HYSTERESIS_STATE": {
             "UNDEFINED": "Undefiniert",
             "ACTIVE": "Aktiv",

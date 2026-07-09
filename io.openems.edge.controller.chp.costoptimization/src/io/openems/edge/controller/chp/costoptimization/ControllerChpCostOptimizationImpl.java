@@ -695,27 +695,24 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 	private Double getCurrentCost(Integer power) {
 
-		Double currentPrice = 0.0;
-		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty() && power != null
-				&& power > 0) {
-			currentPrice = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
-		} else {
+		if (power == null || power <= 0) {
 			return 0.0;
 		}
-		// this.logDebug(this.log, " CurrentPrice " + currentPrice + "€/MWh\n");
+		Double currentPrice;
+		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
+			currentPrice = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
+		} else {
+			currentPrice = (double) this.config.fallbackPrice();
+		}
 		return Math.round((currentPrice * power / 1_000_000.0) * 1000.0) / 1000.0;
 	}
 
 	private Double getCurrentPrice() {
 
-		Double currentPrice = 0.0;
 		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
-			currentPrice = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
-		} else {
-			return 0.0;
+			return this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
 		}
-		// this.logDebug(this.log, " CurrentPrice " + currentPrice + "€/MWh\n");
-		return currentPrice;
+		return (double) this.config.fallbackPrice();
 	}
 
 	private Double getFuturePrice() {
@@ -724,44 +721,36 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 	    if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
 	        var price = this.timeOfUseTariff.getPrices().getAt(target);
-	        return price != null ? price : 0.0;
+	        return price != null ? price : (double) this.config.fallbackPrice();
 	    }
 
-	    return 0.0;
+	    return (double) this.config.fallbackPrice();
 	}
 
 
 	private Double getFutureCost(Integer power) {
-		var from = ZonedDateTime.now(this.componentManager.getClock());
-		int qMin = (from.getMinute() / 15) * 15;
-		from = from.withMinute(qMin).withSecond(0).withNano(0);
+		if (power == null || power <= 0) {
+			return 0.0;
+		}
 
-		var to = from.plusSeconds(this.config.preparationHyteresis()); // 3600s = 1h
+		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
+			var from = ZonedDateTime.now(this.componentManager.getClock());
+			int qMin = (from.getMinute() / 15) * 15;
+			from = from.withMinute(qMin).withSecond(0).withNano(0);
 
-		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty() && power != null
-				&& power > 0) {
-			// this.futurePrice = this.timeOfUseTariff.getPrices().get
+			var to = from.plusSeconds(this.config.preparationHyteresis()); // 3600s = 1h
 
-			// Double[] arrFuturePrices = this.timeOfUseTariff.getPrices().asArray();
-
-			// ToDo 2026 03 27
-			// var avgEurPerMWh = this.timeOfUseTariff.getPrices().getBetweenExclusive(from, to).mapToDouble(Double::doubleValue)
-			//		.average().orElse(0.0);
-			
 			var avgEurPerMWh = this.timeOfUseTariff.getPrices()
 			        .getBetweenExclusive(from, to)
 			        .map(Map.Entry::getValue)
 			        .mapToDouble(Double::doubleValue)
 			        .average()
-			        .orElse(0.0);				
+			        .orElse((double) this.config.fallbackPrice());
 
-			double eurPerHour = Math.round((avgEurPerMWh * (power / 1_000_000.0)) * 1000.0) / 1000.0;
-			return eurPerHour;
-
-		} else {
-			return 0.0;
+			return Math.round((avgEurPerMWh * (power / 1_000_000.0)) * 1000.0) / 1000.0;
 		}
 
+		return Math.round(((double) this.config.fallbackPrice() * power / 1_000_000.0) * 1000.0) / 1000.0;
 	}
 
 	@Deactivate
@@ -843,7 +832,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 		if (this.timeOfUseTariff == null || this.timeOfUseTariff.getPrices().isEmpty()) {
 			this.log.warn(
-					"No electricity prices available (TimeOfUseTariff is null or has no price data). Continuing operation in WARNING state without price-based control.");
+					"No electricity prices available (TimeOfUseTariff is null or has no price data). Continuing operation in WARNING state using configured fallback price of "
+							+ this.config.fallbackPrice() + " €/MWh.");
 			this.changeState(State.WARNING);
 			this.operationalValuesOk = true;
 			return;

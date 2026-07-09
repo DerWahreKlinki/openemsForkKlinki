@@ -54,4 +54,10 @@ export class SettingsComponent implements OnInit {
     public isEdgeBackend(): boolean {
         return this.environment.backend === "OpenEMS Edge";
     }
+
+    // Energy Journey has no registered route yet (see settings-routing.module.ts) -
+    // keep it hidden until the feature is actually wired up.
+    public showEnergyJourney(): boolean {
+        return false;
+    }
 }

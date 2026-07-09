@@ -115,6 +115,12 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		var props = context.getProperties();
 		log.info("[CHP CostOpt] gridMeter.target={}", props.get("gridMeter.target"));
 		log.info("[CHP CostOpt] chp.target={}", props.get("chp.target"));
+
+		this.logDebug(this.log,
+				"Activated with startCriterion=" + config.startCriterion() + ", priceThreshold="
+						+ config.priceThreshold() + "€/MWh, fallbackPrice=" + config.fallbackPrice()
+						+ "€/MWh, minGridPower=" + config.minGridPower() + "W, maxActivePower="
+						+ config.maxActivePower() + "W");
 	}
 
 	@Override
@@ -152,6 +158,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		Integer chpActivePower = this.chp.getGeneratorActivePower().get();
 
 		this.gridPowerWithoutChp = gridActivePower + chpActivePower;
+		this.logDebug(this.log, "run: gridActivePower=" + gridActivePower + "W, chpActivePower=" + chpActivePower
+				+ "W, gridPowerWithoutChp=" + this.gridPowerWithoutChp + "W");
 		Double currentEnergyCostsWithoutChp = this.getCurrentCost(gridPowerWithoutChp);
 		Double currentEnergyCosts = this.getCurrentCost(gridActivePower);
 		
@@ -691,13 +699,14 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		if (this.gridPowerWithoutChp != null) {
 
 			// Apply limits
-			chpTargetPower = Math.min(this.config.maxActivePower(), this.gridPowerWithoutChp); // also avoids sell to grid 
+			chpTargetPower = Math.min(this.config.maxActivePower(), this.gridPowerWithoutChp); // also avoids sell to grid
 
 		}
 
-		
+		this.logDebug(this.log, "calculateChpPowerTarget: min(maxActivePower=" + this.config.maxActivePower()
+				+ "W, gridPowerWithoutChp=" + this.gridPowerWithoutChp + "W) = " + chpTargetPower + "W");
 		return chpTargetPower;
-	}	
+	}
 
 	/**
 	 * Decides whether the CHP should start right now, i.e. whether the configured
@@ -710,9 +719,13 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	 */
 	private boolean shouldStartNow() {
 		if (this.config.startCriterion() == StartCriterion.GRID_THRESHOLD_ONLY) {
+			this.logDebug(this.log, "shouldStartNow: GRID_THRESHOLD_ONLY -> true (price irrelevant)");
 			return true;
 		}
-		return this.currentPrice > this.config.priceThreshold();
+		boolean result = this.currentPrice > this.config.priceThreshold();
+		this.logDebug(this.log, "shouldStartNow: currentPrice=" + this.currentPrice + "€/MWh vs. priceThreshold="
+				+ this.config.priceThreshold() + "€/MWh -> " + result);
+		return result;
 	}
 
 	/**
@@ -724,9 +737,13 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	 */
 	private boolean shouldPrepareForFuture() {
 		if (this.config.startCriterion() == StartCriterion.GRID_THRESHOLD_ONLY) {
+			this.logDebug(this.log, "shouldPrepareForFuture: GRID_THRESHOLD_ONLY -> false (no forward-looking signal)");
 			return false;
 		}
-		return this.futurePrice > this.config.priceThreshold();
+		boolean result = this.futurePrice > this.config.priceThreshold();
+		this.logDebug(this.log, "shouldPrepareForFuture: futurePrice=" + this.futurePrice + "€/MWh vs. priceThreshold="
+				+ this.config.priceThreshold() + "€/MWh -> " + result);
+		return result;
 	}
 
 	/**
@@ -739,9 +756,15 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 	 */
 	private boolean shouldAbandonPreparation() {
 		if (this.config.startCriterion() == StartCriterion.GRID_THRESHOLD_ONLY) {
-			return this.gridPowerWithoutChp < this.config.minGridPower();
+			boolean result = this.gridPowerWithoutChp < this.config.minGridPower();
+			this.logDebug(this.log, "shouldAbandonPreparation: GRID_THRESHOLD_ONLY, gridPowerWithoutChp="
+					+ this.gridPowerWithoutChp + "W vs. minGridPower=" + this.config.minGridPower() + "W -> " + result);
+			return result;
 		}
-		return (this.futurePrice * 2) < this.config.priceThreshold();
+		boolean result = (this.futurePrice * 2) < this.config.priceThreshold();
+		this.logDebug(this.log, "shouldAbandonPreparation: futurePrice*2=" + (this.futurePrice * 2)
+				+ "€/MWh vs. priceThreshold=" + this.config.priceThreshold() + "€/MWh -> " + result);
+		return result;
 	}
 
 	private Double getCurrentCost(Integer power) {
@@ -750,20 +773,30 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			return 0.0;
 		}
 		Double currentPrice;
+		boolean usedFallback;
 		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
 			currentPrice = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
+			usedFallback = false;
 		} else {
 			currentPrice = (double) this.config.fallbackPrice();
+			usedFallback = true;
 		}
-		return Math.round((currentPrice * power / 1_000_000.0) * 1000.0) / 1000.0;
+		var result = Math.round((currentPrice * power / 1_000_000.0) * 1000.0) / 1000.0;
+		this.logDebug(this.log, "getCurrentCost(" + power + "W): price=" + currentPrice + "€/MWh"
+				+ (usedFallback ? " (fallback)" : " (ToU)") + " -> " + result + "€/h");
+		return result;
 	}
 
 	private Double getCurrentPrice() {
 
 		if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
-			return this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
+			var price = this.timeOfUseTariff.getPrices().getFirst(); // Price in €/MWh.
+			this.logDebug(this.log, "getCurrentPrice: " + price + "€/MWh (ToU)");
+			return price;
 		}
-		return (double) this.config.fallbackPrice();
+		var fallback = (double) this.config.fallbackPrice();
+		this.logDebug(this.log, "getCurrentPrice: " + fallback + "€/MWh (fallback)");
+		return fallback;
 	}
 
 	private Double getFuturePrice() {
@@ -772,10 +805,15 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 	    if (this.timeOfUseTariff != null && !this.timeOfUseTariff.getPrices().isEmpty()) {
 	        var price = this.timeOfUseTariff.getPrices().getAt(target);
-	        return price != null ? price : (double) this.config.fallbackPrice();
+	        var result = price != null ? price : (double) this.config.fallbackPrice();
+	        this.logDebug(this.log, "getFuturePrice(" + target + "): " + result
+	                + "€/MWh" + (price != null ? " (ToU)" : " (fallback, no ToU price at target time)"));
+	        return result;
 	    }
 
-	    return (double) this.config.fallbackPrice();
+	    var fallback = (double) this.config.fallbackPrice();
+	    this.logDebug(this.log, "getFuturePrice(" + target + "): " + fallback + "€/MWh (fallback, no ToU)");
+	    return fallback;
 	}
 
 
@@ -798,10 +836,17 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			        .average()
 			        .orElse((double) this.config.fallbackPrice());
 
-			return Math.round((avgEurPerMWh * (power / 1_000_000.0)) * 1000.0) / 1000.0;
+			var result = Math.round((avgEurPerMWh * (power / 1_000_000.0)) * 1000.0) / 1000.0;
+			this.logDebug(this.log, "getFutureCost(" + power + "W, " + from + "-" + to + "): avgPrice=" + avgEurPerMWh
+					+ "€/MWh -> " + result + "€/h");
+			return result;
 		}
 
-		return Math.round(((double) this.config.fallbackPrice() * power / 1_000_000.0) * 1000.0) / 1000.0;
+		var result = Math.round(((double) this.config.fallbackPrice() * power / 1_000_000.0) * 1000.0) / 1000.0;
+		this.logDebug(this.log,
+				"getFutureCost(" + power + "W): no ToU, using fallbackPrice=" + this.config.fallbackPrice()
+						+ "€/MWh -> " + result + "€/h");
+		return result;
 	}
 
 	@Deactivate
@@ -983,6 +1028,13 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 		bufferTemperature = (int) Math.round(bufferTemperature / 10.0);
 
+		this.logDebug(this.log,
+				"checkTemperatureLimits: bufferTemperature=" + bufferTemperature + "°C (min="
+						+ this.config.minBufferTankTemperature() + "°C, threshold="
+						+ this.config.thresholdBufferTankTemperature() + "°C, max="
+						+ this.config.maxBufferTankTemperature() + "°C, reducePowerFrom="
+						+ this.config.reducePowerThresholdTemperature() + "°C)");
+
 		// check if temperature gets close to max -> reduce power
 		if (bufferTemperature >= this.config.reducePowerThresholdTemperature()) {
 			this._setTemperatureNearMax(true);
@@ -991,7 +1043,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			this._setTemperatureNearMax(false);
 			this.temperatureNearMax = false;
 		}
-		
+
 		if (bufferTemperature <= this.config.minBufferTankTemperature()) {
 			this._setTemperatureBelowMin(true);
 			this._setTemperatureAboveMax(false);
@@ -1000,6 +1052,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			this.temperatureBelowMin = true;
 			this.temperatureAboveMax = false;
 			this.temperatureAboveThreshold = false;
+			this.logDebug(this.log, "checkTemperatureLimits: below min -> temperatureBelowMin=true");
 			return;
 		}
 
@@ -1011,6 +1064,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			this.temperatureBelowMin = false;
 			this.temperatureAboveMax = true;
 			this.temperatureAboveThreshold = true;
+			this.logDebug(this.log, "checkTemperatureLimits: at/above max -> temperatureAboveMax=true");
 			return;
 		}
 
@@ -1023,6 +1077,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 			this.temperatureBelowMin = false;
 			this.temperatureAboveMax = false;
 			this.temperatureAboveThreshold = true;
+			this.logDebug(this.log, "checkTemperatureLimits: at/above threshold -> temperatureAboveThreshold=true");
 			return;
 		}
 
@@ -1033,6 +1088,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 		this.temperatureBelowMin = false;
 		this.temperatureAboveMax = false;
 		this.temperatureAboveThreshold = false;
+
+		this.logDebug(this.log, "checkTemperatureLimits: within normal range");
 
 	}
 	

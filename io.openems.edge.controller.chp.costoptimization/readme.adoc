@@ -14,8 +14,8 @@ Dispatch across multiple physical CHP units (e.g. which unit runs, percentage sp
 
 The `startCriterion` configuration parameter decides what triggers a demand-based CHP start once the buffer tank temperature and grid-consumption gates are satisfied:
 
-* `PRICE_THRESHOLD` (default) - starts the CHP once the current (or forecasted) electricity price exceeds `priceThreshold`. If no `TimeOfUseTariff` data is available, `fallbackPrice` is used instead - this also allows running the Controller purely as a fixed-price threshold when no dynamic tariff is configured at all.
-* `GRID_THRESHOLD_ONLY` - ignores price entirely; the CHP starts purely once grid consumption (without the CHP's own contribution) exceeds `minGridPower` and the temperature gates allow it.
+* `PRICE_THRESHOLD` (default) - starts the CHP once the current (or forecasted) electricity price exceeds `priceThreshold`. If no `TimeOfUseTariff` data is available, `fallbackPrice` is used instead - this also allows running the Controller purely as a fixed-price threshold when no dynamic tariff is configured at all. Missing price data also drives the `WARNING` state (see below).
+* `GRID_THRESHOLD_ONLY` - ignores price entirely; the CHP starts purely once grid consumption (without the CHP's own contribution) exceeds `minGridPower` and the temperature gates allow it. Missing `TimeOfUseTariff` data is irrelevant here and never triggers `WARNING`.
 
 == State machine
 
@@ -32,7 +32,7 @@ The Controller cycles through the following states (`StateMachine` channel):
 | Waiting; evaluates start conditions every cycle.
 
 | `WARNING`
-| No `TimeOfUseTariff` data available; the Controller keeps operating using `fallbackPrice` instead of freezing.
+| Only reachable under `startCriterion = PRICE_THRESHOLD`: no `TimeOfUseTariff` data available; the Controller keeps operating using `fallbackPrice` instead of freezing. `WARNING` is merely an entry point - once the state machine has moved on (e.g. to `IDLE`/`CHP_ACTIVE` via its fallthrough into the `NORMAL` logic), it is not forced back to `WARNING` every cycle, so it does not fight with those transitions.
 
 | `ERROR`
 | A required reference (CHP, grid meter) or value is missing; CHP is forced off.
@@ -70,5 +70,13 @@ The Controller cycles through the following states (`StateMachine` channel):
 * `Reduce power temperature threshold [°C]` - CHP output is halved while temperature is within this band below the max
 * `Min. grid power` (`minGridPower`) - minimum grid consumption (without the CHP's own contribution) required to leave `IDLE`
 * `Grid meter ID` / `CHP id` - references to the grid `ElectricityMeter` and the `ManagedSymmetricGenerator`
+
+== Channels
+
+* `StateMachine` - current state, see the table above
+* `ActivePowerTarget` / `ChpActivePower` - the calculated target power and the CHP's live measured power, both in [W]
+* `ChpActiveProductionEnergy` - cumulated, lifetime produced energy in [Wh], mirrored from the CHP device's own real hardware energy counter (`SymmetricGenerator#GENERATOR_ACTIVE_PRODUCTION_ENERGY`) - not a software-integrated estimate
+* `CurrentEnergyPrice`, `EnergyCosts`, `EnergyCostsWithoutChp` - current price and cost figures, driven by the configured `startCriterion`
+* `Awaiting*Hysteresis` - informational flags exposing which hysteresis timer is currently blocking a transition
 
 https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.chp.costoptimization[Source Code icon:github[]]

@@ -69,7 +69,7 @@ export class ChartComponent extends AbstractHistoryChart {
             output: (data: HistoryUtils.ChannelData) => {
                 return [
                     {
-                        name: translate.instant("EDGE.INDEX.WIDGETS.GRID_CONSUMPTION"),
+                        name: translate.instant("GENERAL.GRID_BUY"),
                         color: ChartConstants.Colors.BLUE_GREY,
                         converter: () => data["GridConsumption"],
                         hideShadow: false,

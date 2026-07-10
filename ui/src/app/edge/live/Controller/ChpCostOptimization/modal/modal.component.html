@@ -13,7 +13,8 @@
 <ion-content>
   <ng-container *ngIf="edge.currentData | async as currentData">
     <ion-card-content *ngIf="component as c">
-      <oe-modal-line [name]="'General.mode' | translate" [value]="(c.properties?.mode ?? '') | translate">
+      <oe-modal-line [name]="'GENERAL.MODE' | translate"
+        [value]="('GENERAL.' + (c.properties?.mode ?? 'AUTOMATIC')) | translate">
       </oe-modal-line>
 
       <ion-segment [value]="c.properties?.mode || 'AUTOMATIC'" (ionChange)="updateMode($event)" scrollable="false">
@@ -39,15 +40,6 @@
       <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHP.START_CRITERION_LABEL' | translate"
         [value]="'EDGE.INDEX.WIDGETS.CHP.START_CRITERION.' + (c.properties?.startCriterion ?? 'PRICE_THRESHOLD') | translate">
       </oe-modal-line>
-      <ion-select [value]="c.properties?.startCriterion || 'PRICE_THRESHOLD'" (ionChange)="updateStartCriterion($event)"
-        interface="popover">
-        <ion-select-option value="PRICE_THRESHOLD">
-          {{ 'EDGE.INDEX.WIDGETS.CHP.START_CRITERION.PRICE_THRESHOLD' | translate }}
-        </ion-select-option>
-        <ion-select-option value="GRID_THRESHOLD_ONLY">
-          {{ 'EDGE.INDEX.WIDGETS.CHP.START_CRITERION.GRID_THRESHOLD_ONLY' | translate }}
-        </ion-select-option>
-      </ion-select>
     </ion-card-content>
 
 

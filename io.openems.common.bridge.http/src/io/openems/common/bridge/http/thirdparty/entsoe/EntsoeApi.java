@@ -41,6 +41,13 @@ public class EntsoeApi {
 	 */
 	public static final int ENTSOE_UPDATE_HOUR = 14;
 
+	/**
+	 * Entsoe's endpoint can take noticeably longer to respond than the default
+	 * {@link BridgeHttp#DEFAULT_CONNECT_TIMEOUT}/{@link BridgeHttp#DEFAULT_READ_TIMEOUT}
+	 * allow for, so a more generous timeout is used here.
+	 */
+	public static final int TIMEOUT = 20_000; // 20s
+
 	private EntsoeApi() {
 	}
 
@@ -88,7 +95,10 @@ public class EntsoeApi {
 				.withQueryParam("periodEnd", toDate.withZoneSameInstant(UTC) //
 						.format(URL_DATE_FORMATTER));
 
-		return BridgeHttp.create(urlBuilder.toEncodedString()).build();
+		return BridgeHttp.create(urlBuilder.toEncodedString()) //
+				.setConnectTimeout(TIMEOUT) //
+				.setReadTimeout(TIMEOUT) //
+				.build();
 	}
 
 	/**

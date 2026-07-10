@@ -432,6 +432,8 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 				}
 				break;
 			} else {
+				this.logDebug(this.log,
+						"Decision: neither start criterion nor future price/criterion satisfied -> CHP stays off, remaining in NORMAL");
 				this.chp.applyPreparation(false);
 				this.setChpOff();
 			}
@@ -498,6 +500,7 @@ public class ControllerChpCostOptimizationImpl extends AbstractOpenemsComponent
 
 			if (this.getAwaitingPreparationHysteresis().get()) {
 				// prepare something...
+				this.logDebug(this.log, "Decision: still awaiting preparation hysteresis -> keep preparing");
 				this.chp.applyPreparation(true);
 
 			} else { // hyteresis over -> go back to normal

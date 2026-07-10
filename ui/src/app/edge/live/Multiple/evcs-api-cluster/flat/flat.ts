@@ -21,6 +21,10 @@ export class FlatComponent extends AbstractFlatWidget {
     public isConnectionSuccessful: boolean;
     public alias: string;
     public readonly CONVERT_TO_WATT = Utils.CONVERT_TO_WATT;
+    // This widget is exclusively used for EVCS clusters, which do not have a ChargePower/Plug
+    // channel of their own (only individual EVCS members do) - keep the corresponding UI line
+    // hidden and their channel subscriptions removed accordingly.
+    protected readonly isEvcsCluster = true;
     protected modalComponent: Modal | null = null;
 
     protected override afterIsInitialized(): void {
@@ -50,9 +54,7 @@ export class FlatComponent extends AbstractFlatWidget {
             }
         }
         this.channelAddresses.push(
-            new ChannelAddress(this.componentId, "ChargePower"),
             new ChannelAddress(this.componentId, "Phases"),
-            new ChannelAddress(this.componentId, "Plug"),
             new ChannelAddress(this.componentId, "Status"),
             new ChannelAddress(this.componentId, "State"),
             new ChannelAddress(this.componentId, "EnergySession"),
@@ -95,7 +97,6 @@ export class FlatComponent extends AbstractFlatWidget {
             new ChannelAddress(componentId, "Status"),
             new ChannelAddress(componentId, "State"),
             new ChannelAddress(componentId, "EnergySession"),
-            new ChannelAddress(componentId, "Alias"),
         );
     }
 }

@@ -267,26 +267,46 @@
                     "OUTPUT": "Output",
                     "TITLE": "Channel threshold controller"
                 },
-                "CHARGE_DISCHARGE_STATE": {
-                    "BALANCING_DEFERRAL_REASON_LABEL": "Reason for delay",
-                    "BALANCING_DEFERRAL_REASON": {
-                        "NONE": "",
-                        "PEAKSHAVING": "Active peak shaving",
-                        "PRICE_LIMIT": "Electricity price too high"
-                    }
-                },
                 "CHP": {
                     "HIGH_THRESHOLD": "High Threshold",
                     "LOW_THRESHOLD": "Low Threshold",
-                    "PRODUCED_ENERGY": "Produced energy in this period",
-                    "START_CRITERION_LABEL": "Start criterion",
-                    "START_CRITERION": {
-                        "PRICE_THRESHOLD": "Price threshold (electricity price)",
-                        "GRID_THRESHOLD_ONLY": "Grid consumption only (no price)"
-                    },
+                    "ACTIVE_POWER": "CHP power",
+                    "ACTIVE_POWER_TARGET": "CHP target power",
+                    "AWAITING_DEVICE_HYSTERESIS": "Device-specific hysteresis",
+                    "AWAITING_PREPARATION_HYSTERESIS": "Preparation hysteresis",
+                    "AWAITING_REDUCED_POWER_HYSTERESIS": "Reduced-power hysteresis",
+                    "AWAITING_RUN_HYSTERESIS": "Runtime hysteresis",
+                    "AWAITING_START_HYSTERESIS": "Start hysteresis",
+                    "AWAITING_STOP_HYSTERESIS": "Stop hysteresis",
+                    "AWAITING_TRANSITION_HYSTERESIS": "Transition hysteresis",
                     "CHP_STATE": {
+                        "CHP_ACTIVE": "CHP running",
+                        "CHP_INACTIVE": "CHP stopped",
+                        "CHP_NOT_READY": "Hardware not ready",
+                        "CHP_PREPARING": "CHP preparing",
+                        "ERROR": "Error",
+                        "IDLE": "Standby",
+                        "NORMAL": "Ready",
+                        "OVER_TEMPERATURE": "Over temperature",
+                        "UNDEFINED": "Undefined",
                         "WARNING": "No electricity prices available (fallback price active)"
-                    }
+                    },
+                    "CURRENT_CHP_STATE": "Status",
+                    "CURRENT_ENERGY_COSTS": "Current costs",
+                    "CURRENT_ENERGY_COSTS_WITHOUT_CHP": "Costs without CHP",
+                    "CURRENT_ENERGY_PRICE": "Current price",
+                    "HYSTERESIS_STATE": {
+                        "ACTIVE": "Active",
+                        "INACTIVE": "Inactive",
+                        "UNDEFINED": "Undefined"
+                    },
+                    "PRICE_THRESHOLD": "Switching threshold",
+                    "PRODUCED_ENERGY": "Produced energy in this period",
+                    "START_CRITERION": {
+                        "GRID_THRESHOLD_ONLY": "Grid consumption only (no price)",
+                        "PRICE_THRESHOLD": "Price threshold (electricity price)"
+                    },
+                    "START_CRITERION_LABEL": "Start criterion"
                 },
                 "DELAYED_SELL_TO_GRID": {
                     "CONTINUOUS_SELL_TO_GRID_POWER": "Discharge below",
@@ -517,15 +537,34 @@
                     "HYSTERESIS_SO_C": "Threshold SoC",
                     "MOST_STRESSED_PHASE": "Most stressed phase",
                     "PEAKSHAVING": "Peak-Shaving",
-                    "PEAKSHAVING_ENERGY": "Peak Shaving Energy",
                     "PEAKSHAVING_POWER": "Discharge above",
                     "RECHARGE": "Recharge Power",
-                    "RECHARGED_ENERGY": "Recharged Energy",
                     "RECHARGE_POWER": "Charge below",
                     "RELATION_ERROR": "Discharge limit must be greater than or equal to the charge limit",
                     "START_DATE": "Start date",
                     "START_TIME": "Start time",
-                    "START_TIME_CHARGE": "Charge Start time"
+                    "START_TIME_CHARGE": "Charge Start time",
+                    "CURRENT_PEAKSHAVING_STATE": "Status",
+                    "GRID_CONSUMPTION": "Grid consumption",
+                    "GRID_CONSUMPTION_WITHOUT_ESS": "Grid consumption (without ESS)",
+                    "PEAKSHAVING_ACTIVE": "Peak shaving active",
+                    "PEAKSHAVING_ENERGY": "Peak Shaving Energy",
+                    "PEAKSHAVING_STATE": {
+                        "ACTIVE": "Active",
+                        "CHARGING": "Charging",
+                        "CHARGING_FINISHED": "Charging finished",
+                        "DISABLED": "Disabled",
+                        "DISCHARGING_FAILS": "Discharging failed. ESS empty?",
+                        "ERROR": "Error",
+                        "HYSTERESIS_ACTIVE": "Hysteresis active",
+                        "IDLE": "Ready",
+                        "PEAKSHAVING_POWER_TOO_LOW": "Not enough power for peak shaving",
+                        "PEAKSHAVING_TARGET_NOT_REACHED": "Peak shaving target not reached",
+                        "UNDEFINED": "Undefined"
+                    },
+                    "PEAKSHAVING_TARGET": "Peak shaving target",
+                    "PEAKSHAVING_THRESHOLD_POWER": "Activation above",
+                    "RECHARGED_ENERGY": "Recharged Energy"
                 },
                 "PHASES_INFO": "For technical reasons, the sum of the individual phases can slightly deviate from the total sum.",
                 "SCHEDULE": {
@@ -606,7 +645,50 @@
                     },
                     "CHARGE_MODE": "Base mode",
                     "VEHICLE_ID_ERROR": "The vehicle ID could not be found. Please check the configuration. All registered vehicles are displayed."
+                },
+                "CHARGE_DISCHARGE_STATE": {
+                    "ABOVE_MAX_SOC": "Above configured Max-SoC",
+                    "APPROACHING_MAX_SOC": "SoC approaching maximum limit. Decreasing power",
+                    "APPROACHING_MIN_SOC": "SoC approaching minimum limit. Decreasing power",
+                    "BALANCING_ACTIVE": "Balancing active",
+                    "BALANCING_DEFERRAL_REASON": {
+                        "NONE": "",
+                        "PEAKSHAVING": "Active peak shaving",
+                        "PRICE_LIMIT": "Electricity price too high"
+                    },
+                    "BALANCING_DEFERRAL_REASON_LABEL": "Reason for delay",
+                    "BALANCING_REMAINING_SECONDS": "Remaining time: ",
+                    "BALANCING_WANTED": "Balancing wanted",
+                    "BELOW_MIN_SOC": "Below configured Min-SoC",
+                    "CHARGED_ENERGY_SINCE_LAST_BALANCING": "Energy charged since last balancing: ",
+                    "ERROR": "Error",
+                    "FORCE_CHARGE_ACTIVE": "Battery is charging to the configured balancing point",
+                    "MAX_SOC_REACHED": "Maximum SoC limit reached",
+                    "MIN_SOC_REACHED": "Minimum SoC limit reached",
+                    "NORMAL": "Normal",
+                    "UNDEFINED": "Undefined / initial state"
+                },
+                "CONFIGURATION_CHARGE_DISCHARGE_LIMITER": {
+                    "BALANCING_SOC_VALUE": "cal. SoC",
+                    "CHARGE_DISCHARGE_LIMITER_NOTE": "When this function is activated, the battery's state of charge is kept between the upper and lower limit. After the configured amount of energy, the battery attempts to calibrate itself",
+                    "COUPLER_TITLE": "ToDo",
+                    "EMERGENCY_RESERVE_LABEL": "Charge / discharge limiter{{ symbol }}",
+                    "FORCE_SOC": "cal. SoC",
+                    "FORCE_SOC_VALUE": "cal. SoC",
+                    "IS_ACTIVATED": "Controller activated?",
+                    "IS_ENABLED": "Should the charge/discharge limiting be activated?",
+                    "MAX_SOC": "max. SoC",
+                    "MAX_SOC_VALUE": "max. SoC",
+                    "MIN_SOC": "min. SoC",
+                    "MIN_SOC_VALUE": "min. SoC",
+                    "RECENT": "Current",
+                    "TITLE": "Details on the charge / discharge limiter",
+                    "VALUE": "Value [%]"
                 }
+            },
+            "CHARGE_DISCHARGE_LIMITER": {
+                "CHARGE_DISCHARGE_LIMITER": "Operating range",
+                "INFO_FOR_CHARGE_DISCHARGE_LIMITER_SLIDER": "When activated, the battery storage is kept between a minimum and a maximum"
             }
         },
         "NETWORK": {

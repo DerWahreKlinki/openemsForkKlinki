@@ -1,5 +1,5 @@
 import { TranslateService } from "@ngx-translate/core";
-import { GroupedNavigationTreeUtility, NavigationTree, } from "src/app/shared/components/navigation/shared";
+import { GroupedNavigationTreeUtility, NavigationTree } from "src/app/shared/components/navigation/shared";
 import { Converter } from "src/app/shared/components/shared/converter";
 import { EdgeConfig } from "src/app/shared/shared";
 
@@ -45,19 +45,15 @@ export namespace ControllerBraiinsShared {
         }
 
         const label = component.alias?.trim() || component.id;
-        return createComponentNavigationTree(
-            componentId,
-            label,
-            componentId,
-            translate,
-        );
+        return createComponentNavigationTree(componentId, label, componentId, translate);
     }
 
     export function getGroupedNavigationTree(
         translate: TranslateService,
         componentIds: EdgeConfig.Component["id"][],
         config: EdgeConfig,
-    ): ConstructorParameters<typeof NavigationTree> | null {
+        factoryId: EdgeConfig.Factory["id"],
+    ): NavigationTree | null {
         return GroupedNavigationTreeUtility.createGroupedNavigationTree(
             NAVIGATION_BASE,
             { name: "logo-bitcoin", color: "normal" },
@@ -66,8 +62,8 @@ export namespace ControllerBraiinsShared {
             translate,
             componentIds,
             config,
-            (componentId) =>
-                getNavigationTreeAsChild(translate, componentId, config),
+            factoryId,
+            (componentId) => getNavigationTreeAsChild(translate, componentId, config),
         );
     }
 
@@ -79,7 +75,7 @@ export namespace ControllerBraiinsShared {
     ): NavigationTree {
         const scheduleChildren: NavigationTree[] = [
             new NavigationTree(
-                "edit-task",
+                id + "-edit-task",
                 { baseString: "edit-task" },
                 { name: "create-outline" },
                 translate.instant("JS_SCHEDULE.EDIT_TASK"),
@@ -89,7 +85,7 @@ export namespace ControllerBraiinsShared {
                 { showOrder: "HIDE" },
             ),
             new NavigationTree(
-                "add-task",
+                id + "-add-task",
                 { baseString: "add-task" },
                 { name: "add-outline" },
                 translate.instant("JS_SCHEDULE.ADD_TASK"),
@@ -102,7 +98,7 @@ export namespace ControllerBraiinsShared {
 
         const children: NavigationTree[] = [
             new NavigationTree(
-                "mode",
+                id + "-mode",
                 { baseString: "mode" },
                 { name: "checkmark-done-outline", color: "medium" },
                 translate.instant("BRAIINS_SINGLE.MODE.LABEL"),
@@ -111,7 +107,7 @@ export namespace ControllerBraiinsShared {
                 null,
             ),
             new NavigationTree(
-                "schedule",
+                id + "-schedule",
                 { baseString: "schedule" },
                 { name: "calendar-outline", color: "warning" },
                 translate.instant("HEAT.SCHEDULE.SCHEDULE"),
@@ -138,9 +134,7 @@ export namespace ControllerBraiinsShared {
      * @param raw The raw value
      * @returns The value for chosen mode
      */
-    export const CONVERT_TO_MODE_LABEL = (
-        translate: TranslateService,
-    ): Converter => {
+    export const CONVERT_TO_MODE_LABEL = (translate: TranslateService): Converter => {
         return (raw): string => {
             return Converter.IF_NUMBER_OR_STRING(raw, (value) => {
                 switch (value) {

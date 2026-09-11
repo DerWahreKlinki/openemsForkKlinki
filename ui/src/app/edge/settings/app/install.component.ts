@@ -1,5 +1,5 @@
 // @ts-strict-ignore
-import { Component, effect, inject, OnDestroy, OnInit } from "@angular/core";
+import { Component, effect, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { FormGroup, FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { ModalController, NavController } from "@ionic/angular";
@@ -7,11 +7,11 @@ import { FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
 import { TranslateService } from "@ngx-translate/core";
 import { NgxSpinnerComponent } from "ngx-spinner";
 import { Subject } from "rxjs";
-import { NavigationBackButtonComponent } from "src/app/shared/components/navigation/back-button/back-button";
+import { NavigationBackButtonComponent } from "src/app/shared/components/navigation/back-button/navigation-back-button";
 import { JsonrpcRequest } from "src/app/shared/jsonrpc/base";
 import { ComponentJsonApiRequest } from "src/app/shared/jsonrpc/request/componentJsonApiRequest";
 import { PipeComponentsModule } from "src/app/shared/pipe/pipe.module";
-import { RouteService } from "src/app/shared/service/route.service";
+import { RouteService } from "src/app/shared/service/route/route.service";
 import { CommonUiModule } from "../../../shared/common-ui.module";
 import { Edge, Service, Utils, Websocket } from "../../../shared/shared";
 import { extractErrorMessage } from "../../../shared/utils/error/error.utils";
@@ -45,7 +45,7 @@ export class InstallAppComponent implements OnInit, OnDestroy {
 
     public readonly spinnerId: string = InstallAppComponent.SELECTOR;
 
-    protected form: FormGroup | null = null;
+    protected form = signal<FormGroup | null>(null);
     protected fields: FormlyFieldConfig[] | null = null;
     protected model: any | null = null;
     protected appName: string | null = null;
@@ -102,6 +102,7 @@ export class InstallAppComponent implements OnInit, OnDestroy {
     }
 
     public init() {
+        this.key = null;
         this.isRunning = true;
         this.service.startSpinner(this.spinnerId);
         const state = history?.state;
@@ -169,7 +170,7 @@ export class InstallAppComponent implements OnInit, OnDestroy {
                     this.fields = GetAppAssistant.getInitialFields(appAssistant.fields, {});
                     this.appName = appAssistant.name;
                     this.model = {};
-                    this.form = new FormGroup({});
+                    this.form.set(new FormGroup({}));
 
                     // treat configuration as a installation step
                     this.steps = [
@@ -204,11 +205,11 @@ export class InstallAppComponent implements OnInit, OnDestroy {
             .then((key) => {
                 this.service.startSpinnerTransparentBackground(this.appId);
                 // remove alias field from properties
-                const alias = this.form.value["ALIAS"];
+                const alias = this.form().value["ALIAS"];
                 const clonedFields = {};
-                for (const item in this.form.value) {
+                for (const item in this.form().value) {
                     if (item !== "ALIAS") {
-                        clonedFields[item] = this.form.value[item];
+                        clonedFields[item] = this.form().value[item];
                     }
                 }
 
@@ -246,7 +247,7 @@ export class InstallAppComponent implements OnInit, OnDestroy {
                             this.service.toast(this.translate.instant("EDGE.CONFIG.APP.SUCCESS_INSTALL"), "success");
                         }
 
-                        this.form.markAsPristine();
+                        this.form().markAsPristine();
                         if (this.routeService.getQueryParam("callback")) {
                             this.navController.back();
                             return;

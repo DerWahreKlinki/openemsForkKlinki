@@ -24,10 +24,12 @@ import { FooterNavigationComponentsModule, FooterNavigationModule, } from "./foo
 import { HistoryDataErrorModule } from "./history-data-error/history-data-error.module";
 import { HelpButtonComponent } from "./modal/help-button/help-button";
 import { ModalComponentsModule, ModalModule } from "./modal/modal.module";
-import { NavigationBackButtonComponent } from "./navigation/back-button/back-button";
-import { NavigationBreadCrumbsComponent } from "./navigation/breadcrumbs/breadcrumbs";
-import { NavigationChipsComponent } from "./navigation/chips/chips";
-import { NavigationPageComponent as NavigationViewComponent } from "./navigation/view/view";
+import { NavigationChipsComponent } from "./navigation/accordions/navigation-accordions";
+import { NavigationBackButtonComponent } from "./navigation/back-button/navigation-back-button";
+import { ForwardNavigationOptions } from "./navigation/bottom-bar/forward-navigation-options/forward-navigation-options";
+import { FavoriteButtonComponent } from "./navigation/favorite/button/favorite-button";
+import { NavigationLabelLineComponent } from "./navigation/label-line/label-line";
+import { NavigationPageComponent as NavigationViewComponent } from "./navigation/view/navigation-view";
 import { PickdateComponentModule, PickdateModule } from "./pickdate/pickdate.module";
 import { NotificationComponent } from "./shared/notification/notification";
 
@@ -48,6 +50,9 @@ import { NotificationComponent } from "./shared/notification/notification";
         FooterContentComponent,
         LabelToLinesPipe,
         NavigationBackButtonComponent,
+        ForwardNavigationOptions,
+        NavigationLabelLineComponent,
+        FavoriteButtonComponent,
     ],
     declarations: [
         // Flat
@@ -62,7 +67,6 @@ import { NotificationComponent } from "./shared/notification/notification";
         FooterComponent,
         NavigationViewComponent,
         NavigationChipsComponent,
-        NavigationBreadCrumbsComponent,
     ],
     exports: [
         // Flat
@@ -78,7 +82,6 @@ import { NotificationComponent } from "./shared/notification/notification";
         FooterComponent,
         NavigationViewComponent,
         NavigationChipsComponent,
-        NavigationBreadCrumbsComponent,
         ModalModule,
         FooterNavigationComponentsModule,
         PickdateComponentModule,

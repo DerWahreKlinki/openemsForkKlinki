@@ -9,7 +9,7 @@
         "FAQ": "Häufig gestellte Fragen (FAQ)",
         "LANGUAGE": "Sprache wählen:",
         "THEME": "Theme",
-        "NEW_UI": "Neues UI",
+        "NEW_UI": "Neues Design",
         "OPEN_EMS": "Mehr zu OpenEMS",
         "PATCHNOTES": "Änderungen im Monitoring zu diesem Build"
     },
@@ -339,7 +339,8 @@
                         "RENAULT_ZOE": "Wird an dieser Ladesäule hauptsächlich ein Renault Zoe beladen?"
                     },
                     "AMOUNT_OF_CHARGING_STATIONS": "Anzahl der Ladestationen",
-                    "AUTOMATIC_SWITCHING": "Automatisch",
+                    "AUTOMATIC_SWITCHING": "Automatische Phasenumschaltung",
+                    "AUTOMATIC_SWITCHING_DESCRIPTION": "Die automatische Phasenumschaltung setzt voraus, dass sowohl das Fahrzeug als auch der Ladepunkt diese Funktion technisch unterstützen. Der Vorgang des Phasenwechsels kann wenige Minuten dauern, in denen das Fahrzeug nicht lädt.",
                     "CABLE": "Kabel",
                     "CABLE_NOT_CONNECTED": "Kabel ist nicht angeschlossen",
                     "CAR_FULL": "Auto ist voll",
@@ -492,8 +493,9 @@
                     "BELOW_SOC": "und unter Ladezustand von",
                     "GRID_BUY": "Ab Netzbezug von",
                     "GRID_SELL": "Ab Überschusseinspeisung von",
+                    "HEAT_PUMP": "Wärmepumpe",
                     "LOCK": "Sperre",
-                    "MORE_THAN_MAX_POWER": "Wert darf nicht niedriger als Maximalleistung der Wärmepumpe sein",
+                    "MORE_THAN_HP_POWER": "Wert darf nicht niedriger als Maximalleistung der Wärmepumpe sein",
                     "NORMAL_OPERATION": "Normalbetrieb",
                     "NORMAL_OPERATION_SHORT": "Normal",
                     "RELATION_ERROR": "Einschaltbefehl Überschusswert muss größer als Einschaltempfehlungswert sein",
@@ -502,7 +504,15 @@
                     "SWITCH_ON_REC": "Einschaltempfehlung",
                     "SWITCH_ON_REC_SHORT": "Empfehlung",
                     "UNDEFINED": "Nicht definiert",
-                    "OPERATING_STATUS": "Betriebszustand"
+                    "OPERATING_STATUS": "Betriebszustand",
+                    "AUTOMATIC_DESCRIPTION": "Stelle hier die jeweiligen Schwellwerte für den Modus zum PV-Überschuss ein",
+                    "BASE_MODE_DESCRIPTIONS": {
+                        "SWITCH_ON_COM": "Bei Einschaltbefehl heizt die Wärmepumpe auf höchster Stufe zur maximalen thermischen Speicherung.",
+                        "SWITCH_ON_REC": "Bei Aktivierung erhöht die Wärmepumpe ihre Leistung und nutzt verfügbare Energie verstärkt zur Wärmeerzeugung.",
+                        "NORMAL_OPERATION": "Die Wärmepumpe arbeitet bedarfsgeführt im regulären Leistungsbereich.",
+                        "AUTOMATIC": "Je nach eingestellten Schwellwerten des Netzbezugs sowie der Netzeinspeisung werden die einzelnen Modi geschaltet.\n(Die Schwellwerte können unter Einstellungen angepasst werden)",
+                        "LOCK": "Dieser Betriebszustand limitiert die Leistungsaufnahme der Wärmepumpe je nach Einstellung der Wärmepumpe auf 0 kW oder 4,2 kW."
+                    }
                 },
                 "HEATINGELEMENT": {
                     "ACTIVE_FORCED": "Aktiv (Mindestlaufzeit)",
@@ -581,7 +591,7 @@
                     "CURRENT_VALUE": "Aktueller Wert",
                     "DEPENDEND_ON": "Abhängig von",
                     "MIN_SWITCHING_TIME": "Mindestumschaltzeit",
-                    "MORE_THAN_MAX_POWER": "Wert darf nicht niedriger als Maximalleistung des angesteuerten Geräts sein",
+                    "MORE_THAN_HP_POWER": "Wert darf nicht niedriger als Maximalleistung des angesteuerten Geräts sein",
                     "OTHER": "Sonstige",
                     "RELATION_ERROR": "Schwellenwert muss größer als die geschaltete Last sein",
                     "SWITCH_OFF_ABOVE": "Ausschalten über",
@@ -741,6 +751,7 @@
         "AUTARCHY": "Autarkie",
         "AUTOMATIC": "Automatisch",
         "BACK": "Zurück",
+        "BASE_MODE": "Grundmodus",
         "CANCEL": "abbrechen",
         "CAPACITY": "Kapazität",
         "CHANGE_ACCEPTED": "Änderung übernommen",
@@ -879,6 +890,7 @@
             "MINUTE": "Minute",
             "MINUTES": "Minuten"
         },
+        "TIME_SCHEDULE": "Zeitplan",
         "TO": "Bis",
         "TOTAL": "Gesamt",
         "TOTAL_CHARGE": "Gesamte Beladung",
@@ -960,6 +972,7 @@
         "ACCESS_LEVEL": "Zugriffslevel",
         "CHANGELOG": "Changelog",
         "COCKPIT": "Cockpit",
+        "FAVORITES": "Favoriten",
         "DEFAULT_EDGE_LONG_NAME": "FENECON Energiemanagementsystem",
         "EDGE_SETTINGS": "Einstellungen",
         "EDGE_SYSTEM_SETTINGS": "Systemeinstellungen",
@@ -979,6 +992,7 @@
         "OPENEMS_ENERGY_MANAGEMENT_SYSTEM": "Open Energy Management System",
         "OTHER_USER": "Weitere Benutzer",
         "OVERVIEW": "Alle Systeme",
+        "SYSTEMS": "Systeme",
         "SETTINGS": "Einstellungen",
         "USER": "Benutzer",
         "PROFILE": "Profil"
@@ -997,9 +1011,12 @@
         "NOT_OVERRIDING": "Keine externe Vorgabe vorhanden",
         "OVERRIDING": "Externe Vorgabe wird berücksichtigt",
         "REGISTER": "Register",
-        "SET_ACTIVE_POWER_EQUALS": "Vorgabe Be- bzw. Entladeleistung",
-        "SET_ACTIVE_POWER_GREATER_OR_EQUALS": "Minimale Beladeleistung",
-        "SET_ACTIVE_POWER_LESS_OR_EQUALS": "Maximale Beladeleistung"
+        "SET_ACTIVE_POWER_EQUALS": "Vorgabe Wirkleistung",
+        "SET_ACTIVE_POWER_GREATER_OR_EQUALS": "Vorgabe maximaler Beladeleistung",
+        "SET_ACTIVE_POWER_LESS_OR_EQUALS": "Vorgabe maximaler Entladeleistung",
+        "SET_REACTIVE_POWER_EQUALS": "Vorgabe Blindleistung",
+        "SET_REACTIVE_POWER_GREATER_OR_EQUALS": "Vorgabe minimaler Blindleistung",
+        "SET_REACTIVE_POWER_LESS_OR_EQUALS": "Vorgabe maximaler Blindleistung"
     },
     "NOTIFICATIONS": {
         "AUTHENTICATION_FAILED": "Keine Verbindung: Authentifizierung fehlgeschlagen.",
@@ -1090,7 +1107,7 @@
         },
         "ENERGY_JOURNEY": {
             "TO_THE_ANALYSIS": "Zur Analyse",
-            "YOUR_ENERYJOURNEY": "Deine Energy Journey"
+            "YOUR_ENERYJOURNEY": "OpenEMS Journey"
         },
         "POWER_ASSISTANT": {
             "INFO": "Der 'Power Assistant' zeigt für alle Speichersysteme (ess0, ess1,...) die jeweiligen Controller und jeweils einige relevante Datenpunkte. Die Reihenfolge entspricht der Reihenfolge im Scheduler."

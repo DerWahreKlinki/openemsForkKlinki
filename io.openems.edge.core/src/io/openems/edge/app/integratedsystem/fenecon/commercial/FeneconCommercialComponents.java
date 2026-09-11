@@ -1,5 +1,7 @@
 package io.openems.edge.app.integratedsystem.fenecon.commercial;
 
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.isHardwareGen2OrGen3;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.isHardwareInstalledForMasterBox;
 import static io.openems.edge.core.appmanager.TranslationUtil.translate;
 
 import java.util.Arrays;
@@ -63,18 +65,24 @@ public final class FeneconCommercialComponents {
 	 * Creates a slave cluster battery {@link ComponentDef}. Battery is connected to
 	 * port 1.
 	 *
-	 * @param bundle    the translation bundle
-	 * @param batteryId the id of the battery
+	 * @param bundle         the translation bundle
+	 * @param batteryId      the id of the battery
+	 * @param deviceHardware the device hardware
 	 * @return the {@link ComponentDef}
 	 */
 	public static ComponentDef clusterBatterySlave1(//
 			ResourceBundle bundle, //
-			String batteryId //
+			String batteryId, //
+			OpenemsAppInstance deviceHardware //
 	) {
+
+		final var startUpRelay = isHardwareInstalledForMasterBox(deviceHardware) //
+				? "io0/Relay6" //
+				: "io0/Relay4";
 		return new ComponentDef(batteryId, translate(bundle, "App.IntegratedSystem.batteryN.alias", 1),
 				"Battery.Fenecon.Home",
 				new ComponentProperties(List.of(ComponentProperties.Property.of("batteryStartUpRelay") //
-						.withValue("io0/Relay4"),
+						.withValue(startUpRelay),
 						ComponentProperties.Property.of("enabled") //
 								.withValue(true),
 						ComponentProperties.Property.of("inverterPort") //
@@ -132,9 +140,9 @@ public final class FeneconCommercialComponents {
 			final String modbusIdExternal, //
 			final OpenemsAppInstance deviceHardware //
 	) {
-		final var portName = deviceHardware == null || !deviceHardware.appId.equals("App.OpenemsHardware.CM4S.Gen2")
-				? "/dev/bus0"
-				: "/dev/busUSB3";
+		final var portName = isHardwareGen2OrGen3(deviceHardware) //
+				? "/dev/busUSB3" //
+				: "/dev/bus0";
 
 		final var properties = Lists.newArrayList(//
 				ComponentProperties.Property.of("enabled") //
@@ -379,6 +387,28 @@ public final class FeneconCommercialComponents {
 				ComponentProperties.fromJson(JsonUtils.buildJsonObject() //
 						.addProperty("enabled", true) //
 						.addProperty("modbus.id", modbusId) //
+						.build()),
+				ComponentDef.Configuration.defaultConfig());
+	}
+
+	/**
+	 * Creates a default io for the second battery used in a
+	 * {@link FeneconCommercial100} system.
+	 * 
+	 * @param bundle   the translation bundle
+	 * @param modbusId the id of the external modbus bridge
+	 * @return the {@link ComponentDef}
+	 */
+	public static ComponentDef ioForSecondBattery(//
+			final ResourceBundle bundle, //
+			final String modbusId //
+	) {
+		return new ComponentDef("io2", translate(bundle, "App.FENECON.Commercial.100.ioForSecondBattery.alias"), //
+				"IO.KMtronic.4Port", //
+				ComponentProperties.fromJson(JsonUtils.buildJsonObject() //
+						.addProperty("enabled", true) //
+						.addProperty("modbus.id", modbusId) //
+						.addProperty("modbusUnitId", 2) //
 						.build()),
 				ComponentDef.Configuration.defaultConfig());
 	}

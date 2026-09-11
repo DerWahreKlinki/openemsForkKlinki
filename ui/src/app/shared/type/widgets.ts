@@ -5,6 +5,7 @@ import { SharedProduction } from "src/app/edge/live/common/production/shared/sha
 import { SharedStorage } from "src/app/edge/live/common/storage/shared/shared";
 import { SharedWeather } from "src/app/edge/live/common/weather/shared/shared";
 import { SharedControllerChannelThreshold } from "src/app/edge/live/Controller/Channelthreshold/shared/shared";
+import { SharedControllerChpSoc } from "src/app/edge/live/Controller/ChpSoc/shared/shared";
 import { SharedControllerEnerixControl } from "src/app/edge/live/Controller/EnerixControl/shared/shared";
 import { ControllerEvseSingleShared } from "src/app/edge/live/Controller/Evse/shared/shared";
 import { SharedControllerHeat } from "src/app/edge/live/Controller/Heat/shared/shared";
@@ -17,12 +18,11 @@ import { SharedControllerIoHeatingRoom } from "../../edge/live/Controller/Io/Hea
 import { Edge } from "../components/edge/edge";
 import { EdgeConfig } from "../components/edge/edgeconfig";
 import { NavigationTree } from "../components/navigation/shared";
-import { EdgePermission } from "../shared";
 import { TEnumKeys } from "./utility";
 import { Widget, WidgetClass, WidgetFactory, WidgetNature } from "./widget";
 
 export class Widgets {
-    private static readonly GROUPED_FACTORIES: Partial<
+    public static readonly GROUPED_FACTORIES: Partial<
         Record<
             Widget["name"],
             {
@@ -30,7 +30,8 @@ export class Widgets {
                     translate: TranslateService,
                     componentIds: Widget["componentId"][],
                     config: EdgeConfig,
-                ) => ConstructorParameters<typeof NavigationTree> | null;
+                    factoryId: EdgeConfig.Factory["id"],
+                ) => NavigationTree | null;
                 single: (
                     translate: TranslateService,
                     componentId: Widget["componentId"],
@@ -110,6 +111,8 @@ export class Widgets {
         }
 
         switch (widget.name) {
+            case "Controller.CHP.SoC":
+                return SharedControllerChpSoc.getNavigationTree(translate, component);
             case "Controller.Clever-PV":
                 return SharedControllerEnerixControl.getNavigationTree(translate, component);
             case "Weather.OpenMeteo":
@@ -117,7 +120,7 @@ export class Widgets {
             case "Controller.IO.HeatingElement":
                 return SharedControllerIoHeatingElement.getNavigationTree(translate, component);
             case "Controller.Io.HeatPump.SgReady":
-                return SharedControllerIoHeatpump.getNavigationTree(translate, component);
+                return SharedControllerIoHeatpump.getNavigationTree(translate, component, edge);
             case "Heat.Askoma":
                 return SharedControllerHeat.getNavigationTree(translate, component, true);
             case "Heat.MyPv":
@@ -161,7 +164,7 @@ export class Widgets {
                         )?.length > 0
                     );
                 case "Controller.Api.ModbusTcp.ReadWrite":
-                    return EdgePermission.isModbusTcpApiWidgetAllowed(edge);
+                    return true;
                 default:
                     return false;
             }
@@ -176,7 +179,8 @@ export class Widgets {
                 ) {
                     continue;
                 }
-                const component = config.getComponent(componentId);
+
+                const component = config.getComponentSafelyOrDefault(componentId);
                 if (component.isEnabled) {
                     list.push({
                         name: nature,
@@ -188,7 +192,7 @@ export class Widgets {
         }
         for (const factory of Object.values(WidgetFactory).filter((v) => typeof v === "string")) {
             for (const componentId of config.getComponentIdsByFactory(factory.toString())) {
-                const component = config.getComponent(componentId);
+                const component = config.getComponentSafelyOrDefault(componentId);
                 if (factory === "Controller.Clever-PV") {
                     // Clever-PV Widget should be shown only if readOnly property is explicitely set to false
                     const readOnly = config.getPropertyFromComponent<boolean>(component, "readOnly");
@@ -196,6 +200,7 @@ export class Widgets {
                         continue;
                     }
                 }
+
                 if (component.isEnabled) {
                     list.push({
                         name: factory,
@@ -212,17 +217,17 @@ export class Widgets {
                 w1.name === "Controller.IO.ChannelSingleThreshold" &&
                 w2.name === "Controller.IO.ChannelSingleThreshold"
             ) {
-                let outputChannelAddress1: string | string[] = config.getComponentProperties(w1.componentId)[
-                    "outputChannelAddress"
-                ];
-                if (typeof outputChannelAddress1 !== "string") {
+                let outputChannelAddress1: string | string[] | undefined = config.getComponentProperties(
+                    w1.componentId,
+                )?.["outputChannelAddress"];
+                if (Array.isArray(outputChannelAddress1)) {
                     // Takes only the first output for simplicity reasons
                     outputChannelAddress1 = outputChannelAddress1[0];
                 }
-                let outputChannelAddress2: string | string[] = config.getComponentProperties(w2.componentId)[
-                    "outputChannelAddress"
-                ];
-                if (typeof outputChannelAddress2 !== "string") {
+                let outputChannelAddress2: string | string[] | undefined = config.getComponentProperties(
+                    w2.componentId,
+                )?.["outputChannelAddress"];
+                if (Array.isArray(outputChannelAddress2)) {
                     // Takes only the first output for simplicity reasons
                     outputChannelAddress2 = outputChannelAddress2[0];
                 }
@@ -240,8 +245,9 @@ export class Widgets {
         edge: Edge,
         translate: TranslateService,
         config: EdgeConfig,
+        /** Widgets to build the navigation trees from. Defaults to all Widgets derived from `config`. */
+        widgets: Widget[] = Widgets.parseWidgets(edge, config).list ?? [],
     ): ConstructorParameters<typeof NavigationTree>[] {
-        const widgets = Widgets.parseWidgets(edge, config).list ?? [];
         const navigationTrees: ConstructorParameters<typeof NavigationTree>[] = [];
         const groupedComponentIdsByWidgetName: Partial<Record<Widget["name"], Widget["componentId"][]>> = {};
 
@@ -281,9 +287,9 @@ export class Widgets {
                 continue;
             }
 
-            const groupedNavigationTree = groupedFactory.grouped(translate, componentIds, config);
+            const groupedNavigationTree = groupedFactory.grouped(translate, componentIds, config, groupedWidgetName);
             if (groupedNavigationTree != null) {
-                navigationTrees.push(groupedNavigationTree);
+                navigationTrees.push(groupedNavigationTree.toConstructorParams());
             }
         }
 

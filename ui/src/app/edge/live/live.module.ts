@@ -17,7 +17,7 @@ import { WeatherModule } from "./common/weather/weather.module";
 import { Controller_ChannelthresholdComponent } from "./Controller/Channelthreshold/Channelthreshold";
 import { Controller_ChpCostOptimizationComponent } from "./Controller/ChpCostOptimization/ChpCostOptimization";
 import { Controller_ChpCostOptimizationModalComponent } from "./Controller/ChpCostOptimization/modal/modal.component";
-import { Controller_ChpSocComponent } from "./Controller/ChpSoc/ChpSoc";
+import { ControllerChpFlatComponent } from "./Controller/ChpSoc/flat/ChpSoc";
 import { Controller_ChpSocModalComponent } from "./Controller/ChpSoc/modal/modal.component";
 import { Controller_EnerixControl } from "./Controller/EnerixControl/EnerixControl";
 import { ControllerEssFixActivePower } from "./Controller/Ess/FixActivePower/fix-active-power";
@@ -90,13 +90,13 @@ import { SystemOutageInfoComponent } from "./system-outage-info/oe-system-outage
         HelpButtonComponent,
         EvcsClusterApiChartComponent,
         ControllerBraiinsModule,
+        ControllerChpFlatComponent,
     ],
     declarations: [
         AdministrationComponent,
         Controller_Asymmetric_PeakShavingComponent,
         Controller_Asymmetric_PeakShavingModalComponent,
         Controller_ChannelthresholdComponent,
-        Controller_ChpSocComponent,
         Controller_ChpSocModalComponent,
         Controller_ChpCostOptimizationComponent,
         Controller_ChpCostOptimizationModalComponent,

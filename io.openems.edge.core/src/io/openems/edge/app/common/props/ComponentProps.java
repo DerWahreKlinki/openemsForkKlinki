@@ -5,6 +5,7 @@ import static io.openems.edge.app.common.props.MeterIntegrationUtil.getExternMet
 import static io.openems.edge.app.common.props.MeterIntegrationUtil.getMeterIdFromAlias;
 import static io.openems.edge.app.common.props.MeterIntegrationUtil.isMeterNotFromCurrentApp;
 import static io.openems.edge.app.common.props.MeterIntegrationUtil.meterUsed;
+import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.isHardwareInstalledForMasterBox;
 import static io.openems.edge.core.appmanager.TranslationUtil.translate;
 import static io.openems.edge.core.appmanager.formly.builder.SelectBuilder.DEFAULT_COMPONENT_2_LABEL;
 import static io.openems.edge.core.appmanager.formly.builder.SelectBuilder.DEFAULT_COMPONENT_2_VALUE;
@@ -34,6 +35,7 @@ import io.openems.edge.core.appmanager.ComponentUtil;
 import io.openems.edge.core.appmanager.ComponentUtilSupplier;
 import io.openems.edge.core.appmanager.Nameable;
 import io.openems.edge.core.appmanager.OpenemsApp;
+import io.openems.edge.core.appmanager.OpenemsAppCategory;
 import io.openems.edge.core.appmanager.TranslationUtil;
 import io.openems.edge.core.appmanager.Type.Parameter.BundleProvider;
 import io.openems.edge.core.appmanager.formly.Exp;
@@ -410,7 +412,7 @@ public final class ComponentProps {
 	/**
 	 * Creates a {@link AppDef} for a selection to show if the element is measured
 	 * internal or external.
-	 * 
+	 *
 	 * @param isElementMeasured the {@link Nameable} IS_ELEMENT_MEASURED
 	 * @param <APP>             the type of the app, which must implement *
 	 *                          OpenemsApp, ComponentUtilSupplier and *
@@ -424,8 +426,7 @@ public final class ComponentProps {
 		return AppDef.copyOfGeneric(CommonProps.defaultDef(), de -> de //
 				.setTranslatedLabel("howMeasured") //
 				.setField(JsonFormlyUtil::buildSelectFromNameable, (app, property, l, parameter, field) -> {
-					if (PropsUtil.isHomeInstalled(app.getAppManagerUtil())
-							&& app.getAppManagerUtil().getInstantiatedAppsOf("App.FENECON.Home").isEmpty()) {
+					if (isHomeExceptGen1(app) || isTechbaseGen3AndHomeOrCommercial(app)) {
 						field.setOptions(OptionsFactory.of(MeterIntegration.class), l);
 					} else {
 						field.setOptions(OptionsFactory.of(MeterIntegration.class, MeterIntegration.INTERN), l);
@@ -437,7 +438,7 @@ public final class ComponentProps {
 	/**
 	 * Creates a {@link AppDef} for a selection of all valid consumption meters if
 	 * the element is extern measured.
-	 * 
+	 *
 	 * @param isElementMeasured the {@link Nameable} IS_ELEMENT_MEASURED
 	 * @param howMeasured       the {@link Nameable} HOW_MEASURED
 	 * @param <APP>             the type of the app, which must implement * *
@@ -476,6 +477,19 @@ public final class ComponentProps {
 					field.onlyShowIf(MeterIntegrationUtil.checkMeasuredAndExtern(isElementMeasured, howMeasured))
 							.build();
 				}));
+	}
+
+	private static <APP extends OpenemsApp & AppManagerUtilSupplier> boolean isHomeExceptGen1(APP app) {
+		return PropsUtil.isHomeInstalled(app.getAppManagerUtil())
+				&& app.getAppManagerUtil().getInstantiatedAppsOf("App.FENECON.Home").isEmpty();
+	}
+
+	private static <APP extends OpenemsApp & AppManagerUtilSupplier> boolean isTechbaseGen3AndHomeOrCommercial(
+			APP app) {
+		final var deviceHardware = app.getAppManagerUtil()
+				.getFirstInstantiatedAppByCategories(OpenemsAppCategory.OPENEMS_DEVICE_HARDWARE);
+		return isHardwareInstalledForMasterBox(deviceHardware)
+				&& PropsUtil.isProductTypeWithCompatibleMasterboxInstalled(app.getAppManagerUtil());
 	}
 
 	private ComponentProps() {

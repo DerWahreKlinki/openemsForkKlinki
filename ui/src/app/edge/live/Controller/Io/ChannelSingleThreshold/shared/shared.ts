@@ -5,7 +5,7 @@ import { Converter } from "src/app/shared/components/shared/converter";
 import { Filter } from "src/app/shared/components/shared/filter";
 import { Formatter } from "src/app/shared/components/shared/formatter";
 import { OeFormlyView } from "src/app/shared/components/shared/oe-formly-component";
-import { RouteService } from "src/app/shared/service/route.service";
+import { RouteService } from "src/app/shared/service/route/route.service";
 import { ChannelAddress, CurrentData, Edge, EdgeConfig, Service, Websocket } from "src/app/shared/shared";
 import { CurrentDataUtils } from "src/app/shared/type/currentdata";
 import { Mode } from "src/app/shared/type/general";
@@ -477,20 +477,6 @@ export namespace SharedIoChannelSingleThreshold {
         ).toConstructorParams();
     }
 
-    export function getNavigationTreeAsChild(
-        translate: TranslateService,
-        componentId: EdgeConfig.Component["id"],
-        config: EdgeConfig,
-    ): NavigationTree | null {
-        const component = config.getComponentSafely(componentId);
-        if (component == null) {
-            return null;
-        }
-
-        const label = component.alias?.trim() || component.id;
-        return createComponentNavigationTree(componentId, label, componentId, translate);
-    }
-
     function createComponentNavigationTree(
         id: string,
         label: string,
@@ -503,7 +489,10 @@ export namespace SharedIoChannelSingleThreshold {
             { name: "aperture-outline", color: "normal" },
             label,
             "label",
-            [NavigationConstants.CommonNodes.HISTORY(translate), NavigationConstants.CommonNodes.SETTINGS(translate)],
+            [
+                NavigationConstants.CommonNodes.HISTORY(translate, id),
+                NavigationConstants.CommonNodes.SETTINGS(translate, id),
+            ],
             null,
         );
     }
@@ -512,7 +501,8 @@ export namespace SharedIoChannelSingleThreshold {
         translate: TranslateService,
         componentIds: EdgeConfig.Component["id"][],
         config: EdgeConfig,
-    ): ConstructorParameters<typeof NavigationTree> | null {
+        factoryId: EdgeConfig.Factory["id"],
+    ): NavigationTree | null {
         return GroupedNavigationTreeUtility.createGroupedNavigationTree(
             "channel-single-threshold-controllers",
             { name: "aperture-outline", color: "normal" },
@@ -521,7 +511,14 @@ export namespace SharedIoChannelSingleThreshold {
             translate,
             componentIds,
             config,
-            (componentId) => getNavigationTreeAsChild(translate, componentId, config),
+            factoryId,
+            (componentId) =>
+                GroupedNavigationTreeUtility.getNavigationTreeAsChild(
+                    translate,
+                    componentId,
+                    config,
+                    createComponentNavigationTree,
+                ),
         );
     }
 

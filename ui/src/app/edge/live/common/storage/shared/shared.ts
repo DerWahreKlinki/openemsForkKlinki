@@ -8,6 +8,8 @@ import { Name } from "src/app/shared/components/shared/name";
 import { OeFormlyField } from "src/app/shared/components/shared/oe-formly-component";
 import { Phase } from "src/app/shared/components/shared/phase";
 import { ChannelAddress, CurrentData, Edge, EdgeConfig } from "src/app/shared/shared";
+import { Widget } from "src/app/shared/type/widget";
+import { Widgets } from "src/app/shared/type/widgets";
 import { DateUtils } from "src/app/shared/utils/date/dateutils";
 import { NumberUtils } from "src/app/shared/utils/number/number-utils";
 import { SharedEssFixDigitalPowerControl } from "../../../Controller/Ess/FixActivePower/shared/shared";
@@ -142,6 +144,19 @@ export namespace SharedStorage {
         const prepareBatteryExtensionCtrl = config.getComponentsByFactory("Controller.Ess.PrepareBatteryExtension");
         const hasAtLeastOneController = emergencyReserveCtrl.length > 0 || prepareBatteryExtensionCtrl.length > 0;
 
+        const systemComponents = config.getComponentsByFactories(
+            "System.Fenecon.Industrial.S",
+            "System.Fenecon.Industrial.M",
+            "System.Fenecon.Industrial.L",
+            "System.Fenecon.Industrial.Xl",
+        );
+
+        const systemWidgets: Widget[] = systemComponents
+            .filter((component) => component.isEnabled)
+            .map((component) => ({ name: component.factoryId, componentId: component.id, alias: component.alias }));
+
+        const systemNavigationTrees = Widgets.getControllerNavigationTrees(edge, translate, config, systemWidgets);
+
         return new NavigationTree(
             "storage",
             { baseString: "common/storage" },
@@ -149,10 +164,17 @@ export namespace SharedStorage {
             translate.instant("GENERAL.STORAGE_SYSTEM"),
             "icon",
             [
+                ...(systemNavigationTrees != null && systemNavigationTrees.length > 0
+                    ? systemNavigationTrees.map((el) => new NavigationTree(...el))
+                    : []),
                 ...essController,
-                NavigationConstants.CommonNodes.PHASE_ACCURATE(translate, "details", "success"),
-                NavigationConstants.CommonNodes.HISTORY(translate, historyChildren),
-                NavigationConstants.CommonNodes.SETTINGS(translate, hasAtLeastOneController ? "LOW" : "HIDE"),
+                NavigationConstants.CommonNodes.PHASE_ACCURATE(translate, "details", "success", "storage"),
+                NavigationConstants.CommonNodes.HISTORY(translate, "storage", historyChildren),
+                NavigationConstants.CommonNodes.SETTINGS(
+                    translate,
+                    "storage",
+                    hasAtLeastOneController ? "LOW" : "HIDE",
+                ),
             ],
             null,
             { isCommonWidget: true },

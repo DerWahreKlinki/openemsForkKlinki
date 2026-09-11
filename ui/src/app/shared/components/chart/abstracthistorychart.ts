@@ -1,6 +1,6 @@
 // @ts-strict-ignore
 import { DecimalPipe, formatNumber } from "@angular/common";
-import { AfterContentInit, AfterViewInit, ChangeDetectorRef, Directive, EventEmitter, HostListener, inject, Input, OnDestroy, OnInit, Output, signal, ViewChild, WritableSignal, } from "@angular/core";
+import { ChangeDetectorRef, Directive, EventEmitter, HostListener, inject, Input, OnDestroy, OnInit, Output, signal, ViewChild, WritableSignal, AfterViewInit, AfterContentInit, } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { TranslateService } from "@ngx-translate/core";
 import * as Chart from "chart.js";
@@ -21,7 +21,7 @@ import { QueryHistoricTimeseriesDataResponse } from "../../jsonrpc/response/quer
 import { QueryHistoricTimeseriesEnergyResponse } from "../../jsonrpc/response/queryHistoricTimeseriesEnergyResponse";
 import { FormatSecondsToDurationPipe } from "../../pipe/formatSecondsToDuration/formatSecondsToDuration.pipe";
 import { LayoutRefreshService } from "../../service/layoutRefreshService";
-import { RouteService } from "../../service/route.service";
+import { RouteService } from "../../service/route/route.service";
 import { ChannelAddress, Currency, Edge, EdgeConfig, Logger, Service, Utils } from "../../shared";
 import { Language } from "../../type/language";
 import { ArrayUtils } from "../../utils/array/array.utils";
@@ -1284,6 +1284,30 @@ export abstract class AbstractHistoryChart implements OnInit, OnDestroy, AfterVi
         this.ngAfterViewInit();
     }
 
+    ngAfterViewInit() {
+        this.viewHeight = this.calculateViewHeight();
+        this.cdRef.detectChanges(); // Avoids ExpressionChangedAfterItHasBeenCheckedError
+    }
+
+    calculateViewHeight(): string {
+        return ViewUtils.getChartContentHeightInVh(this.navigationService.position()) + "dvh";
+    }
+
+    ngAfterContentInit() {
+        setTimeout(() => {
+            // TODO: rm after new navigation refactoring complete
+            let counter = 0;
+            const interval = setInterval(() => {
+                this.ngAfterViewInit();
+
+                if (counter > 10) {
+                    clearInterval(interval);
+                }
+                counter++;
+            });
+        });
+    }
+
     /**
      * Start NGX-Spinner
      *
@@ -1326,30 +1350,6 @@ export abstract class AbstractHistoryChart implements OnInit, OnDestroy, AfterVi
 
     ngOnDestroy() {
         this.options = AbstractHistoryChart.removePlugins(this.options);
-    }
-
-    ngAfterViewInit() {
-        this.viewHeight = this.calculateViewHeight();
-        this.cdRef.detectChanges(); // Avoids ExpressionChangedAfterItHasBeenCheckedError
-    }
-
-    calculateViewHeight(): string {
-        return ViewUtils.getChartContentHeightInVh(this.navigationService.position()) + "dvh";
-    }
-
-    ngAfterContentInit() {
-        setTimeout(() => {
-            // TODO: rm after new navigation refactoring complete
-            let counter = 0;
-            const interval = setInterval(() => {
-                this.ngAfterViewInit();
-
-                if (counter > 10) {
-                    clearInterval(interval);
-                }
-                counter++;
-            });
-        });
     }
 
     protected getChartHeight(): number | null {
@@ -1591,7 +1591,6 @@ export abstract class AbstractHistoryChart implements OnInit, OnDestroy, AfterVi
             this.xAxisScalingType,
             this.labels,
         );
-        this.viewHeight = this.calculateViewHeight();
         this.loading = false;
         this.stopSpinner();
     }

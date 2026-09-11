@@ -6,10 +6,10 @@ import { TranslateService } from "@ngx-translate/core";
 import { AbstractModal } from "src/app/shared/components/modal/abstractModal";
 import { HelpButtonComponent } from "src/app/shared/components/modal/help-button/help-button";
 import { NavigationService } from "src/app/shared/components/navigation/service/navigation.service";
+import { RouteService } from "src/app/shared/service/route/route.service";
 import { Service, Websocket } from "src/app/shared/shared";
 import { Language } from "src/app/shared/type/language";
 import { Icon } from "src/app/shared/type/widget";
-import { environment } from "src/environments";
 import de from "./i18n/de.json";
 import en from "./i18n/en.json";
 
@@ -61,7 +61,7 @@ export class NavigationInfoComponent extends AbstractModal {
                 iconName: "information-outline",
                 contentText: this.translate.instant("BETA_TEST.CHANGELOG"),
                 buttonText: this.translate.instant("BETA_TEST.BUTTON"),
-                buttonHref: this.link ?? "",
+                buttonHref: "",
                 footer: {
                     text: this.translate.instant("BETA_TEST.FEEDBACK"),
                     link: "",
@@ -71,10 +71,13 @@ export class NavigationInfoComponent extends AbstractModal {
         ];
         return cards;
     });
+    protected docs: {
+        link: string | null;
+        displayName: string;
+        icon: IconWithRequiredName;
+    } | null = null;
 
-    protected link = environment.links.REDIRECT.BETA_CHANGE_LOG;
-    protected docs: { link: string | null; displayName: string; icon: IconWithRequiredName } | null = null;
-
+    private readonly routeService = inject(RouteService);
     private navigationService = inject(NavigationService);
 
     constructor(
@@ -122,7 +125,7 @@ export class NavigationInfoComponent extends AbstractModal {
                 "storage",
                 {
                     displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
-                        source: translate.instant("GENERAL.STORAGE"),
+                        source: translate.instant("GENERAL.STORAGE_SYSTEM"),
                     }),
                     link: "REDIRECT.COMMON_STORAGE",
                     icon: { name: "oe-storage" },
@@ -138,6 +141,26 @@ export class NavigationInfoComponent extends AbstractModal {
                     icon: { name: "oe-consumption" },
                 },
             ],
+            [
+                "autarchy",
+                {
+                    displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
+                        source: translate.instant("GENERAL.AUTARCHY"),
+                    }),
+                    link: "REDIRECT.COMMON_AUTARCHY",
+                    icon: { name: "oe-grid" },
+                },
+            ],
+            [
+                "selfconsumption",
+                {
+                    displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
+                        source: translate.instant("GENERAL.SELF_CONSUMPTION"),
+                    }),
+                    link: "REDIRECT.COMMON_SELFCONSUMPTION",
+                    icon: { name: "oe-selfconsumption" },
+                },
+            ],
         ]);
 
     ionViewWillLeave() {
@@ -145,6 +168,33 @@ export class NavigationInfoComponent extends AbstractModal {
     }
 
     ionViewWillEnter() {
-        this.navigationService.headerTitle.set(this.translate.instant("GENERAL.INFO"));
+        this.resolveSourceAndMode();
+        this.setHeaderTitle();
+    }
+
+    protected override onIsInitialized(): void {
+        this.setHeaderTitle();
+    }
+
+    private resolveSourceAndMode(): void {
+        const source = this.route.snapshot.queryParamMap.get("source");
+        this.isGlobalInfo.set(source === "global");
+
+        if (source && source !== "global") {
+            const page = NavigationInfoComponent.DOCS_LINKS(this.translate).get(source);
+            if (page != null) {
+                this.docs = {
+                    displayName: page.displayName,
+                    icon: page.icon,
+                    link: HelpButtonComponent.getLink(page.link, this.service) ?? null,
+                };
+            }
+        }
+    }
+
+    private setHeaderTitle(): void {
+        this.navigationService.headerTitle.set(
+            this.translate.instant(this.isGlobalInfo() ? "GENERAL.HELP" : "GENERAL.INFO"),
+        );
     }
 }

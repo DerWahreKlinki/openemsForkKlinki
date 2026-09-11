@@ -1,16 +1,19 @@
 import { TranslateService } from "@ngx-translate/core";
 import { Role } from "../../type/role";
+import { OeSet } from "../../type/set";
 import { TEnumKeys, TPartialBy } from "../../type/utility";
 import { Icon, Widget, WidgetClass } from "../../type/widget";
 import { ArrayUtils } from "../../utils/array/array.utils";
 import { Edge } from "../edge/edge";
 import { EdgeConfig } from "../edge/edgeconfig";
+import { Name } from "../shared/name";
 
 export enum NavigationId {
     LIVE = "live",
     HISTORY = "history",
     FORECAST = "forecast",
     ROOT = "root",
+    FAVORITES = "favorites",
 }
 
 export enum AvailableScope {
@@ -50,6 +53,7 @@ type IconColor =
     | "warning"
     | "normal"
     | "production";
+
 export type PartialedIcon = TPartialBy<
     Pick<Omit<Icon, "size" | "color"> & { color: IconColor }, "color" | "name">,
     "color"
@@ -61,23 +65,28 @@ export type NavigationTreeOptions = {
     pageFilter?: PageFilterSet | null;
     customLink?: string | null;
     isCommonWidget?: boolean;
+    accordionOpenedOnDefault?: boolean;
+    hideFavorite?: boolean;
 };
 
 export class NavigationTree {
-    public showOrder: "VERY_HIGH" | "HIGH" | "LOW" | "HIDE";
-    public availableScope: AvailableScope.LOCAL | AvailableScope.LIVE_AND_OVERVIEW;
-    public pageFilter: PageFilterSet | null;
-    public customLink: string | null;
-    public isCommonWidget: boolean;
+    public showOrder: NavigationTreeOptions["showOrder"];
+    public availableScope: NavigationTreeOptions["availableScope"];
+    public pageFilter: NavigationTreeOptions["pageFilter"];
+    public customLink: NavigationTreeOptions["customLink"];
+    public isCommonWidget: NavigationTreeOptions["isCommonWidget"];
+    public accordionOpenedOnDefault: NavigationTreeOptions["accordionOpenedOnDefault"];
+    public hideFavorite: NavigationTreeOptions["hideFavorite"];
 
     constructor(
+        // Ids must be unique across the entire navigation tree, including children
         public id: NavigationId | string,
         public routerLink: {
             baseString: string;
             queryParams?: { [key: string]: string };
         },
         public icon: PartialedIcon,
-        public label: string,
+        public label: string | { desktop: string; mobile: string },
         public mode: "icon" | "label" | "hidden",
         public children: NavigationTree[],
         public parent: NavigationTree | null,
@@ -88,6 +97,8 @@ export class NavigationTree {
         this.pageFilter = options.pageFilter ?? null;
         this.customLink = options.customLink ?? null;
         this.isCommonWidget = options.isCommonWidget ?? false;
+        this.accordionOpenedOnDefault = options.accordionOpenedOnDefault ?? false;
+        this.hideFavorite = options.hideFavorite ?? false;
     }
 
     /**
@@ -114,12 +125,81 @@ export class NavigationTree {
                 pageFilter: navigationTree.pageFilter,
                 customLink: navigationTree.customLink,
                 isCommonWidget: navigationTree.isCommonWidget,
+                accordionOpenedOnDefault: navigationTree.accordionOpenedOnDefault,
+                hideFavorite: navigationTree.hideFavorite,
             },
         );
     }
 
     public static dummy() {
         return new NavigationTree("", { baseString: "" }, { name: "help-outline" }, "", "label", [], null);
+    }
+
+    public static findById(tree: NavigationTree | null, id: NavigationId | string): NavigationTree | null {
+        if (!tree) {
+            return null;
+        }
+
+        if (tree.id === id) {
+            return tree;
+        }
+
+        for (const child of tree.children ?? []) {
+            const result = this.findById(child, id);
+
+            if (result) {
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    public static areIdsUnique(
+        node: NavigationTree,
+        errorMsg: (duplicates: string[]) => string = (duplicates: string[]) => `${duplicates}`,
+    ): boolean {
+        const absoluteIds = node.getAbsoluteNavigations()?.map((el) => el.id) ?? null;
+        if (new OeSet(absoluteIds).size !== absoluteIds.length) {
+            const duplicateNodes = ArrayUtils.findDuplicates(absoluteIds, (a, b) => a === b);
+            throw new Error(errorMsg(duplicateNodes));
+        }
+
+        return true;
+    }
+
+    public static findNodeByAbsoluteTree(tree: NavigationTree | null, absoluteId: string): NavigationTree | null {
+        if (!tree) {
+            return null;
+        }
+
+        const absoluteIds = tree.getAbsoluteNavigations();
+        for (const node of absoluteIds) {
+            if (node.id === absoluteId) {
+                return node;
+            }
+        }
+
+        return null;
+    }
+
+    public getAbsoluteNavigations(): NavigationTree[] {
+        const ids: NavigationTree[] = [];
+        this.buildAbsoluteNavigationTreeIds(structuredClone(this), ids);
+        return ids;
+    }
+
+    public buildAbsoluteNavigationTreeIds(tree: NavigationTree, ids: NavigationTree[]): void {
+        const newNavigationTree = NavigationTree.of(tree);
+        if (newNavigationTree == null) {
+            return;
+        }
+
+        ids.push(newNavigationTree);
+
+        for (const child of tree.children) {
+            this.buildAbsoluteNavigationTreeIds(child, ids);
+        }
     }
 
     /**
@@ -363,6 +443,8 @@ export class NavigationTree {
                 pageFilter: this.pageFilter,
                 isCommonWidget: this.isCommonWidget,
                 customLink: this.customLink,
+                accordionOpenedOnDefault: this.accordionOpenedOnDefault,
+                hideFavorite: this.hideFavorite,
             },
         ];
     }
@@ -480,7 +562,8 @@ export class NavigationTree {
         this.icon.color = color;
     }
 
-    private setParentRecursively() {
+    /** Sets the parent for the current navigation tree and all its children recursively */
+    public setParentRecursively() {
         function traverse(node: NavigationTree, parent: NavigationTree | null): void {
             if (node.parent == null) {
                 node.parent = parent;
@@ -543,74 +626,71 @@ export namespace NavigationConstants {
     ];
 
     export namespace CommonNodes {
-        export function SETTINGS(translate: TranslateService, showOrder: NavigationTree["showOrder"] = "LOW") {
+        export function SETTINGS(
+            translate: TranslateService,
+            componentId: string,
+            showOrder: NavigationTree["showOrder"] = "LOW",
+        ) {
             return new NavigationTree(
-                "settings",
+                componentId + "-settings",
                 { baseString: "settings" },
                 { name: "settings-outline", color: "medium" },
                 translate.instant("MENU.SETTINGS"),
                 "label",
                 [],
                 null,
-                { showOrder },
+                { showOrder, hideFavorite: true },
             );
         }
         export function PHASE_ACCURATE(
             translate: TranslateService,
             id: NavigationTree["id"],
             iconColor: NavigationTree["icon"]["color"],
+            componentId: string,
             children: NavigationTree["children"] = [],
         ) {
             return new NavigationTree(
-                id,
+                componentId + "-" + id,
                 { baseString: id },
                 { name: "list-outline", color: iconColor },
                 translate.instant("EDGE.HISTORY.PHASE_ACCURATE"),
                 "label",
                 children,
                 null,
+                { hideFavorite: true },
             );
         }
         export function CURRENT_AND_VOLTAGE(
             translate: TranslateService,
             edge: Edge,
+            componentId: string,
             children: NavigationTree["children"] = [],
         ) {
             return edge.roleIsAtLeast(Role.INSTALLER)
                 ? [
                       new NavigationTree(
-                          "current-voltage",
+                          componentId + "-current-voltage",
                           { baseString: "current-voltage" },
                           { name: "flame", color: "danger" },
                           translate.instant("EDGE.HISTORY.CURRENT_AND_VOLTAGE"),
                           "label",
                           children,
                           null,
+                          { hideFavorite: true },
                       ),
                   ]
                 : [];
         }
-        export function INFO(translate: TranslateService, queryParams: { source: string } | {} = {}) {
+        export function HISTORY(translate: TranslateService, componentId: string, children: NavigationTree[] = []) {
             return new NavigationTree(
-                "info",
-                { baseString: "navigation-info", queryParams: queryParams },
-                { name: "information-outline" },
-                translate.instant("GENERAL.INFO"),
-                "label",
-                [],
-                null,
-                { showOrder: "LOW" },
-            );
-        }
-        export function HISTORY(translate: TranslateService, children: NavigationTree[] = []) {
-            return new NavigationTree(
-                "history",
+                componentId + "-history",
                 { baseString: "history" },
                 { name: "stats-chart-outline", color: "warning" },
                 translate.instant("GENERAL.HISTORY"),
                 "label",
                 children,
                 null,
+                { hideFavorite: true },
             );
         }
     }
@@ -642,8 +722,9 @@ export namespace GroupedNavigationTreeUtility {
         translate: TranslateService,
         componentIds: EdgeConfig.Component["id"][],
         config: EdgeConfig,
+        factoryId: EdgeConfig.Factory["id"],
         getChildTreeFn: (componentId: EdgeConfig.Component["id"]) => NavigationTree | null,
-    ): ConstructorParameters<typeof NavigationTree> | null {
+    ): NavigationTree | null {
         const children = componentIds
             .slice()
             .sort((left, right) => compareByAliasThenComponentId(config, left, right))
@@ -656,13 +737,13 @@ export namespace GroupedNavigationTreeUtility {
 
         return new NavigationTree(
             groupId,
-            { baseString: groupBaseString },
+            { baseString: groupBaseString, queryParams: { factoryId: factoryId } },
             groupIcon,
             translate.instant(groupLabelKey),
             "label",
             children,
             null,
-        ).toConstructorParams();
+        );
     }
 
     /**
@@ -687,5 +768,25 @@ export namespace GroupedNavigationTreeUtility {
         }
 
         return leftComponentId.localeCompare(rightComponentId);
+    }
+
+    export function getNavigationTreeAsChild(
+        translate: TranslateService,
+        componentId: EdgeConfig.Component["id"],
+        config: EdgeConfig,
+        createComponentNavigationTree: (
+            componentId: EdgeConfig.Component["id"],
+            label: string,
+            baseString: string,
+            translate: TranslateService,
+        ) => NavigationTree,
+    ): NavigationTree | null {
+        const component = config.getComponentSafely(componentId);
+        if (component == null) {
+            return null;
+        }
+
+        const label = Name.METER_ALIAS_OR_ID(component);
+        return createComponentNavigationTree(componentId, label, componentId, translate);
     }
 }

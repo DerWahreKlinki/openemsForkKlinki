@@ -104,12 +104,50 @@ export namespace StringUtils {
         return match ? Number.parseInt(match, 10) : null;
     }
 
-    /** Converts a camelCase string to SCREAMING_SNAKE_CASE. Example: "apmOutputActivePower" -> "APM_OUTPUT_ACTIVE_POWER" */
-    export function toScreamingSnakeCase(str: string | null): string | null {
-        if (str == null || !isValidString(str)) {
+    /**
+     * Replaces a segment of a path string at the specified index with a new value.
+     *
+     * @param path The path
+     * @param index The index to split
+     * @param replacement The replacement for the given index
+     * @param splitBy The delimiter to split the path by (default is "/")
+     * @returns The modified path with the segment replaced, or null if the path is null.
+     */
+    export function replaceSegment(
+        path: string | null,
+        index: number,
+        replacement: string,
+        splitBy: string = "/",
+    ): string | null {
+        if (path == null) {
             return null;
         }
+        const segments = StringUtils.splitBy(path, splitBy) ?? [];
+        segments[index] = replacement;
+        return segments.join(splitBy);
+    }
 
-        return str.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+    /**
+     * Replaces a segment of a path string at the specified index with a new value.
+     *
+     * @param path The path
+     * @param index The index to split
+     * @param replacement The replacement for the given index
+     * @param splitBy The delimiter to split the path by (default is "/")
+     * @returns The modified path with the segment replaced, or null if the path is null.
+     */
+    export function replaceSegmentOrElse(
+        path: string | null,
+        index: number,
+        replacement: string,
+        orElse: string,
+        splitBy: string = "/",
+    ): string {
+        const result = StringUtils.replaceSegment(path, index, replacement, splitBy);
+
+        if (result == null) {
+            return orElse;
+        }
+        return result;
     }
 }

@@ -1,6 +1,7 @@
 import { TranslateService } from "@ngx-translate/core";
 import { EvcsComponent } from "src/app/shared/components/edge/config-components/evcs/evcsComponent";
 import { TextIndentation } from "src/app/shared/components/modal/modal-line/modal-line";
+import { SharedBottomNavigationBar } from "src/app/shared/components/navigation/bottom-bar/shared";
 import { NavigationConstants, NavigationTree } from "src/app/shared/components/navigation/shared";
 import { Converter } from "src/app/shared/components/shared/converter";
 import { Name } from "src/app/shared/components/shared/name";
@@ -41,9 +42,9 @@ export namespace SharedConsumption {
             translate.instant("GENERAL.CONSUMPTION"),
             "icon",
             [
-                NavigationConstants.CommonNodes.PHASE_ACCURATE(translate, "details", "warning"),
+                ...SharedBottomNavigationBar.getConsumptionChildren(config, edge, translate),
+                NavigationConstants.CommonNodes.PHASE_ACCURATE(translate, "details", "warning", "consumption"),
                 getHistoryNavigationTree(edge, sum, evcss, heatComponents, consumptionMeters, translate),
-                NavigationConstants.CommonNodes.INFO(translate, { source: "consumption" }),
             ],
             null,
             { isCommonWidget: true },
@@ -58,24 +59,16 @@ export namespace SharedConsumption {
         consumptionMeterComponents: EdgeConfig.Component[],
         translate: TranslateService,
     ): NavigationTree {
-        return new NavigationTree(
-            "history",
-            { baseString: "history" },
-            { name: "stats-chart-outline", color: "warning" },
-            translate.instant("GENERAL.HISTORY"),
-            "label",
-            [
-                ...getHistorySingleComponentNavigationTree(
-                    edge,
-                    sum,
-                    evcsComponents,
-                    heatComponents,
-                    consumptionMeterComponents,
-                    translate,
-                ),
-            ],
-            null,
-        );
+        return NavigationConstants.CommonNodes.HISTORY(translate, "consumption", [
+            ...getHistorySingleComponentNavigationTree(
+                edge,
+                sum,
+                evcsComponents,
+                heatComponents,
+                consumptionMeterComponents,
+                translate,
+            ),
+        ]);
     }
 
     function isHeatComponent(component: EdgeConfig.Component, heatComponents: EdgeConfig.Component[]): boolean {
@@ -100,7 +93,7 @@ export namespace SharedConsumption {
         ];
 
         return [
-            NavigationConstants.CommonNodes.PHASE_ACCURATE(translate, sum.id + "/details", "warning"),
+            NavigationConstants.CommonNodes.PHASE_ACCURATE(translate, sum.id + "/details", "warning", sum.id),
             ...uniqueComponents.map(
                 (el) =>
                     new NavigationTree(
@@ -244,7 +237,6 @@ export namespace SharedConsumption {
         return {
             title: translate.instant("GENERAL.CONSUMPTION"),
             helpKey: "REDIRECT.COMMON_CONSUMPTION",
-            useDefaultPrefix: false,
             isCommonWidget: true,
             lines: lines,
             component: new EdgeConfig.Component(),
@@ -365,7 +357,6 @@ export namespace SharedConsumption {
         return {
             title: translate.instant("GENERAL.CONSUMPTION"),
             helpKey: "REDIRECT.COMMON_CONSUMPTION",
-            useDefaultPrefix: false,
             lines: lines,
             component: new EdgeConfig.Component(),
             isCommonWidget: true,

@@ -10,8 +10,6 @@ import { FlatComponent as AsymmetricPeakshavingFlatComponent } from "../live/Con
 import { FlatComponent as SymmetricPeakshavingFlatComponent } from "../live/Controller/peak-shaving/symmetric/history/flat/flat";
 import { FlatComponent as ThresholdPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Symmetric_Threshold/history/flat/flat";
 import { FlatComponent as TimeslotPeakshavingFlatComponent } from "../live/Controller/peak-shaving/Symmetric_TimeSlot/history/flat/flat";
-import { ChpSocChartComponent } from "./chpsoc/chart.component";
-import { ChpSocWidgetComponent } from "./chpsoc/widget.component";
 import { Common } from "./common/common";
 import { FlatComponent as ChpCostOptimizationFlatComponent } from "./Controller/chp/CostOptimization/flat/flat";
 import { Controller } from "./Controller/controller.module";
@@ -33,9 +31,7 @@ import { HistoryParentComponent } from "./historyparent.component";
         ModbusTcpApiHistoryFlatComponent,
     ],
     declarations: [
-        ChpSocChartComponent,
-        ChpSocWidgetComponent,
-	    ChpCostOptimizationFlatComponent,
+        ChpCostOptimizationFlatComponent,
         DelayedSellToGridChartComponent,
         DelayedSellToGridChartOverviewComponent,
         DelayedSellToGridWidgetComponent,

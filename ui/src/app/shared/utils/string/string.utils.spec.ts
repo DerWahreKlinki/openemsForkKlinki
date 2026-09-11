@@ -72,44 +72,15 @@ describe("StringUtils", () => {
         });
     });
 
-    describe("toScreamingSnakeCase", () => {
-        const testCases = [
-            {
-                description: "a standard camelCase string",
-                input: "apmOutputActivePower",
-                expected: "APM_OUTPUT_ACTIVE_POWER",
-            },
-            {
-                description: "a property with a number in it",
-                input: "rpmQuV1Voltage",
-                expected: "RPM_QU_V1_VOLTAGE",
-            },
-            {
-                description: "a single lowercase word",
-                input: "mode",
-                expected: "MODE",
-            },
-            {
-                description: "a word that is already fully capitalized",
-                input: "POWER",
-                expected: "POWER",
-            },
-            {
-                description: "an empty string (safety check)",
-                input: "",
-                expected: "",
-            },
-            {
-                description: "a null value (safety check)",
-                input: null,
-                expected: null,
-            },
-        ];
-
-        testCases.forEach(({ description, input, expected }) => {
-            it(`should correctly handle ${description}`, () => {
-                expect(StringUtils.toScreamingSnakeCase(input)).toEqual(expected);
-            });
+    describe("+replaceSegment", () => {
+        it("replaces segment at specified index", () => {
+            expect(StringUtils.replaceSegment("a/b/c", 1, "x")).toEqual("a/x/c");
+        });
+        it("returns null if path is null", () => {
+            expect(StringUtils.replaceSegment(null, 1, "x")).toBeNull();
+        });
+        it("uses custom splitBy delimiter", () => {
+            expect(StringUtils.replaceSegment("a|b|c", 1, "x", "|")).toEqual("a|x|c");
         });
     });
 });

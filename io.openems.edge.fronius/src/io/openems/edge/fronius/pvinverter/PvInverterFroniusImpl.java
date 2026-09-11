@@ -369,6 +369,7 @@ public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 		}
 	}
 
+	@Override
 	@Deactivate
 	protected void deactivate() {
 		super.deactivate();

@@ -1,4 +1,4 @@
-import { Component, inject, ChangeDetectionStrategy } from "@angular/core";
+import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
 import { TranslateService } from "@ngx-translate/core";
 import { EnergySchedulerV2 } from "src/app/shared/components/edge/config-components/energy/energy";
 
@@ -43,34 +43,6 @@ export class CommonConsumptionHomeComponent extends AbstractFormlyComponent {
         const lines: OeFormlyField[] = [];
 
         if (energyScheduler.schedule !== GetSchedule.Response.empty) {
-            // TODO INTERSOLAR
-            if (user?.id == "intersolar@fenecon.de" || edge.id == "fems888") {
-                const energyToday = energyScheduler.schedule.calculateEnergyFromPower(
-                    "today",
-                    "ConsumptionActivePower",
-                );
-                const energyTomorrow = energyScheduler.schedule.calculateEnergyFromPower(
-                    "tomorrow",
-                    "ConsumptionActivePower",
-                );
-                lines.push({
-                    type: "stats-line",
-                    stats: [
-                        {
-                            name: translate.instant("EDGE.HISTORY.TODAY"),
-                            value: energyToday.history,
-                            unit: "kWh",
-                            predictionValue: energyToday.prediction,
-                        },
-                        {
-                            name: translate.instant("EDGE.HISTORY.TOMORROW"),
-                            value: energyTomorrow.prediction,
-                            unit: "kWh",
-                        },
-                    ],
-                });
-            }
-
             lines.push(
                 {
                     type: "component-line",
@@ -85,7 +57,7 @@ export class CommonConsumptionHomeComponent extends AbstractFormlyComponent {
                 {
                     type: "channel-line",
                     name: translate.instant("GENERAL.POWER"),
-                    channel: new ChannelAddress("_sum", "ProductionActivePower").toString(),
+                    channel: new ChannelAddress("_sum", "ConsumptionActivePower").toString(),
                     converter: Converter.POWER_IN_KILO_WATT,
                     style: {
                         name: { fontSize: "large" },
@@ -158,7 +130,6 @@ export class CommonConsumptionHomeComponent extends AbstractFormlyComponent {
         return {
             title: translate.instant("GENERAL.CONSUMPTION"),
             helpKey: "REDIRECT.COMMON_CONSUMPTION",
-            useDefaultPrefix: false,
             isCommonWidget: true,
             lines: lines,
             component: new EdgeConfig.Component(),

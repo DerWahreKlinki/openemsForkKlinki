@@ -94,10 +94,4 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		return 0;
 	}
 
-	@Override
-	public String Modbus_target() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
 }

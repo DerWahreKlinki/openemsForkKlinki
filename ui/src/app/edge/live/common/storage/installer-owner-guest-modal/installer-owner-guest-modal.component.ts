@@ -47,6 +47,7 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
 
     public formGroup: FormGroup = new FormGroup({});
     protected isAtLeastInstaller: boolean;
+    protected hasRequiredEdgeVersion: boolean;
     protected isTargetTimeInValid: Map<string, boolean> = new Map();
     protected config: EdgeConfig;
     protected essComponents: EdgeConfig.Component[] | null = null;

@@ -75,8 +75,8 @@ public interface SolaredgeDcCharger extends EssDcCharger, OpenemsComponent {
 				.accessMode(AccessMode.READ_ONLY)),
 
 		/**
-		 * Active Power Limit in Percent
-		 * 
+		 * Active Power Limit in Percent.
+		 *
 		 *
 		 * <ul>
 		 * <li>Interface: SolaredgeDcCharger
@@ -89,8 +89,8 @@ public interface SolaredgeDcCharger extends EssDcCharger, OpenemsComponent {
 				.accessMode(AccessMode.READ_ONLY)),
 
 		/**
-		 * Write Channel for active power limit in percent
-		 * 
+		 * Write Channel for active power limit in percent.
+		 *
 		 *
 		 * <ul>
 		 * <li>Interface: SolaredgeDcCharger
@@ -104,10 +104,10 @@ public interface SolaredgeDcCharger extends EssDcCharger, OpenemsComponent {
 
 		/**
 		 * Commits the active power limit. Needs to be set after changing new power
-		 * limit
-		 * 
-		 * 1 - Commit
-		 * 
+		 * limit.
+		 *
+		 * <p>1 - Commit
+		 *
 		 * <ul>
 		 * <li>Interface: SolaredgeDcCharger
 		 * <li>Type: Integer

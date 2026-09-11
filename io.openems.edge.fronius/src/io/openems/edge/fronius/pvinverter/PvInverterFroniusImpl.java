@@ -133,8 +133,9 @@ public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 	        this.addInitialModbusTask(this.getModbusProtocol());
 	    }
 	}
-	private int BASE_ADDRESS;
-	private int MODULE_START_ADDRESS;
+
+	private int baseAddress;
+	private int moduleStartAddress;
 	private static final int REGISTER_OFFSET = 20; // Number of registers per module
 	private boolean staticTasksAdded = false;
 
@@ -177,25 +178,25 @@ public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 	 * @throws OpenemsException on error
 	 */
 	private void addInitialModbusTask(ModbusProtocol protocol) throws OpenemsException {
-		this.BASE_ADDRESS = this.config.modbusBaseAddress() + 2; // Starting address for S160 Block. i.e. 40264 for
+		this.baseAddress = this.config.modbusBaseAddress() + 2; // Starting address for S160 Block. i.e. 40264 for
 																	// Fronius Symo.
-		this.MODULE_START_ADDRESS = BASE_ADDRESS + 17; // Starting address for modules
+		this.moduleStartAddress = baseAddress + 17; // Starting address for modules
 		protocol.addTask(//
-				new FC3ReadRegistersTask(BASE_ADDRESS, Priority.HIGH,
+				new FC3ReadRegistersTask(baseAddress, Priority.HIGH,
 
-						m(PvInverterFronius.ChannelId.DCA_SF, new SignedWordElement(BASE_ADDRESS)),
-						m(PvInverterFronius.ChannelId.DCV_SF, new SignedWordElement(BASE_ADDRESS + 1)),
-						m(PvInverterFronius.ChannelId.DCW_SF, new SignedWordElement(BASE_ADDRESS + 2)),
-						m(PvInverterFronius.ChannelId.DCWH_SF, new SignedWordElement(BASE_ADDRESS + 3)),
-						new DummyRegisterElement(BASE_ADDRESS + 4, BASE_ADDRESS + 5),
-						m(PvInverterFronius.ChannelId.N, new SignedWordElement(BASE_ADDRESS + 6))
+						m(PvInverterFronius.ChannelId.DCA_SF, new SignedWordElement(baseAddress)),
+						m(PvInverterFronius.ChannelId.DCV_SF, new SignedWordElement(baseAddress + 1)),
+						m(PvInverterFronius.ChannelId.DCW_SF, new SignedWordElement(baseAddress + 2)),
+						m(PvInverterFronius.ChannelId.DCWH_SF, new SignedWordElement(baseAddress + 3)),
+						new DummyRegisterElement(baseAddress + 4, baseAddress + 5),
+						m(PvInverterFronius.ChannelId.N, new SignedWordElement(baseAddress + 6))
 
 				));
 	}
 
 	private void addStaticModbusTasks(ModbusProtocol protocol, int numberOfModules) throws OpenemsException {
 		for (int i = 0; i < numberOfModules; i++) {
-			int moduleBaseAddress = MODULE_START_ADDRESS + (i * REGISTER_OFFSET);
+			int moduleBaseAddress = moduleStartAddress + (i * REGISTER_OFFSET);
 			String currentChannelName = "ST" + (i + 1) + "_DC_CURRENT_INTERNAL";
 			String voltageChannelName = "ST" + (i + 1) + "_DC_VOLTAGE_INTERNAL";
 			String powerChannelName = "ST" + (i + 1) + "_DC_POWER_INTERNAL";

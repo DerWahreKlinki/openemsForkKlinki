@@ -63,7 +63,7 @@ public class BridgeModbusTcpImpl extends AbstractModbusBridge
 	private InetAddress ipAddress = null;
 	private int port;
 
-	/** Experimental approach **/
+	/** Experimental approach. */
 	private final Logger log = LoggerFactory.getLogger(BridgeModbusTcpImpl.class);
 	private boolean shouldSkip = false;
 	private int noSkipIdx = 0;
@@ -176,7 +176,12 @@ public class BridgeModbusTcpImpl extends AbstractModbusBridge
 		this.ipAddress = ipAddress;
 	}
 	
-	/** Experimental approach **/
+	/**
+	 * Experimental approach.
+	 *
+	 * @param event the {@link Event}
+	 * @return true if this is a new Cycle
+	 */
 	private boolean isNewCycle(Event event) {
 		return Objects.equals(event.getTopic(), EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE);
 	}

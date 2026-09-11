@@ -81,6 +81,7 @@ export class AdminStorageModalComponent implements OnInit, OnDestroy {
     public formGroup: FormGroup = new FormGroup({});
     protected readonly Converter = Converter;
     protected isAtLeastInstaller: boolean;
+    protected hasRequiredEdgeVersion: boolean;
     protected isTargetTimeInValid: Map<string, boolean> = new Map();
     protected config: EdgeConfig;
     protected essComponents: EdgeConfig.Component[] | null = null;

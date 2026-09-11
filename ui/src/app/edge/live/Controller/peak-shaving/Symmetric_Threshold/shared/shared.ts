@@ -195,8 +195,8 @@ export namespace SharedControllerThresholdPeakshaving {
             Name.METER_ALIAS_OR_ID(component),
             "label",
             [
-                NavigationConstants.CommonNodes.HISTORY(translate),
-                NavigationConstants.CommonNodes.SETTINGS(translate),
+                NavigationConstants.CommonNodes.HISTORY(translate, component.id),
+                NavigationConstants.CommonNodes.SETTINGS(translate, component.id),
             ],
             null,
         ).toConstructorParams();

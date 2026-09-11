@@ -72,7 +72,7 @@ import io.openems.edge.timedata.api.TimedataProvider;
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_WRITE
 })
 
-@GenerateTargetsFromReferences("modbus")
+@GenerateTargetsFromReferences("Modbus")
 public class PvInverterSmaSunnyTripowerImpl extends AbstractSunSpecPvInverter
 		implements PvInverterSmaSunnyTripower, SunSpecPvInverter, ManagedSymmetricPvInverter, ElectricityMeter,
 		ModbusComponent, OpenemsComponent, EventHandler, ModbusSlave, TimedataProvider {
@@ -139,7 +139,11 @@ public class PvInverterSmaSunnyTripowerImpl extends AbstractSunSpecPvInverter
 	private Instant lastSuccessfulCommunication = null; // Zeitstempel der letzten erfolgreichen Modbus-Kommunikation
 
 	@Override
-	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
+	@Reference(//
+			policy = ReferencePolicy.STATIC, //
+			policyOption = ReferencePolicyOption.GREEDY, //
+			cardinality = ReferenceCardinality.MANDATORY, //
+			target = "(&(id=${config.modbus_id})(enabled=true))")
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus);
 	}

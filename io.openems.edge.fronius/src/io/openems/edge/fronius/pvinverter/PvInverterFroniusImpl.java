@@ -69,7 +69,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
     EdgeEventConstants.TOPIC_CYCLE_BEFORE_WRITE //
 })
 
-@GenerateTargetsFromReferences("modbus")
+@GenerateTargetsFromReferences("Modbus")
 public class PvInverterFroniusImpl extends AbstractSunSpecPvInverter
 		implements PvInverterFronius, SunSpecPvInverter, ManagedSymmetricPvInverter, ElectricityMeter, ModbusComponent,
 		OpenemsComponent, EventHandler, ModbusSlave, TimedataProvider {

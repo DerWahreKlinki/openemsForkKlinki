@@ -119,8 +119,6 @@ public class VictronEssImpl extends AbstractOpenemsModbusComponent
 		super.setModbus(modbus);
 	}
 
-	// XXX: NOTE OSGi References are not used correctly here!
-	@Reference(policy = DYNAMIC, policyOption = GREEDY)
 	private volatile VictronBatteryInverter batteryInverter;
 
 	@Reference(cardinality = OPTIONAL, policy = DYNAMIC)
@@ -149,7 +147,6 @@ public class VictronEssImpl extends AbstractOpenemsModbusComponent
 
 	}
 
-	@Reference(policy = DYNAMIC, policyOption = GREEDY)
 	private volatile VictronBattery battery;
 
 	@Reference(cardinality = OPTIONAL, policy = DYNAMIC)

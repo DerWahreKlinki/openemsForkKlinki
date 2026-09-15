@@ -38,6 +38,7 @@ import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.dccharger.api.EssDcCharger;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
+import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 import io.openems.edge.pytes.ess.PytesJs3;
 
 @Designate(ocd = Config.class, factory = true)
@@ -47,13 +48,15 @@ import io.openems.edge.pytes.ess.PytesJs3;
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
 @EventTopics({ //
-		EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE, //
+		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE, //
 })
 public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 		implements PytesDcCharger, EssDcCharger, ModbusComponent, OpenemsComponent, EventHandler, TimedataProvider, ModbusSlave {
 
-	private Config config = null;
+	private final CalculateEnergyFromPower calculateActualEnergy = new CalculateEnergyFromPower(this,
+			EssDcCharger.ChannelId.ACTUAL_ENERGY);
 
+	private Config config = null;
 
 
 	public PytesDcChargerImpl() {
@@ -118,9 +121,20 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 			return;
 		}
 		switch (event.getTopic()) {
-		case EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE:
-			// TODO: fill channels
+		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
+			this.calculateEnergy();
 			break;
+		}
+	}
+
+	private void calculateEnergy() {
+		var actualPower = this.getActualPower().get();
+		if (actualPower == null) {
+			this.calculateActualEnergy.update(null);
+		} else if (actualPower > 0) {
+			this.calculateActualEnergy.update(actualPower);
+		} else {
+			this.calculateActualEnergy.update(0);
 		}
 	}
 

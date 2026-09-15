@@ -60,6 +60,7 @@ import io.openems.edge.ess.api.SymmetricEss;
 import io.openems.edge.ess.power.api.Power;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
+import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
@@ -75,6 +76,7 @@ import io.openems.edge.pytes.enums.WorkState;
 )
 @EventTopics({ //
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE, //
+		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE, //
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS, //
 })
 public class PytesJs3Impl extends AbstractOpenemsModbusComponent
@@ -101,6 +103,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	@Reference
 	private Cycle cycle;
+
+	private final CalculateEnergyFromPower calculateAcChargeEnergy = new CalculateEnergyFromPower(this,
+			SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY);
+	private final CalculateEnergyFromPower calculateAcDischargeEnergy = new CalculateEnergyFromPower(this,
+			SymmetricEss.ChannelId.ACTIVE_DISCHARGE_ENERGY);
+	private final CalculateEnergyFromPower calculateDcChargeEnergy = new CalculateEnergyFromPower(this,
+			HybridEss.ChannelId.DC_CHARGE_ENERGY);
+	private final CalculateEnergyFromPower calculateDcDischargeEnergy = new CalculateEnergyFromPower(this,
+			HybridEss.ChannelId.DC_DISCHARGE_ENERGY);
 
 	// Power control handlers - created once both battery and charger are available
 	private volatile ApplyPowerHandler applyPowerHandler = null;
@@ -164,10 +175,40 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 			break;
 
+		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
+			this.calculateEnergy();
+			break;
+
 		case EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS:
 			this.defineWorkState();
 			break;
 
+		}
+	}
+
+	private void calculateEnergy() {
+		var acActivePower = this.getActivePower().get();
+		if (acActivePower == null) {
+			this.calculateAcChargeEnergy.update(null);
+			this.calculateAcDischargeEnergy.update(null);
+		} else if (acActivePower > 0) {
+			this.calculateAcChargeEnergy.update(0);
+			this.calculateAcDischargeEnergy.update(acActivePower);
+		} else {
+			this.calculateAcChargeEnergy.update(acActivePower * -1);
+			this.calculateAcDischargeEnergy.update(0);
+		}
+
+		var dcDischargePower = this.getDcDischargePower().get();
+		if (dcDischargePower == null) {
+			this.calculateDcChargeEnergy.update(null);
+			this.calculateDcDischargeEnergy.update(null);
+		} else if (dcDischargePower > 0) {
+			this.calculateDcChargeEnergy.update(0);
+			this.calculateDcDischargeEnergy.update(dcDischargePower);
+		} else {
+			this.calculateDcChargeEnergy.update(dcDischargePower * -1);
+			this.calculateDcDischargeEnergy.update(0);
 		}
 	}
 

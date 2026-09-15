@@ -1,7 +1,6 @@
 package io.openems.edge.pytes.ess;
 
 import io.openems.common.test.AbstractComponentConfig;
-import io.openems.edge.pytes.ess.Config;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.WorkMode;
 
@@ -10,7 +9,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	protected static class Builder {
 		private String id;
-		//		private String setting0;
+		private String modbusId = "modbus0";
+		private int modbusUnitId = 1;
+		private WorkMode workMode = WorkMode.EXTERNAL;
+		private RemoteDispatchRealtimeControlSwitch essSetpoint = RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
+		private int maxApparentPower = 10000;
+		private int minSoc = 10;
+		private boolean enableBackupPort = true;
+		private boolean debugMode = false;
+		private boolean extendedDebugMode = false;
+		private boolean readOnlyMode = false;
 
 		private Builder() {
 		}
@@ -20,10 +28,55 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-//		public Builder setSetting0(String setting0) {
-//			this.setting0 = setting0;
-//			return this;
-		//		}
+		public Builder setModbusId(String modbusId) {
+			this.modbusId = modbusId;
+			return this;
+		}
+
+		public Builder setModbusUnitId(int modbusUnitId) {
+			this.modbusUnitId = modbusUnitId;
+			return this;
+		}
+
+		public Builder setWorkMode(WorkMode workMode) {
+			this.workMode = workMode;
+			return this;
+		}
+
+		public Builder setEssSetpoint(RemoteDispatchRealtimeControlSwitch essSetpoint) {
+			this.essSetpoint = essSetpoint;
+			return this;
+		}
+
+		public Builder setMaxApparentPower(int maxApparentPower) {
+			this.maxApparentPower = maxApparentPower;
+			return this;
+		}
+
+		public Builder setMinSoc(int minSoc) {
+			this.minSoc = minSoc;
+			return this;
+		}
+
+		public Builder setEnableBackupPort(boolean enableBackupPort) {
+			this.enableBackupPort = enableBackupPort;
+			return this;
+		}
+
+		public Builder setDebugMode(boolean debugMode) {
+			this.debugMode = debugMode;
+			return this;
+		}
+
+		public Builder setExtendedDebugMode(boolean extendedDebugMode) {
+			this.extendedDebugMode = extendedDebugMode;
+			return this;
+		}
+
+		public Builder setReadOnlyMode(boolean readOnlyMode) {
+			this.readOnlyMode = readOnlyMode;
+			return this;
+		}
 
 		public MyConfig build() {
 			return new MyConfig(this);
@@ -47,64 +100,53 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public boolean debugMode() {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
 	public String modbus_id() {
-		// TODO Auto-generated method stub
-		return null;
+		return this.builder.modbusId;
 	}
 
 	@Override
 	public int modbusUnitId() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public int maxApparentPower() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public boolean readOnlyMode() {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public RemoteDispatchRealtimeControlSwitch essSetpoint() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public int minSoc() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public boolean enableBackupPort() {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public boolean extendedDebugMode() {
-		// TODO Auto-generated method stub
-		return false;
+		return this.builder.modbusUnitId;
 	}
 
 	@Override
 	public WorkMode workMode() {
-		// TODO Auto-generated method stub
-		return null;
+		return this.builder.workMode;
 	}
 
+	@Override
+	public RemoteDispatchRealtimeControlSwitch essSetpoint() {
+		return this.builder.essSetpoint;
+	}
+
+	@Override
+	public int maxApparentPower() {
+		return this.builder.maxApparentPower;
+	}
+
+	@Override
+	public int minSoc() {
+		return this.builder.minSoc;
+	}
+
+	@Override
+	public boolean enableBackupPort() {
+		return this.builder.enableBackupPort;
+	}
+
+	@Override
+	public boolean debugMode() {
+		return this.builder.debugMode;
+	}
+
+	@Override
+	public boolean extendedDebugMode() {
+		return this.builder.extendedDebugMode;
+	}
+
+	@Override
+	public boolean readOnlyMode() {
+		return this.builder.readOnlyMode;
+	}
 
 }

@@ -398,7 +398,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 */
 		LEAD_ACID_BATTERY_TEMP(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
-				.unit(Unit.DEGREE_CELSIUS)),
+				.unit(Unit.DEZIDEGREE_CELSIUS)),
 
 		/**
 		 * Function Status (reg 33097, U16, read-only).
@@ -521,7 +521,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 */
 		INVERTER_CABINET_TEMP(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
-				.unit(Unit.DEGREE_CELSIUS)
+				.unit(Unit.DEZIDEGREE_CELSIUS)
 				.persistencePriority(LOW)),
 
 		/** Limited Power Actual Value (reg 33104, U16, FC4).
@@ -552,7 +552,7 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 */
 		INVERTER_MODULE_TEMP2(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
-				.unit(Unit.DEGREE_CELSIUS)
+				.unit(Unit.DEZIDEGREE_CELSIUS)
 				.persistencePriority(LOW)),
 		
 		/**
@@ -1303,10 +1303,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	// Set remote dispatch system import limit
 	/**
 	 * Sets the system import power limit (reg 44103, FC16).
-	 * Resolution: 1 unit = 100 W. Write 0xFFFF to reset to default (1 × rated power).
+	 * Register resolution is 100 W; the channel converter scales from W.
 	 * Active only when REMOTE_DISPATCH_SYSTEM_LIMIT_SWITCH BIT00 = 1 (import enabled).
 	 *
-	 * @param value import limit in units of 100 W
+	 * @param value import limit in W (rounded down to 100 W)
 	 * @throws OpenemsNamedException on write error
 	 */
 	public default void setRemoteDispatchSystemImportLimit(int value) throws OpenemsNamedException {
@@ -1326,10 +1326,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 	// Set remote dispatch system export limit
 	/**
 	 * Sets the system export power limit (reg 44104, FC16).
-	 * Resolution: 1 unit = 100 W. Write 0xFFFF to reset to default (1 × rated power).
+	 * Register resolution is 100 W; the channel converter scales from W.
 	 * Active only when REMOTE_DISPATCH_SYSTEM_LIMIT_SWITCH BIT01 = 1 (export enabled).
 	 *
-	 * @param value export limit in units of 100 W
+	 * @param value export limit in W (rounded down to 100 W)
 	 * @throws OpenemsNamedException on write error
 	 */
 	public default void setRemoteDispatchSystemExportLimit(int value) throws OpenemsNamedException {
@@ -6130,8 +6130,53 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		return enabled
 				? word | (1 << bit)
 				: word & ~(1 << bit);
-	}	
-	
+	}
+
+	/**
+	 * Reconstructs the current raw value of reg 43110 from the STORAGE_CTRL_* bit
+	 * channels (Appendix 6).
+	 *
+	 * @return the raw word, or null if the register has not been read yet
+	 */
+	public default Integer getStorageControlSwitchRaw() {
+		var bits = new ChannelId[] { //
+				ChannelId.STORAGE_CTRL_SELF_USE_MODE, ChannelId.STORAGE_CTRL_TIME_OF_USE_MODE,
+				ChannelId.STORAGE_CTRL_OFFGRID_MODE, ChannelId.STORAGE_CTRL_BATT_WAKEUP,
+				ChannelId.STORAGE_CTRL_RESERVE_BATT_MODE, ChannelId.STORAGE_CTRL_ALLOW_GRID_CHARGE,
+				ChannelId.STORAGE_CTRL_FEED_IN_PRIORITY, ChannelId.STORAGE_CTRL_BATT_OVC,
+				ChannelId.STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING, ChannelId.STORAGE_CTRL_BATT_CURRENT_CORRECTION,
+				ChannelId.STORAGE_CTRL_BATT_HEALING_MODE, ChannelId.STORAGE_CTRL_PEAK_SHAVING_MODE,
+				ChannelId.STORAGE_CTRL_RESERVED_12, ChannelId.STORAGE_CTRL_RESERVED_13,
+				ChannelId.STORAGE_CTRL_RESERVED_14, ChannelId.STORAGE_CTRL_RESERVED_15 };
+		int word = 0;
+		for (int i = 0; i < bits.length; i++) {
+			BooleanReadChannel channel = this.channel(bits[i]);
+			Boolean value = channel.value().get();
+			if (value == null) {
+				return null;
+			}
+			if (value) {
+				word |= 1 << i;
+			}
+		}
+		return word;
+	}
+
+	/**
+	 * Sets bits 0-6 of the storage control switch (reg 43110). Datasheet requires
+	 * read-modify-write, so bits 7-15 are taken from the current read-back value;
+	 * nothing is written while the read-back is still unknown or when the value
+	 * would not change.
+	 *
+	 * @param selfUse           BIT00 Self-Use mode
+	 * @param timeOfUse         BIT01 Time of use mode
+	 * @param offGrid           BIT02 Off-grid mode
+	 * @param batteryWakeup     BIT03 Battery wakeup switch
+	 * @param reserveBattery    BIT04 Reserve battery mode
+	 * @param gridChargeAllowed BIT05 Allow grid to charge the battery
+	 * @param feedInPriority    BIT06 Feed in priority mode
+	 * @throws OpenemsNamedException on write error
+	 */
 	public default void setStorageControlSwitch(
 			boolean selfUse,
 			boolean timeOfUse,
@@ -6141,8 +6186,12 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 			boolean gridChargeAllowed,
 			boolean feedInPriority) throws OpenemsNamedException {
 
-		int value = 0;
+		Integer current = this.getStorageControlSwitchRaw();
+		if (current == null) {
+			return;
+		}
 
+		int value = current;
 		value = setBit(value, 0, selfUse);
 		value = setBit(value, 1, timeOfUse);
 		value = setBit(value, 2, offGrid);
@@ -6151,9 +6200,10 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		value = setBit(value, 5, gridChargeAllowed);
 		value = setBit(value, 6, feedInPriority);
 
-		this.getSetStorageControlSwitchChannel().setNextWriteValue(value);
-
-	}	
+		if (value != current) {
+			this.getSetStorageControlSwitchChannel().setNextWriteValue(value);
+		}
+	}
 
 
 	// -----------------------------------------------------------------------

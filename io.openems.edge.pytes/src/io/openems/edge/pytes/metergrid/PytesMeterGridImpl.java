@@ -123,7 +123,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 		var modbusProtocol = new ModbusProtocol(this,
 
 				// ---------------------------------------------------------------
-				// EPM / CT status flags (reg 33248-33292)
+				// EPM / CT status flags (reg 33248-33250)
 				// Priority LOW - status/diagnostic, polled infrequently
 				// ---------------------------------------------------------------
 				new FC4ReadInputRegistersTask(33248, Priority.LOW,
@@ -134,37 +134,29 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 						.bit(0, PytesMeterGrid.ChannelId.EPM_SWITCH)
 						.bit(1, PytesMeterGrid.ChannelId.FAILSAFE_SWITCH)),
 
-						// reg 33249 - reserved
+						// reg 33249 - EPM real time backflow power (not mapped)
 						new DummyRegisterElement(33249, 33249),
 
 						// reg 33250 - Meter/CT position and EPM status flags (Appendix 10)
-						// BIT01=meter in grid, BIT02=CT in grid, BIT04=EPM status,
-						// BIT05=failsafe status, BIT07=meter fault, BIT08=CT fault,
-						// BIT09=meter reversed, BIT10=CT reversed, BIT11=EPM fault,
-						// BIT12=unbalanced power control allowed
 						m(new BitsWordElement(33250, this)
 								.bit(1,  PytesMeterGrid.ChannelId.METER_IN_GRID)
 								.bit(2,  PytesMeterGrid.ChannelId.CT_IN_GRID)
 								.bit(4,  PytesMeterGrid.ChannelId.EPM_SWITCH_STATUS)
 								.bit(5,  PytesMeterGrid.ChannelId.FAILSAFE_SWITCH_STATUS)
-								.bit(7,  PytesMeterGrid.ChannelId.METER_FAULT_STATUS)
-								.bit(8,  PytesMeterGrid.ChannelId.CT_FAULT_STATUS)
-								.bit(9,  PytesMeterGrid.ChannelId.METER_REVERSE_STATUS)
-								.bit(10, PytesMeterGrid.ChannelId.CT_REVERSE_STATUS)
-								.bit(11, PytesMeterGrid.ChannelId.EPM_FAULT_STATUS)
-								.bit(12, PytesMeterGrid.ChannelId.POWER_CONTROL_MODE_UNBALANCED_ALLOWED)),
+								.bit(6,  PytesMeterGrid.ChannelId.POWER_CONTROL_MODE_UNBALANCED)
+								.bit(7,  PytesMeterGrid.ChannelId.EPM_CURRENT_SETTING_SWITCH_STATUS)
+								.bit(8,  PytesMeterGrid.ChannelId.EXTERNAL_EPM_STATUS)
+								.bit(9,  PytesMeterGrid.ChannelId.EXTERNAL_EPM_FAILSAFE_STATUS)
+								.bit(10, PytesMeterGrid.ChannelId.PARALLEL_EPM_POWER_SETTING_SWITCH)
+								.bit(11, PytesMeterGrid.ChannelId.PARALLEL_EPM_CURRENT_SETTING_SWITCH)
+								.bit(12, PytesMeterGrid.ChannelId.PARALLEL_POWER_CONTROL_MODE_UNBALANCED))
+				),
 
-						// reg 33251-33286 - external meter electrical data (separate task below)
-						new DummyRegisterElement(33251, 33289),
-						/*
-						// reg 33287 - Inverter operating status
-						// 0=Stop, 1=Open loop, 2=Soft start, 3=Grid-connected,
-						// 4=Off-grid/EPS, 5=Off-grid to on-grid, 6=Bypass, 7=Generator
-						m(PytesMeterGrid.ChannelId.OPERATING_STATUS, new UnsignedWordElement(33287)),
+				// ---------------------------------------------------------------
+				// CT self-test and equipment fault code (reg 33290-33292)
+				// ---------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33290, Priority.LOW,
 
-						// reg 33288–33289 – reserved
-						new DummyRegisterElement(33288, 33289),
-*/
 						// reg 33290 - CT self-test result
 						// 0=Not tested, 1=Not meeting conditions, 2=Testing,
 						// 3=Normal, 100=Abnormal CT connection
@@ -193,9 +185,9 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 						ElementToChannelConverter.SCALE_FACTOR_2),
 
 				// reg 33252 - Meter Phase A current [mA]
-				// Datasheet: 0.01 A -> SCALE_FACTOR_2 -> mA
+				// Datasheet: 0.01 A -> SCALE_FACTOR_1 -> mA
 				m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33252),
-						ElementToChannelConverter.SCALE_FACTOR_2),
+						ElementToChannelConverter.SCALE_FACTOR_1),
 
 				// reg 33253 - Meter Phase B voltage [mV]
 				// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
@@ -203,9 +195,9 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 						ElementToChannelConverter.SCALE_FACTOR_2),
 
 				// reg 33254 - Meter Phase B current [mA]
-				// Datasheet: 0.01 A -> SCALE_FACTOR_2 -> mA
+				// Datasheet: 0.01 A -> SCALE_FACTOR_1 -> mA
 				m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33254),
-						ElementToChannelConverter.SCALE_FACTOR_2),
+						ElementToChannelConverter.SCALE_FACTOR_1),
 
 				// reg 33255 - Meter Phase C voltage [mV]
 				// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
@@ -213,9 +205,9 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 						ElementToChannelConverter.SCALE_FACTOR_2),
 
 				// reg 33256 - Meter Phase C current [mA]
-				// Datasheet: 0.01 A -> SCALE_FACTOR_2 -> mA
+				// Datasheet: 0.01 A -> SCALE_FACTOR_1 -> mA
 				m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33256),
-						ElementToChannelConverter.SCALE_FACTOR_2),
+						ElementToChannelConverter.SCALE_FACTOR_1),
 
 				// reg 33257-33258 - Meter Phase A active power [W] (S32)
 				// Datasheet: 0.001kw = 1 W -> no converter needed

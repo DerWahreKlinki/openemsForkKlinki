@@ -42,6 +42,7 @@ import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
+import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
 import io.openems.edge.common.component.ClockProvider;
@@ -178,17 +179,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	
 
 				// ---------------------------------------------------------------
-				// Backup circuit setting (reg 43111, holding register)
-				// FC16 write / FC3 read, Priority LOW
-				// Datasheet: "Backup circuit setting. 0x0000=disable, 0x0001=enable (default)"
+				// Storage control switch (reg 43110) and backup circuit setting (reg 43111)
+				// Datasheet 43110: "Only 0x06 function code writing is supported"
+				// Datasheet 43111: "0x0000=disable, 0x0001=enable (default)"
 				// ---------------------------------------------------------------
 
-				new FC16WriteRegistersTask(43110,
-						
-						m(PytesJs3.ChannelId.SET_STORAGE_CTRL_SWITCH, new UnsignedWordElement(43110)),						
+				new FC6WriteRegisterTask(43110,
+						m(PytesJs3.ChannelId.SET_STORAGE_CTRL_SWITCH, new UnsignedWordElement(43110))),
 
-						// reg 43111 - Backup circuit setting [write]
-						// Uses EnableDisable enum.
+				new FC16WriteRegistersTask(43111,
 						m(PytesJs3.ChannelId.SET_BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111))),
 
 				new FC3ReadRegistersTask(43110, Priority.LOW,
@@ -283,11 +282,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// Uses RemoteDispatchSystemLimitSwitch enum. No per-bit decode needed.
 						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_LIMIT_SWITCH, new UnsignedWordElement(44102)),
 
-						// reg 44103 – Remote dispatch system import limit [write] (1=100W)
-						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_IMPORT_LIMIT, new UnsignedWordElement(44103)),
+						// reg 44103 – Remote dispatch system import limit [write] (1=100W -> SCALE_FACTOR_2)
+						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_IMPORT_LIMIT, new UnsignedWordElement(44103),
+								ElementToChannelConverter.SCALE_FACTOR_2),
 
-						// reg 44104 – Remote dispatch system export limit [write] (1=100W)
-						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT, new UnsignedWordElement(44104)),
+						// reg 44104 – Remote dispatch system export limit [write] (1=100W -> SCALE_FACTOR_2)
+						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT, new UnsignedWordElement(44104),
+								ElementToChannelConverter.SCALE_FACTOR_2),
 
 						// reg 44105 – Remote dispatch real-time control switch [write]
 						// 1=Standby (default), 2=Battery charge/discharge control, 3=Grid point
@@ -321,11 +322,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 44102 – Remote dispatch system limit switch [read-back]
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_LIMIT_SWITCH, new UnsignedWordElement(44102)),
 
-						// reg 44103 – Remote dispatch system import limit [read-back]
-						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_IMPORT_LIMIT, new UnsignedWordElement(44103)),
+						// reg 44103 – Remote dispatch system import limit [read-back] (1=100W)
+						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_IMPORT_LIMIT, new UnsignedWordElement(44103),
+								ElementToChannelConverter.SCALE_FACTOR_2),
 
-						// reg 44104 – Remote dispatch system export limit [read-back]
-						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT, new UnsignedWordElement(44104)),
+						// reg 44104 – Remote dispatch system export limit [read-back] (1=100W)
+						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT, new UnsignedWordElement(44104),
+								ElementToChannelConverter.SCALE_FACTOR_2),
 
 						// reg 44105 – Remote dispatch real-time control switch [read-back]
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_SWITCH, new UnsignedWordElement(44105)),
@@ -333,22 +336,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								new SignedDoublewordElement(44106)),
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH,
 								new UnsignedWordElement(44108))),
-
-				// Write new values to inverter
-				// Each register gets its own task because they are not contiguous
-
-				new FC16WriteRegistersTask(43010,
-						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC, new UnsignedWordElement(43010)),
-						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
-						new DummyRegisterElement(43012, 43017),
-						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC, new UnsignedWordElement(43018))),
-
-				// Read current values back from inverter
-				new FC3ReadRegistersTask(43010, Priority.LOW,
-						m(PytesJs3.ChannelId.SET_MAX_CHARGE_SOC, new UnsignedWordElement(43010)),
-						m(PytesJs3.ChannelId.SET_OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
-						new DummyRegisterElement(43012, 43017),
-						m(PytesJs3.ChannelId.SET_FORCE_CHARGE_SOC, new UnsignedWordElement(43018))),
 
 				new FC4ReadInputRegistersTask(33287, Priority.LOW,
 						// reg 33287 - Inverter operating status
@@ -454,7 +441,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33094 – Grid frequency [mHz]
 						// Datasheet: 0.01Hz -> SCALE_FACTOR_1 -> mHz.
 						m(PytesJs3.ChannelId.FREQUENCY, new UnsignedWordElement(33094),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverter.SCALE_FACTOR_1)),
+
+				// Datasheet 3.2: max. 50 registers per frame -> 33067-33125 split here
+				new FC4ReadInputRegistersTask(33095, Priority.HIGH, //
 
 						// reg 33095 – Inverter current status (Appendix 2)
 						// Datasheet: See Appendix 2.
@@ -497,17 +487,19 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						new DummyRegisterElement(33100, 33103),
 
 						// reg 33104 – Limited power actual value (0.01%, U16)
-						// Datasheet: 0.01% resolution.
-						m(PytesJs3.ChannelId.LIMITED_POWER_ACTUAL_VALUE, new UnsignedWordElement(33104)),
+						// Datasheet: 0.01% -> SCALE_FACTOR_MINUS_2 -> %
+						m(PytesJs3.ChannelId.LIMITED_POWER_ACTUAL_VALUE, new UnsignedWordElement(33104),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
 
 						// reg 33105 – PF adjustment actual value (0.001 resolution, S16)
 						// Datasheet: 100=1.00, 800=0.80. Range(-1.00 : 1.00)
 						m(PytesJs3.ChannelId.PF_ADJUSTMENT_ACTUAL_VALUE, new SignedWordElement(33105)),
 
 						// reg 33106 – Limited reactive power (0.01%, S16)
-						// Datasheet: 0.01% resolution. Range: -6000 to +6000.
+						// Datasheet: 0.01% -> SCALE_FACTOR_MINUS_2 -> %. Range: -6000 to +6000.
 						// Only effective in Working Mode 4 (Fix reactive power).
-						m(PytesJs3.ChannelId.LIMITED_REACTIVE_POWER, new SignedWordElement(33106)),
+						m(PytesJs3.ChannelId.LIMITED_REACTIVE_POWER, new SignedWordElement(33106),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
 
 						// reg 33107 – Inverter module temperature 2 (0.1°C, S16)
 						// Datasheet: 0.1°C. For off-grid. Same as 33093 (different NTC).

@@ -134,46 +134,47 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * reg 33250 BIT07 - External meter fault.
-		 * true = the external meter has reported a communication or hardware fault
+		 * reg 33250 BIT06 - Power control mode (Appendix 10).
+		 * false = 3-phase balanced control, true = 3-phase individual (unbalanced) control
 		 */
-		METER_FAULT_STATUS(Doc.of(BOOLEAN) //
+		POWER_CONTROL_MODE_UNBALANCED(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * reg 33250 BIT08 - CT fault.
-		 * true = the CT has reported a fault (open circuit, wrong phase, ...)
+		 * reg 33250 BIT07 - EPM current setting switch (Appendix 10).
 		 */
-		CT_FAULT_STATUS(Doc.of(BOOLEAN) //
+		EPM_CURRENT_SETTING_SWITCH_STATUS(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * reg 33250 BIT09 - External meter connected in reverse polarity.
-		 * true = meter CT or voltage wiring is reversed - power readings will be inverted
+		 * reg 33250 BIT08 - External EPM ON/OFF status (Appendix 10, 3PH RHI 5G only).
 		 */
-		METER_REVERSE_STATUS(Doc.of(BOOLEAN) //
+		EXTERNAL_EPM_STATUS(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * 33250 BIT10 - CT connected in reverse polarity.
-		 * true = CT clamp is clipped on in the wring direction
+		 * reg 33250 BIT09 - External EPM failsafe switch status (Appendix 10, 3PH RHI 5G only).
 		 */
-		CT_REVERSE_STATUS(Doc.of(BOOLEAN) //
+		EXTERNAL_EPM_FAILSAFE_STATUS(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * reg 33250 BIT11 - EPM fault.
-		 * true = the EPM module itself has reported an internal fault
+		 * reg 33250 BIT10 - Parallel EPM power setting switch (Appendix 10).
 		 */
-		EPM_FAULT_STATUS(Doc.of(BOOLEAN) //
+		PARALLEL_EPM_POWER_SETTING_SWITCH(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * reg 33250 BIT12 - Power control mode allows unbalanced phase output.
-		 * false = balanced 3-phase control (equal current on all phases)
-		 * true = individual per-phase control allowed (unbalanced currents permitted)
+		 * reg 33250 BIT11 - Parallel EPM current setting switch (Appendix 10).
 		 */
-		POWER_CONTROL_MODE_UNBALANCED_ALLOWED(Doc.of(BOOLEAN) //
+		PARALLEL_EPM_CURRENT_SETTING_SWITCH(Doc.of(BOOLEAN) //
+				.accessMode(READ_ONLY)),
+
+		/**
+		 * reg 33250 BIT12 - Parallel power control mode (Appendix 10). Valid when BIT10 or BIT11 is on.
+		 * false = three-phase unified control, true = three-phase independent control
+		 */
+		PARALLEL_POWER_CONTROL_MODE_UNBALANCED(Doc.of(BOOLEAN) //
 				.accessMode(READ_ONLY)),
 
 		// -----------------------------------------------------------------------
@@ -532,96 +533,6 @@ public interface PytesMeterGrid extends ElectricityMeter, ModbusComponent, Opene
 	 */
 	public default Value<Boolean> getCtInGrid() {
 		return this.getCtInGridChannel().value();
-	}
-
-	/**
-	 * Channel for {@link ChannelId#METER_FAULT_STATUS}.
-	 *
-	 * @return the Channel
-	 */
-	public default BooleanReadChannel getMeterFaultStatusChannel() {
-		return this.channel(ChannelId.METER_FAULT_STATUS);
-	}
-
-	/**
-	 * true if meter has a fault. See {@link ChannelId#METER_FAULT_STATUS}.
-	 *
-	 * @return the value
-	 */
-	public default Value<Boolean> getMeterFaultStatus() {
-		return this.getMeterFaultStatusChannel().value();
-	}
-
-	/**
-	 * Channel for {@link ChannelId#CT_FAULT_STATUS}.
-	 *
-	 * @return the Channel
-	 */
-	public default BooleanReadChannel getCtFaultStatusChannel() {
-		return this.channel(ChannelId.CT_FAULT_STATUS);
-	}
-
-	/**
-	 * true if CT has a fault. See {@link ChannelId#CT_FAULT_STATUS}.
-	 *
-	 * @return the value
-	 */
-	public default Value<Boolean> getCtFaultStatus() {
-		return this.getCtFaultStatusChannel().value();
-	}
-
-	/**
-	 * Channel for {@link ChannelId#METER_REVERSE_STATUS}.
-	 *
-	 * @return the Channel
-	 */
-	public default BooleanReadChannel getMeterReverseStatusChannel() {
-		return this.channel(ChannelId.METER_REVERSE_STATUS);
-	}
-
-	/**
-	 * true if meter is wired in reverse. See {@link ChannelId#METER_REVERSE_STATUS}.
-	 *
-	 * @return the value
-	 */
-	public default Value<Boolean> getMeterReverseStatus() {
-		return this.getMeterReverseStatusChannel().value();
-	}
-
-	/**
-	 * Channel for {@link ChannelId#CT_REVERSE_STATUS}.
-	 *
-	 * @return the Channel
-	 */
-	public default BooleanReadChannel getCtReverseStatusChannel() {
-		return this.channel(ChannelId.CT_REVERSE_STATUS);
-	}
-
-	/**
-	 * true if CT is clipped in reverse. See {@link ChannelId#CT_REVERSE_STATUS}.
-	 *
-	 * @return the value
-	 */
-	public default Value<Boolean> getCtReverseStatus() {
-		return this.getCtReverseStatusChannel().value();
-	}
-
-	/**
-	 * Channel for {@link ChannelId#EPM_FAULT_STATUS}.
-	 *
-	 * @return the Channel
-	 */
-	public default BooleanReadChannel getEpmFaultStatusChannel() {
-		return this.channel(ChannelId.EPM_FAULT_STATUS);
-	}
-
-	/**
-	 * true if EPM module has a fault. See {@link ChannelId#EPM_FAULT_STATUS}.
-	 *
-	 * @return the value
-	 */
-	public default Value<Boolean> getEpmFaultStatus() {
-		return this.getEpmFaultStatusChannel().value();
 	}
 
 	// -----------------------------------------------------------------------

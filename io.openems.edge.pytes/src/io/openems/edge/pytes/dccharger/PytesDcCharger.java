@@ -57,20 +57,20 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
 	         * PV energy generated today (reg 33035, U16).
 	         * For Hybrid models: shows PV generation of this inverter.
 	         * For AC Coupled models: shows generation of parallel PV inverters.
-	         * Datasheet: 0.1 kWh resolution → SCALE_FACTOR_MINUS_1 → KWh.
-	         * Unit: KWh
+	         * Datasheet: 0.1 kWh resolution → SCALE_FACTOR_2 → Wh.
+	         * Unit: Wh
 	         */
-	        PV_ENERGY_TODAY_KWH(Doc.of(INTEGER) //
-	        	.unit(Unit.KILOWATT_HOURS) //
+	        PV_ENERGY_TODAY(Doc.of(INTEGER) //
+	        	.unit(Unit.WATT_HOURS) //
 	        	.accessMode(READ_ONLY)),
 
 	        /**
 	         * PV energy generated yesterday (reg 33036, U16).
-	         * Datasheet: 0.1 kWh resolution → SCALE_FACTOR_MINUS_1 → Wh.
+	         * Datasheet: 0.1 kWh resolution → SCALE_FACTOR_2 → Wh.
 	         * Unit: Wh
 	         */
-	        PV_ENERGY_YESTERDAY_KWH(Doc.of(INTEGER) //
-	        	.unit(Unit.KILOWATT_HOURS) //
+	        PV_ENERGY_YESTERDAY(Doc.of(INTEGER) //
+	        	.unit(Unit.WATT_HOURS) //
 	        	.accessMode(READ_ONLY)),
 
 	        /**
@@ -295,39 +295,39 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
 	}
 
 	/**
-	 * Channel for {@link ChannelId#PV_ENERGY_TODAY_KWH}.
+	 * Channel for {@link ChannelId#PV_ENERGY_TODAY}.
 	 *
 	 * @return the Channel
 	 */
-	public default IntegerReadChannel getPvEnergyTodayKwhChannel() {
-		return this.channel(ChannelId.PV_ENERGY_TODAY_KWH);
+	public default IntegerReadChannel getPvEnergyTodayChannel() {
+		return this.channel(ChannelId.PV_ENERGY_TODAY);
 	}
 
 	/**
-	 * PV energy generated today [KWh]. See {@link ChannelId#PV_ENERGY_TODAY_KWH}.
+	 * PV energy generated today [Wh]. See {@link ChannelId#PV_ENERGY_TODAY}.
 	 *
 	 * @return the Channel {@link Value}
 	 */
-	public default Value<Integer> getPvEnergyTodayKwh() {
-		return this.getPvEnergyTodayKwhChannel().value();
+	public default Value<Integer> getPvEnergyToday() {
+		return this.getPvEnergyTodayChannel().value();
 	}
 
 	/**
-	 * Channel for {@link ChannelId#PV_ENERGY_YESTERDAY_KWH}.
+	 * Channel for {@link ChannelId#PV_ENERGY_YESTERDAY}.
 	 *
 	 * @return the Channel
 	 */
-	public default IntegerReadChannel getPvEnergyYesterdayKwhChannel() {
-		return this.channel(ChannelId.PV_ENERGY_YESTERDAY_KWH);
+	public default IntegerReadChannel getPvEnergyYesterdayChannel() {
+		return this.channel(ChannelId.PV_ENERGY_YESTERDAY);
 	}
 
 	/**
-	 * PV energy generated yesterday [KWh]. See {@link ChannelId#PV_ENERGY_YESTERDAY_KWH}.
+	 * PV energy generated yesterday [Wh]. See {@link ChannelId#PV_ENERGY_YESTERDAY}.
 	 *
 	 * @return the Channel {@link Value}
 	 */
-	public default Value<Integer> getPvEnergyYesterdayKwh() {
-		return this.getPvEnergyYesterdayKwhChannel().value();
+	public default Value<Integer> getPvEnergyYesterday() {
+		return this.getPvEnergyYesterdayChannel().value();
 	}
 
 	/**

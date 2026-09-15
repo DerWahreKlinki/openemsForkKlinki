@@ -144,13 +144,13 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 						// PV energy last month [kWh], resolution 1kWh
 						m(PytesDcCharger.ChannelId.PV_ENERGY_LAST_MONTH_KWH, new UnsignedDoublewordElement(33033)),
 
-						// PV energy today [kWh], resolution 0.1kWh
-						m(PytesDcCharger.ChannelId.PV_ENERGY_TODAY_KWH, new UnsignedWordElement(33035),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+						// PV energy today [Wh], resolution 0.1kWh -> SCALE_FACTOR_2
+						m(PytesDcCharger.ChannelId.PV_ENERGY_TODAY, new UnsignedWordElement(33035),
+									ElementToChannelConverter.SCALE_FACTOR_2),
 
-						// PV energy yesterday [1kWh], resolution 0.1kWh
-						m(PytesDcCharger.ChannelId.PV_ENERGY_YESTERDAY_KWH, new UnsignedWordElement(33036),
-									ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+						// PV energy yesterday [Wh], resolution 0.1kWh -> SCALE_FACTOR_2
+						m(PytesDcCharger.ChannelId.PV_ENERGY_YESTERDAY, new UnsignedWordElement(33036),
+									ElementToChannelConverter.SCALE_FACTOR_2),
 
 						// PV energy this year [kWh], resolution 1kWh
 						m(PytesDcCharger.ChannelId.PV_ENERGY_YEAR_KWH, new UnsignedDoublewordElement(33037)),

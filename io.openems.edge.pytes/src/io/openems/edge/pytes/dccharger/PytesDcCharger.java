@@ -18,7 +18,7 @@ import io.openems.edge.pytes.enums.DcInputType;
 public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHandler {
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
-                // -----------------------------------------------------------------------
+	        // -----------------------------------------------------------------------
 	        // PV Energy Counters (reg 33029..33039)
 	        // All counters are cumulative totals from the inverter lifetime.
 	        // Priority LOW – historical totals, slow-changing.
@@ -91,7 +91,7 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
 	        	.unit(Unit.KILOWATT_HOURS) //
 	        	.accessMode(READ_ONLY)),
 
-                // -----------------------------------------------------------------------
+	        // -----------------------------------------------------------------------
 	        // DC Input Configuration (reg 33048)
 	        // Priority LOW – set by hardware, never changes at runtime.
 	        // -----------------------------------------------------------------------
@@ -104,7 +104,7 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
 	        DC_INPUT_TYPE(Doc.of(DcInputType.values()) //
 	        	.accessMode(READ_ONLY)),
 
-                // -----------------------------------------------------------------------
+	        // -----------------------------------------------------------------------
 	        // DC Voltages and Currents per input string (reg 33049..33066)
 	        // All voltages: 0.1 V resolution → SCALE_FACTOR_2 (×100) → mV
 	        // All currents: 0.1 A resolution → SCALE_FACTOR_2 (×100) → mA
@@ -236,76 +236,132 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
         }
 
 
-        // -----------------------------------------------------------------------
+	// -----------------------------------------------------------------------
 	// Accessor methods – PV Energy Counters
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_TOTAL_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_TOTAL_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default LongReadChannel getPvEnergyTotalKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_TOTAL_KWH);
 	}
 
-	/** @return Total PV energy generated [kWh]. See {@link ChannelId#PV_ENERGY_TOTAL_KWH} */
+	/**
+	 * Total PV energy generated [kWh]. See {@link ChannelId#PV_ENERGY_TOTAL_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Long> getPvEnergyTotalKwh() {
 		return this.getPvEnergyTotalKwhChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_MONTH_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_MONTH_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default LongReadChannel getPvEnergyMonthKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_MONTH_KWH);
 	}
 
-	/** @return PV energy generated this month [kWh]. See {@link ChannelId#PV_ENERGY_MONTH_KWH} */
+	/**
+	 * PV energy generated this month [kWh]. See {@link ChannelId#PV_ENERGY_MONTH_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Long> getPvEnergyMonthKwh() {
 		return this.getPvEnergyMonthKwhChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_LAST_MONTH_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_LAST_MONTH_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default LongReadChannel getPvEnergyLastMonthKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_LAST_MONTH_KWH);
 	}
 
-	/** @return PV energy generated last month [kWh]. See {@link ChannelId#PV_ENERGY_LAST_MONTH_KWH} */
+	/**
+	 * PV energy generated last month [kWh]. See {@link ChannelId#PV_ENERGY_LAST_MONTH_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Long> getPvEnergyLastMonthKwh() {
 		return this.getPvEnergyLastMonthKwhChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_TODAY_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_TODAY_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getPvEnergyTodayKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_TODAY_KWH);
 	}
 
-	/** @return PV energy generated today [KWh]. See {@link ChannelId#PV_ENERGY_TODAY_KWH} */
+	/**
+	 * PV energy generated today [KWh]. See {@link ChannelId#PV_ENERGY_TODAY_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getPvEnergyTodayKwh() {
 		return this.getPvEnergyTodayKwhChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_YESTERDAY_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_YESTERDAY_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getPvEnergyYesterdayKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_YESTERDAY_KWH);
 	}
 
-	/** @return PV energy generated yesterday [KWh]. See {@link ChannelId#PV_ENERGY_YESTERDAY_KWH} */
+	/**
+	 * PV energy generated yesterday [KWh]. See {@link ChannelId#PV_ENERGY_YESTERDAY_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getPvEnergyYesterdayKwh() {
 		return this.getPvEnergyYesterdayKwhChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_YEAR_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_YEAR_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default LongReadChannel getPvEnergyYearKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_YEAR_KWH);
 	}
 
-	/** @return PV energy generated this year [kWh]. See {@link ChannelId#PV_ENERGY_YEAR_KWH} */
+	/**
+	 * PV energy generated this year [kWh]. See {@link ChannelId#PV_ENERGY_YEAR_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Long> getPvEnergyYearKwh() {
 		return this.getPvEnergyYearKwhChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#PV_ENERGY_LAST_YEAR_KWH} */
+	/**
+	 * Channel for {@link ChannelId#PV_ENERGY_LAST_YEAR_KWH}.
+	 *
+	 * @return the Channel
+	 */
 	public default LongReadChannel getPvEnergyLastYearKwhChannel() {
 		return this.channel(ChannelId.PV_ENERGY_LAST_YEAR_KWH);
 	}
 
-	/** @return PV energy generated last year [kWh]. See {@link ChannelId#PV_ENERGY_LAST_YEAR_KWH} */
+	/**
+	 * PV energy generated last year [kWh]. See {@link ChannelId#PV_ENERGY_LAST_YEAR_KWH}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Long> getPvEnergyLastYearKwh() {
 		return this.getPvEnergyLastYearKwhChannel().value();
 	}
@@ -314,12 +370,20 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
 	// Accessor methods – DC Input Configuration
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#DC_INPUT_TYPE} */
+	/**
+	 * Channel for {@link ChannelId#DC_INPUT_TYPE}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcInputTypeChannel() {
 		return this.channel(ChannelId.DC_INPUT_TYPE);
 	}
 
-	/** @return Number of DC input strings connected. See {@link ChannelId#DC_INPUT_TYPE} */
+	/**
+	 * Number of DC input strings connected. See {@link ChannelId#DC_INPUT_TYPE}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcInputType() {
 		return this.getDcInputTypeChannel().value();
 	}
@@ -328,162 +392,290 @@ public interface PytesDcCharger extends EssDcCharger, OpenemsComponent, EventHan
 	// Accessor methods – DC Voltages and Currents
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_1} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_1}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage1Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_1);
 	}
 
-	/** @return DC string 1 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_1} */
+	/**
+	 * DC string 1 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_1}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage1() {
 		return this.getDcVoltage1Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_1} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_1}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent1Channel() {
 		return this.channel(ChannelId.DC_CURRENT_1);
 	}
 
-	/** @return DC string 1 current [mA]. See {@link ChannelId#DC_CURRENT_1} */
+	/**
+	 * DC string 1 current [mA]. See {@link ChannelId#DC_CURRENT_1}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent1() {
 		return this.getDcCurrent1Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_2} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_2}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage2Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_2);
 	}
 
-	/** @return DC string 2 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_2} */
+	/**
+	 * DC string 2 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_2}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage2() {
 		return this.getDcVoltage2Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_2} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_2}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent2Channel() {
 		return this.channel(ChannelId.DC_CURRENT_2);
 	}
 
-	/** @return DC string 2 current [mA]. See {@link ChannelId#DC_CURRENT_2} */
+	/**
+	 * DC string 2 current [mA]. See {@link ChannelId#DC_CURRENT_2}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent2() {
 		return this.getDcCurrent2Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_3} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_3}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage3Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_3);
 	}
 
-	/** @return DC string 3 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_3} */
+	/**
+	 * DC string 3 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_3}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage3() {
 		return this.getDcVoltage3Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_3} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_3}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent3Channel() {
 		return this.channel(ChannelId.DC_CURRENT_3);
 	}
 
-	/** @return DC string 3 current [mA]. See {@link ChannelId#DC_CURRENT_3} */
+	/**
+	 * DC string 3 current [mA]. See {@link ChannelId#DC_CURRENT_3}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent3() {
 		return this.getDcCurrent3Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_4} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_4}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage4Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_4);
 	}
 
-	/** @return DC string 4 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_4} */
+	/**
+	 * DC string 4 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_4}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage4() {
 		return this.getDcVoltage4Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_4} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_4}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent4Channel() {
 		return this.channel(ChannelId.DC_CURRENT_4);
 	}
 
-	/** @return DC string 4 current [mA]. See {@link ChannelId#DC_CURRENT_4} */
+	/**
+	 * DC string 4 current [mA]. See {@link ChannelId#DC_CURRENT_4}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent4() {
 		return this.getDcCurrent4Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_5} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_5}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage5Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_5);
 	}
 
-	/** @return DC string 5 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_5} */
+	/**
+	 * DC string 5 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_5}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage5() {
 		return this.getDcVoltage5Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_5} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_5}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent5Channel() {
 		return this.channel(ChannelId.DC_CURRENT_5);
 	}
 
-	/** @return DC string 5 current [mA]. See {@link ChannelId#DC_CURRENT_5} */
+	/**
+	 * DC string 5 current [mA]. See {@link ChannelId#DC_CURRENT_5}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent5() {
 		return this.getDcCurrent5Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_6} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_6}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage6Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_6);
 	}
 
-	/** @return DC string 6 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_6} */
+	/**
+	 * DC string 6 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_6}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage6() {
 		return this.getDcVoltage6Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_6} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_6}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent6Channel() {
 		return this.channel(ChannelId.DC_CURRENT_6);
 	}
 
-	/** @return DC string 6 current [mA]. See {@link ChannelId#DC_CURRENT_6} */
+	/**
+	 * DC string 6 current [mA]. See {@link ChannelId#DC_CURRENT_6}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent6() {
 		return this.getDcCurrent6Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_7} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_7}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage7Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_7);
 	}
 
-	/** @return DC string 7 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_7} */
+	/**
+	 * DC string 7 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_7}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage7() {
 		return this.getDcVoltage7Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_7} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_7}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent7Channel() {
 		return this.channel(ChannelId.DC_CURRENT_7);
 	}
 
-	/** @return DC string 7 current [mA]. See {@link ChannelId#DC_CURRENT_7} */
+	/**
+	 * DC string 7 current [mA]. See {@link ChannelId#DC_CURRENT_7}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent7() {
 		return this.getDcCurrent7Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_VOLTAGE_8} */
+	/**
+	 * Channel for {@link ChannelId#DC_VOLTAGE_8}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcVoltage8Channel() {
 		return this.channel(ChannelId.DC_VOLTAGE_8);
 	}
 
-	/** @return DC string 8 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_8} */
+	/**
+	 * DC string 8 voltage [mV]. See {@link ChannelId#DC_VOLTAGE_8}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcVoltage8() {
 		return this.getDcVoltage8Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#DC_CURRENT_8} */
+	/**
+	 * Channel for {@link ChannelId#DC_CURRENT_8}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcCurrent8Channel() {
 		return this.channel(ChannelId.DC_CURRENT_8);
 	}
 
-	/** @return DC string 8 current [mA]. See {@link ChannelId#DC_CURRENT_8} */
+	/**
+	 * DC string 8 current [mA]. See {@link ChannelId#DC_CURRENT_8}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcCurrent8() {
 		return this.getDcCurrent8Channel().value();
 	}

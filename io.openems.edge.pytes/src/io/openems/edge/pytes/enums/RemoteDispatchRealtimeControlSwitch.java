@@ -18,7 +18,18 @@ public enum RemoteDispatchRealtimeControlSwitch implements OptionsEnum {
 		this.name = name;
 	}
 
-	@Override public int getValue() { return this.value; }
-	@Override public String getName() { return this.name; }
-	@Override public OptionsEnum getUndefined() { return UNDEFINED; }
+	@Override
+	public int getValue() {
+		return this.value;
+	}
+
+	@Override
+	public String getName() {
+		return this.name;
+	}
+
+	@Override
+	public OptionsEnum getUndefined() {
+		return UNDEFINED;
+	}
 }

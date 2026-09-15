@@ -33,6 +33,12 @@ public enum MeterLocationCode implements OptionsEnum {
         return UNDEFINED;
     }
 
+    /**
+     * Gets the {@link MeterLocationCode} matching the given raw value.
+     *
+     * @param value the raw value
+     * @return the matching {@link MeterLocationCode} or {@link #UNDEFINED}
+     */
     public static MeterLocationCode fromValue(int value) {
         for (var v : values()) {
             if (v.value == value) {

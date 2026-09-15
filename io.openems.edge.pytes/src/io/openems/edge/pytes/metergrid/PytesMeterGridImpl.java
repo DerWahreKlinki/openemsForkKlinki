@@ -156,7 +156,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 						// reg 33251-33286 - external meter electrical data (separate task below)
 						new DummyRegisterElement(33251, 33289),
-/*
+						/*
 						// reg 33287 - Inverter operating status
 						// 0=Stop, 1=Open loop, 2=Soft start, 3=Grid-connected,
 						// 4=Off-grid/EPS, 5=Off-grid to on-grid, 6=Bypass, 7=Generator
@@ -283,7 +283,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 				// High byte = location
 				// Low byte = device type
 				// Decoded by listener into METER1_LOCATION_CODE and METER1_TYPE_CODE
-			    m(PytesMeterGrid.ChannelId.METER1_TYPE_LOCATION_RAW, new UnsignedWordElement(33300))
+				m(PytesMeterGrid.ChannelId.METER1_TYPE_LOCATION_RAW, new UnsignedWordElement(33300))
 		));
 
 		// ---------------------------------------------------------------
@@ -313,7 +313,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 			    m(PytesMeterGrid.ChannelId.BACKFLOW_POWER, new SignedWordElement(43074))
 		));		
 
-/*
+		/*
 		if (this.config.meterDeviceType() == MeterDeviceType.INTERNAL) {
 			// Inverter Grid Electrical (33073..33094)
 			modbusProtocol.addTask(new FC4ReadInputRegistersTask(33073, Priority.LOW, // total: 22 registers
@@ -337,7 +337,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 					m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(33094))));
 		} else {
 */
-			// External meter / EPM Grid Electrical (33250..33282 / 33286)
+		// External meter / EPM Grid Electrical (33250..33282 / 33286)
 
 		//}
 
@@ -384,7 +384,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 	private void installListeners() {
 
-		// Decode reg 33300 raw word into location and type sub-channels
+	    // Decode reg 33300 raw word into location and type sub-channels
 	    this.getMeter1TypeLocationRawChannel().onUpdate(value -> {
 	        Integer raw = (value == null) ? null : value.get();
 	        if (raw == null) {
@@ -425,13 +425,6 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 			Boolean ctInGrid     = chCtInGrid.value().get();
 			Boolean parallelPv   = chParallelPv.value().get();
 			Boolean epmSw        = chEpmSw.value().get();
-			Boolean failsafeSw   = chFailsafeSw.value().get();
-			Boolean pcmUnbal     = chPcmUnbal.value().get();
-			Boolean epmCurrSw    = chEpmCurrSw.value().get();
-			Boolean extEpmStatus = chExtEpmStatus.value().get();
-			Boolean extFailsafe  = chExtFailsafe.value().get();
-			Boolean ctSelect     = chCtSelect.value().get();
-
 
 			if (ctInGrid     != null && ctInGrid) {
 				word |= (1 << 2);
@@ -442,21 +435,33 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 			if (epmSw        != null && epmSw) {
 				word |= (1 << 4);
 			}
+
+			Boolean failsafeSw = chFailsafeSw.value().get();
 			if (failsafeSw   != null && failsafeSw) {
 				word |= (1 << 5);
 			}
+
+			Boolean pcmUnbal = chPcmUnbal.value().get();
 			if (pcmUnbal     != null && pcmUnbal) {
 				word |= (1 << 6);
 			}
+
+			Boolean epmCurrSw = chEpmCurrSw.value().get();
 			if (epmCurrSw    != null && epmCurrSw) {
 				word |= (1 << 7);
 			}
+
+			Boolean extEpmStatus = chExtEpmStatus.value().get();
 			if (extEpmStatus != null && extEpmStatus) {
 				word |= (1 << 8);
 			}
+
+			Boolean extFailsafe = chExtFailsafe.value().get();
 			if (extFailsafe  != null && extFailsafe) {
 				word |= (1 << 9);
 			}
+
+			Boolean ctSelect = chCtSelect.value().get();
 			if (ctSelect     != null && ctSelect) {
 				word |= (1 << 13);
 			}
@@ -480,6 +485,11 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 
 
 
+	/**
+	 * Collects the current values of all Channels for debug logging.
+	 *
+	 * @return a formatted string of all Channel values
+	 */
 	public String collectDebugData() {
 		// Collect channel values in one stream
 		return Stream.of(OpenemsComponent.ChannelId.values(), //
@@ -504,8 +514,8 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 			if (this.config.extendedDebugMode()) {
 				this.logInfo(this.log,
 						"\n ############################################## Meter Values Start #############################################");
-				this.logInfo(log, this.collectDebugData());
-				this.logInfo(log,
+				this.logInfo(this.log, this.collectDebugData());
+				this.logInfo(this.log,
 						"\n ############################################## Meter Values End #############################################");
 
 			}

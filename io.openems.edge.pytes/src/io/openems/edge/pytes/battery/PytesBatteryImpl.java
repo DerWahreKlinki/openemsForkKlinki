@@ -192,8 +192,8 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 		Integer batteryVoltage = this.getBmsBatteryVoltage().get(); // mV (from BMS)
 		
 		
-		if (batteryCurrentWithoutDirection == null || batteryVoltage == null || batteryCurrentDirection == null ) {
-			log.error("Battery power cannot be calculated due to missing values");
+		if (batteryCurrentWithoutDirection == null || batteryVoltage == null || batteryCurrentDirection == null) {
+			this.log.error("Battery power cannot be calculated due to missing values");
 			return;
 		}
 
@@ -201,8 +201,8 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 
 	    int power = (int) Math.round(batteryCurrentWithoutDirection * batteryVoltage * sign / 1000000);
 	    this._setDcDischargePower(power);
-	    this._setVoltage((int) Math.round(batteryVoltage /1000.0)); // parent class wants V
-		this._setCurrent((int) Math.round((batteryCurrentWithoutDirection * sign)/1000.0)); // parent class wants A
+	    this._setVoltage((int) Math.round(batteryVoltage / 1000.0)); // parent class wants V
+		this._setCurrent((int) Math.round((batteryCurrentWithoutDirection * sign) / 1000.0)); // parent class wants A
 
 	}
 

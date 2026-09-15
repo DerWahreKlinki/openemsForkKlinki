@@ -59,33 +59,57 @@ public interface PytesInternalMeterBackupPort extends ElectricityMeter, ModbusCo
 		}
 	}
 
-	/**@return Channel for {@link ChannelId#APPARENT_POWER_L1} */
+	/**
+	 * Channel for {@link ChannelId#APPARENT_POWER_L1}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getApparentPowerL1Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L1);
 	}
 
-	/**@return  Phase A apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L1} */
+	/**
+	 * Phase A apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L1}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getApparentPowerL1() {
 		return this.getApparentPowerL1Channel().value();
 	}
 
-	/**@return Channel for {@link ChannelId#APPARENT_POWER_L2} */
+	/**
+	 * Channel for {@link ChannelId#APPARENT_POWER_L2}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getApparentPowerL2Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L2);
 	}
 
-	/**@return  Phase B apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L2} */
+	/**
+	 * Phase B apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L2}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getApparentPowerL2() {
 		return this.getApparentPowerL2Channel().value();
 	}
 
 
-	/**@return Channel for {@link ChannelId#APPARENT_POWER_L3} */
+	/**
+	 * Channel for {@link ChannelId#APPARENT_POWER_L3}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getApparentPowerL3Channel() {
 		return this.channel(ChannelId.APPARENT_POWER_L3);
 	}
 
-	/**@return  Phase C apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L3} */
+	/**
+	 * Phase C apparent power [VA]. See {@link ChannelId#APPARENT_POWER_L3}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getApparentPowerL3() {
 		return this.getApparentPowerL3Channel().value();
 	}

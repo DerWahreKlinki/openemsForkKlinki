@@ -202,26 +202,22 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// BIT05 Allow grid charge — 0 = not allowed, 1 = allowed
 						// BIT04 Reserve battery — 1 = backup/reserve battery mode active
 						// Bit positions verified against datasheet Appendix 6.
-						m(new BitsWordElement(43110, this).bit(0, PytesJs3.ChannelId.STORAGE_CTRL_SELF_USE_MODE) // BIT00:
-																													// Self-use
-																													// mode
+						m(new BitsWordElement(43110, this).bit(0, PytesJs3.ChannelId.STORAGE_CTRL_SELF_USE_MODE) // BIT00: Self-use mode
 								.bit(1, PytesJs3.ChannelId.STORAGE_CTRL_TIME_OF_USE_MODE) // BIT01: Time-of-use mode
 								.bit(2, PytesJs3.ChannelId.STORAGE_CTRL_OFFGRID_MODE) // BIT02: Off-grid mode
 								.bit(3, PytesJs3.ChannelId.STORAGE_CTRL_BATT_WAKEUP) // BIT03: Battery wakeup switch
 								.bit(4, PytesJs3.ChannelId.STORAGE_CTRL_RESERVE_BATT_MODE) // BIT04: Reserve battery
-																							// mode
+								// mode
 								.bit(5, PytesJs3.ChannelId.STORAGE_CTRL_ALLOW_GRID_CHARGE) // BIT05: Allow grid charge
-																							// (0=NotAllow, 1=Allow)
+								// (0=NotAllow, 1=Allow)
 								.bit(6, PytesJs3.ChannelId.STORAGE_CTRL_FEED_IN_PRIORITY) // BIT06: Feed-in priority
-																							// mode
+								// mode
 								.bit(7, PytesJs3.ChannelId.STORAGE_CTRL_BATT_OVC) // BIT07: Battery OVC function
 								.bit(8, PytesJs3.ChannelId.STORAGE_CTRL_FORCE_CHARGE_PEAKSHAVING) // BIT08: Force charge
-																									// / peak shaving
-								.bit(9, PytesJs3.ChannelId.STORAGE_CTRL_BATT_CURRENT_CORRECTION) // BIT09: Battery
-																									// current
-																									// correction
+								// / peak shaving
+								.bit(9, PytesJs3.ChannelId.STORAGE_CTRL_BATT_CURRENT_CORRECTION) // BIT09: Battery current correction
 								.bit(10, PytesJs3.ChannelId.STORAGE_CTRL_BATT_HEALING_MODE) // BIT10: Battery healing
-																							// mode
+								// mode
 								.bit(11, PytesJs3.ChannelId.STORAGE_CTRL_PEAK_SHAVING_MODE) // BIT11: Peak-shaving mode
 								.bit(12, PytesJs3.ChannelId.STORAGE_CTRL_RESERVED_12)
 								.bit(13, PytesJs3.ChannelId.STORAGE_CTRL_RESERVED_13)
@@ -567,10 +563,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// The framework fills all 16 sub-channels atomically on every Modbus read,
 						// replacing the old decodeBits() call that ran one cycle later.
 						// Bit positions verified against datasheet Appendix 7.
-						m(new BitsWordElement(33115, this).bit(0, PytesJs3.ChannelId.SETTING_FLAG_FLASH_TIMEOUT) // BIT00:
-																													// FLASH
-																													// r/w
-																													// timeout
+						m(new BitsWordElement(33115, this).bit(0, PytesJs3.ChannelId.SETTING_FLAG_FLASH_TIMEOUT) // BIT00: FLASH r/w timeout
 								.bit(1, PytesJs3.ChannelId.SETTING_FLAG_CLEAR_ENERGY) // BIT01: Clear energy flag
 								.bit(2, PytesJs3.ChannelId.SETTING_FLAG_RESERVED_02) // BIT02: Reserved
 								.bit(3, PytesJs3.ChannelId.SETTING_FLAG_RESERVED_03) // BIT03: Reserved
@@ -580,7 +573,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(7, PytesJs3.ChannelId.SETTING_FLAG_RESERVED_07) // BIT07: Reserved
 								.bit(8, PytesJs3.ChannelId.SETTING_FLAG_RESET_DATALOGGER) // BIT08: Reset datalogger
 								.bit(9, PytesJs3.ChannelId.SETTING_FLAG_FACTORY_RECOVER) // BIT09: Return factory
-																							// settings
+								// settings
 								.bit(10, PytesJs3.ChannelId.SETTING_FLAG_RESERVED_10) // BIT10: Reserved
 								.bit(11, PytesJs3.ChannelId.SETTING_FLAG_RESERVED_11) // BIT11: Reserved
 								.bit(12, PytesJs3.ChannelId.SETTING_FLAG_RESERVED_12) // BIT12: Reserved
@@ -591,41 +584,34 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33116: Fault Code 01 (U16, Appendix 4) — grid-side faults
 						// Bit positions verified against datasheet Appendix 4.
 						m(new BitsWordElement(33116, this).bit(0, PytesJs3.ChannelId.FAULT_REG1_NO_GRID) // BIT00: No
-																											// grid
+								// grid
 								.bit(1, PytesJs3.ChannelId.FAULT_REG1_GRID_OVERVOLTAGE) // BIT01: Grid overvoltage
 								.bit(2, PytesJs3.ChannelId.FAULT_REG1_GRID_UNDERVOLTAGE) // BIT02: Grid undervoltage
 								.bit(3, PytesJs3.ChannelId.FAULT_REG1_GRID_OVERFREQ) // BIT03: Grid overfrequency
 								.bit(4, PytesJs3.ChannelId.FAULT_REG1_GRID_UNDERFREQ) // BIT04: Grid underfrequency
 								.bit(5, PytesJs3.ChannelId.FAULT_REG1_UNBALANCED_GRID) // BIT05: Unbalanced grid
 								.bit(6, PytesJs3.ChannelId.FAULT_REG1_GRID_FREQ_FLUCTUATION) // BIT06: Frequency
-																								// fluctuation
+								// fluctuation
 								.bit(7, PytesJs3.ChannelId.FAULT_REG1_GRID_REVERSE_CURRENT) // BIT07: Reverse current
 								.bit(8, PytesJs3.ChannelId.FAULT_REG1_GRID_CURRENT_TRACKING_ERROR) // BIT08: Current
-																									// tracking error
+								// tracking error
 								.bit(9, PytesJs3.ChannelId.FAULT_REG1_METER_COM_FAIL) // BIT09: Meter comms fail
 								.bit(10, PytesJs3.ChannelId.FAULT_REG1_FAILSAFE) // BIT10: Failsafe triggered
 								.bit(11, PytesJs3.ChannelId.FAULT_REG1_METER_SELECT_FAIL) // BIT11: Meter select fail
 								.bit(12, PytesJs3.ChannelId.FAULT_REG1_EPM_HARD_LIMIT) // BIT12: EPM hard limit
 								.bit(13, PytesJs3.ChannelId.FAULT_REG1_G100_CURRENT_OVER_LIMIT) // BIT13: G100
-																								// over-limit
+								// over-limit
 								.bit(14, PytesJs3.ChannelId.FAULT_REG1_RESERVED_14) // BIT14: Reserved
-								.bit(15, PytesJs3.ChannelId.FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY)), // BIT15:
-																										// Abnormal
-																										// phase
-																										// polarity
+								.bit(15, PytesJs3.ChannelId.FAULT_REG1_ABNORMAL_GRID_PHASE_POLARITY)), // BIT15: Abnormal phase polarity
 
 						// ── reg 33117: Fault Code 02 (U16, Appendix 4) — backup/hub faults ──────────
-						m(new BitsWordElement(33117, this).bit(0, PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERVOLTAGE) // BIT00:
-																													// Backup
-																													// overvoltage
+						m(new BitsWordElement(33117, this).bit(0, PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERVOLTAGE) // BIT00: Backup overvoltage
 								.bit(1, PytesJs3.ChannelId.FAULT_REG2_BACKUP_OVERLOAD) // BIT01: Backup overload
 								.bit(2, PytesJs3.ChannelId.FAULT_REG2_GRID_BACKUP_OVERLOAD) // BIT02: Grid/backup
-																							// overload
-								.bit(3, PytesJs3.ChannelId.FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE) // BIT03: Off-grid
-																									// backup
-																									// undervoltage
+								// overload
+								.bit(3, PytesJs3.ChannelId.FAULT_REG2_OFFGRID_BACKUP_UNDERVOLTAGE) // BIT03: Off-grid backup undervoltage
 								.bit(4, PytesJs3.ChannelId.FAULT_REG2_HUB_PANEL_OV_CURRENT) // BIT04: Hub panel
-																							// over-current
+								// over-current
 								.bit(5, PytesJs3.ChannelId.FAULT_REG2_RESERVED_05) // BIT05–BIT15: Reserved
 								.bit(6, PytesJs3.ChannelId.FAULT_REG2_RESERVED_06)
 								.bit(7, PytesJs3.ChannelId.FAULT_REG2_RESERVED_07)
@@ -639,76 +625,55 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(15, PytesJs3.ChannelId.FAULT_REG2_RESERVED_15)),
 
 						// reg 33118: Fault Code 03 (U16, Appendix 4) — battery faults
-						m(new BitsWordElement(33118, this).bit(0, PytesJs3.ChannelId.FAULT_REG3_BATTERY_NOT_CONNECTED) // BIT00:
-																														// Battery
-																														// not
-																														// connected
+						m(new BitsWordElement(33118, this).bit(0, PytesJs3.ChannelId.FAULT_REG3_BATTERY_NOT_CONNECTED) // BIT00: Battery not connected
 								.bit(1, PytesJs3.ChannelId.FAULT_REG3_BATTERY_OVERVOLTAGE_CHECK) // BIT01: Overvoltage
-																									// check
+								// check
 								.bit(2, PytesJs3.ChannelId.FAULT_REG3_BATTERY_UNDERVOLTAGE_CHECK) // BIT02: Undervoltage
-																									// check
+								// check
 								.bit(3, PytesJs3.ChannelId.FAULT_REG3_BATTERY_BMS_ALARM) // BIT03: BMS alarm
-								.bit(4, PytesJs3.ChannelId.FAULT_REG3_INCONSISTENT_BATTERY_SELECTION)// BIT04:
-																										// Inconsistent
-																										// battery
-																										// selection
+								.bit(4, PytesJs3.ChannelId.FAULT_REG3_INCONSISTENT_BATTERY_SELECTION) // BIT04: Inconsistent battery selection
 								.bit(5, PytesJs3.ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_LOW) // BIT05: Lead-acid temp
-																								// too low
+								// too low
 								.bit(6, PytesJs3.ChannelId.FAULT_REG3_LEAD_ACID_TEMP_TOO_HIGH) // BIT06: Lead-acid temp
-																								// too high
-								.bit(7, PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED) // BIT07: 2nd
-																									// battery not
-																									// connected
-								.bit(8, PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE)// BIT08: 2nd
-																									// battery SW
-																									// overvoltage
-								.bit(9, PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE)// BIT09: 2nd
-																										// battery SW
-																										// undervoltage
-								.bit(10, PytesJs3.ChannelId.FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL) // BIT10: Parallel
-																										// comms
-																										// abnormal
+								// too high
+								.bit(7, PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_NOT_CONNECTED) // BIT07: 2nd battery not connected
+								.bit(8, PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_OVERVOLTAGE) // BIT08: 2nd battery SW overvoltage
+								.bit(9, PytesJs3.ChannelId.FAULT_REG3_SECOND_BATTERY_SW_UNDERVOLTAGE) // BIT09: 2nd battery SW undervoltage
+								.bit(10, PytesJs3.ChannelId.FAULT_REG3_PARALLEL_BATTERY_COM_ABNORMAL) // BIT10: Parallel comms abnormal
 								.bit(11, PytesJs3.ChannelId.FAULT_REG3_LOW_BATTERY_OFFGRID) // BIT11: Low battery
-																							// off-grid
+								// off-grid
 								.bit(12, PytesJs3.ChannelId.FAULT_REG3_RESERVED_12)
 								.bit(13, PytesJs3.ChannelId.FAULT_REG3_RESERVED_13)
 								.bit(14, PytesJs3.ChannelId.FAULT_REG3_RESERVED_14)
 								.bit(15, PytesJs3.ChannelId.FAULT_REG3_RESERVED_15)),
 
 						// reg 33119: Fault Code 04 (U16, Appendix 4) — DC/IGBT/AFCI faults
-						m(new BitsWordElement(33119, this).bit(0, PytesJs3.ChannelId.FAULT_REG4_DC_OVERVOLTAGE) // BIT00:
-																												// DC
-																												// overvoltage
+						m(new BitsWordElement(33119, this).bit(0, PytesJs3.ChannelId.FAULT_REG4_DC_OVERVOLTAGE) // BIT00: DC overvoltage
 								.bit(1, PytesJs3.ChannelId.FAULT_REG4_DC_BUS_OVERVOLTAGE) // BIT01: DC bus overvoltage
 								.bit(2, PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE) // BIT02: DC bus
-																									// unbalanced
+								// unbalanced
 								.bit(3, PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNDERVOLTAGE) // BIT03: DC bus undervoltage
 								.bit(4, PytesJs3.ChannelId.FAULT_REG4_DC_BUS_UNBALANCED_VOLTAGE_2) // BIT04: DC bus
-																									// unbalanced 2
+								// unbalanced 2
 								.bit(5, PytesJs3.ChannelId.FAULT_REG4_DC_OVERCURRENT_A) // BIT05: DC overcurrent A
 								.bit(6, PytesJs3.ChannelId.FAULT_REG4_DC_OVERCURRENT_B) // BIT06: DC overcurrent B
 								.bit(7, PytesJs3.ChannelId.FAULT_REG4_DC_INPUT_INTERFERENCE) // BIT07: DC input
-																								// interference
+								// interference
 								.bit(8, PytesJs3.ChannelId.FAULT_REG4_GRID_OVERCURRENT) // BIT08: Grid overcurrent
 								.bit(9, PytesJs3.ChannelId.FAULT_REG4_IGBT_OVERCURRENT) // BIT09: IGBT overcurrent
 								.bit(10, PytesJs3.ChannelId.FAULT_REG4_GRID_INTERFERENCE_02) // BIT10: Grid interference
-																								// 02
+								// 02
 								.bit(11, PytesJs3.ChannelId.FAULT_REG4_AFCI_SELF_CHECK) // BIT11: AFCI self-check
 								.bit(12, PytesJs3.ChannelId.FAULT_REG4_ARC_FAULT_RESERVED) // BIT12: Arc fault
-																							// (reserved)
+								// (reserved)
 								.bit(13, PytesJs3.ChannelId.FAULT_REG4_GRID_CURRENT_SAMPLING_FAULT) // BIT13: Current
-																									// sampling fault
+								// sampling fault
 								.bit(14, PytesJs3.ChannelId.FAULT_REG4_DSP_SELF_CHECK_ERROR) // BIT14: DSP self-check
-																								// error
-								.bit(15, PytesJs3.ChannelId.FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT)), // BIT15:
-																										// Battery
-																										// discharge
-																										// overcurrent
+								// error
+								.bit(15, PytesJs3.ChannelId.FAULT_REG4_BATTERY_DISCHARGE_OVERCURRENT)), // BIT15: Battery discharge overcurrent
 
 						// reg 33120: Fault Code 05 (U16, Appendix 4) — protection faults
-						m(new BitsWordElement(33120, this).bit(0, PytesJs3.ChannelId.FAULT_REG5_GRID_INTERFERENCE) // BIT00:
-																													// Grid
-																													// interference
+						m(new BitsWordElement(33120, this).bit(0, PytesJs3.ChannelId.FAULT_REG5_GRID_INTERFERENCE) // BIT00: Grid interference
 								.bit(1, PytesJs3.ChannelId.FAULT_REG5_OVER_DC_COMPONENTS) // BIT01: Over DC components
 								.bit(2, PytesJs3.ChannelId.FAULT_REG5_OVER_TEMPERATURE) // BIT02: Over temperature
 								.bit(3, PytesJs3.ChannelId.FAULT_REG5_RELAY_CHECK) // BIT03: Relay check
@@ -717,17 +682,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(6, PytesJs3.ChannelId.FAULT_REG5_12V_UNDERVOLTAGE) // BIT06: 12V undervoltage
 								.bit(7, PytesJs3.ChannelId.FAULT_REG5_LEAK_CURRENT) // BIT07: Leakage current
 								.bit(8, PytesJs3.ChannelId.FAULT_REG5_LEAK_CURRENT_SELF_CHECK) // BIT08: Leakage
-																								// self-check
+								// self-check
 								.bit(9, PytesJs3.ChannelId.FAULT_REG5_DSP_INITIAL) // BIT09: DSP initial protection
 								.bit(10, PytesJs3.ChannelId.FAULT_REG5_DSP_B) // BIT10: DSP B protection
 								.bit(11, PytesJs3.ChannelId.FAULT_REG5_BATTERY_OVERVOLTAGE_HW) // BIT11: Battery
-																								// overvoltage HW
+								// overvoltage HW
 								.bit(12, PytesJs3.ChannelId.FAULT_REG5_LLC_HW_OVERCURRENT) // BIT12: LLC HW overcurrent
-								.bit(13, PytesJs3.ChannelId.FAULT_REG5_GRID_TRANSIENT_OVERCURRENT) // BIT13: Grid
-																									// transient
-																									// overcurrent
+								.bit(13, PytesJs3.ChannelId.FAULT_REG5_GRID_TRANSIENT_OVERCURRENT) // BIT13: Grid transient overcurrent
 								.bit(14, PytesJs3.ChannelId.FAULT_REG5_BATTERY_COM_FAILURE) // BIT14: Battery comms
-																							// failure
+								// failure
 								.bit(15, PytesJs3.ChannelId.FAULT_REG5_DSP_COM_FAIL)), // BIT15: DSP comms fail
 
 						// reg 33121: Operating Status (U16, Appendix 5)
@@ -744,30 +707,28 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// details
 						// reg 36026: Mapping inverter working status uses the same appendix (U16,
 						// Appendix 5)
-						m(new BitsWordElement(33121, this).bit(0, PytesJs3.ChannelId.OPERATING_STAT_NORMAL_OPERATION) // BIT00:
-																														// Normal
-																														// operation
+						m(new BitsWordElement(33121, this).bit(0, PytesJs3.ChannelId.OPERATING_STAT_NORMAL_OPERATION) // BIT00: Normal operation
 								.bit(1, PytesJs3.ChannelId.OPERATING_STAT_INITIALIZING) // BIT01: Initializing
 								.bit(2, PytesJs3.ChannelId.OPERATING_STAT_CONTROLLED_OFF) // BIT02: Controlled turning
-																							// off
+								// off
 								.bit(3, PytesJs3.ChannelId.OPERATING_STAT_FAULT_OFF) // BIT03: Fault-induced off
 								.bit(4, PytesJs3.ChannelId.OPERATING_STAT_STANDBY) // BIT04: Standby
 								.bit(5, PytesJs3.ChannelId.OPERATING_STAT_LIMITED_TEMP_FREQ) // BIT05: Limited
-																								// (temp/freq derate)
+								// (temp/freq derate)
 								.bit(6, PytesJs3.ChannelId.OPERATING_STAT_LIMITED_EXTERNAL) // BIT06: Limited (external
-																							// reason)
+								// reason)
 								.bit(7, PytesJs3.ChannelId.OPERATING_STAT_BACKUP_OVERLOAD) // BIT07: Backup port
-																							// overload
+								// overload
 								.bit(8, PytesJs3.ChannelId.OPERATING_STAT_LOAD_FAULT) // BIT08: Load fault
 								.bit(9, PytesJs3.ChannelId.OPERATING_STAT_GRID_FAULT) // BIT09: Grid fault (grid
-																						// abnormal)
+								// abnormal)
 								.bit(10, PytesJs3.ChannelId.OPERATING_STAT_BATTERY_FAULT) // BIT10: Battery fault
 								.bit(11, PytesJs3.ChannelId.OPERATING_STAT_RESERVED_11) // BIT11: Reserved
 								.bit(12, PytesJs3.ChannelId.OPERATING_STAT_GRID_SURGE_WARN) // BIT12: Grid surge
-																							// (warning)
+								// (warning)
 								.bit(13, PytesJs3.ChannelId.OPERATING_STAT_FAN_FAULT_WARN) // BIT13: Fan fault (warning)
 								.bit(14, PytesJs3.ChannelId.OPERATING_STAT_EXTERNAL_FAN_FAIL) // BIT14: External fan
-																								// failure
+								// failure
 								.bit(15, PytesJs3.ChannelId.OPERATING_STAT_RESERVED_15)), // BIT15: Reserved
 
 						// ── reg 33122: Operating Mode (U16, Appendix 8) ─────────────────────────────
@@ -795,11 +756,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(5, PytesJs3.ChannelId.WMODE_POWER_Q)),
 
 						// reg 33124: Fault Code 06 (U16, Appendix 4) — parallel/multi-unit faults
-						m(new BitsWordElement(33124, this).bit(0, PytesJs3.ChannelId.FAULT_REG6_SLAVE_LOSE_ERR) // BIT00:
-																												// Slave
-																												// sync
-																												// signal
-																												// loss
+						m(new BitsWordElement(33124, this).bit(0, PytesJs3.ChannelId.FAULT_REG6_SLAVE_LOSE_ERR) // BIT00: Slave sync signal loss
 								.bit(1, PytesJs3.ChannelId.FAULT_REG6_MASTER_LOSE_ERR) // BIT01: Master sync signal loss
 								.bit(2, PytesJs3.ChannelId.FAULT_REG6_SLAVE_PRD_ERR) // BIT02: Slave sync period error
 								.bit(3, PytesJs3.ChannelId.FAULT_REG6_MASTER_PRD_ERR) // BIT03: Master sync period error
@@ -813,30 +770,26 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(11, PytesJs3.ChannelId.FAULT_REG6_CAN_BUS_LOSE) // BIT11: CAN bus lost
 								.bit(12, PytesJs3.ChannelId.FAULT_REG6_MODEL_MISMATCH) // BIT12: Model mismatch
 								.bit(13, PytesJs3.ChannelId.FAULT_REG6_3P_CREATE_FAIL) // BIT13: 3P parallel create
-																						// failed
+								// failed
 								.bit(14, PytesJs3.ChannelId.FAULT_REG6_ACBK_OPEN) // BIT14: AC breaker open
 								.bit(15, PytesJs3.ChannelId.FAULT_REG6_RESERVED_15)), // BIT15: Reserved
 
 						// reg 33125: Fault Code 07 (U16, Appendix 4) — hardware/startup faults
-						m(new BitsWordElement(33125, this).bit(0, PytesJs3.ChannelId.FAULT_REG7_REVE_DC) // BIT00:
-																											// Reverse
-																											// DC
+						m(new BitsWordElement(33125, this).bit(0, PytesJs3.ChannelId.FAULT_REG7_REVE_DC) // BIT00: Reverse DC
 								.bit(1, PytesJs3.ChannelId.FAULT_REG7_BATTERY_HW_OVERVOLTAGE_02) // BIT01: Battery HW
-																									// overvoltage 02
+								// overvoltage 02
 								.bit(2, PytesJs3.ChannelId.FAULT_REG7_BATTERY_HW_OVERCURRENT) // BIT02: Battery HW
-																								// overcurrent
-								.bit(3, PytesJs3.ChannelId.FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT) // BIT03: Bus
-																									// midpoint HW
-																									// overcurrent
+								// overcurrent
+								.bit(3, PytesJs3.ChannelId.FAULT_REG7_BUS_MIDPOINT_HW_OVERCURRENT) // BIT03: Bus midpoint HW overcurrent
 								.bit(4, PytesJs3.ChannelId.FAULT_REG7_BATTERY_STARTUP_FAIL) // BIT04: Battery startup
-																							// fail
+								// fail
 								.bit(5, PytesJs3.ChannelId.FAULT_REG7_DC3_AVG_OVERCURRENT) // BIT05: DC3 average
-																							// overcurrent
+								// overcurrent
 								.bit(6, PytesJs3.ChannelId.FAULT_REG7_DC4_AVG_OVERCURRENT) // BIT06: DC4 average
-																							// overcurrent
+								// overcurrent
 								.bit(7, PytesJs3.ChannelId.FAULT_REG7_SOFTRUN_TIMEOUT) // BIT07: Soft-start timeout
 								.bit(8, PytesJs3.ChannelId.FAULT_REG7_OFFGRID_TO_GRID_TIMEOUT) // BIT08: Off-grid to
-																								// grid timeout
+								// grid timeout
 								.bit(9, PytesJs3.ChannelId.FAULT_REG7_DRM_NOT_CONNECT) // BIT09: DRM not connected
 								.bit(10, PytesJs3.ChannelId.FAULT_REG7_RESERVED_10)
 								.bit(11, PytesJs3.ChannelId.FAULT_REG7_RESERVED_11)
@@ -845,7 +798,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(14, PytesJs3.ChannelId.FAULT_REG7_RESERVED_14)
 								.bit(15, PytesJs3.ChannelId.FAULT_REG7_RESERVED_15)))
 						
-						/*
+		/*
 						,
 
 						// reg 33126–33131 – Reserved / not documented for this model.
@@ -901,7 +854,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	private void defineWorkState() {
 		if ((this.battery == null || this.charger == null) && this.getWorkState() != WorkState.UNDEFINED) {
 			this.changeState(WorkState.WARNING);
-			this.logWarn(log, "ESS not ready yet. Either battery or Charger missing or not fully initialized");
+			this.logWarn(this.log, "ESS not ready yet. Either battery or Charger missing or not fully initialized");
 			return;
 		}
 
@@ -975,6 +928,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 * Writes the configured default values to the inverter during INITIALIZING.
 	 * Returns true only when all values have been confirmed by read-back. Each call
 	 * writes one register at a time and returns false to re-check next cycle.
+	 *
+	 * @return true once all default values have been confirmed by read-back
 	 */
 	private boolean setDefaultValues() {
 		Integer currentForceMinSoc = this.getForceChargeSoc().get();
@@ -1268,7 +1223,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	@Override
 	public String debugLog() {
-		if (config.debugMode()) {
+		if (this.config.debugMode()) {
 			return "SoC:" + this.getSoc().asString() //
 					+ "|L:" + this.getActivePower().asString()
 
@@ -1289,6 +1244,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 					+ "|DcDischarge:" + this.getDcDischargePower().asString() + "|Allowed:"
 					+ this.getAllowedChargePower().asString() + ";" + this.getAllowedDischargePower().asString(); //
 		}
+	}
+
+	/**
+	 * Logs a debug message. For use in handler-classes.
+	 *
+	 * @param message the message to log
+	 */
+	public void debugLog(String message) {
+		this.logDebug(this.log, message);
 	}
 
 	@Override
@@ -1329,7 +1293,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			return;
 		}
 
-		logDebug(this.log, "ApplyPower: ActivePowerTarget = " + targetActivePower);
+		this.logDebug(this.log, "ApplyPower: ActivePowerTarget = " + targetActivePower);
 
 		if (this.applyPowerHandler != null) {
 			this.applyPowerHandler.apply(targetActivePower, reactivePower, this.config.maxApparentPower(),
@@ -1359,8 +1323,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	/**
 	 * Uses Info Log for further debug features.
+	 *
+	 * @param log     the {@link Logger} to log to
+	 * @param message the message to log
 	 */
-
 	protected void logDebug(Logger log, String message) {
 		if (this.config.debugMode()) {
 
@@ -1376,13 +1342,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 	}
 
+	/**
+	 * Gets the {@link Logger} of this component.
+	 *
+	 * @return the Logger
+	 */
 	public Logger getLogger() {
 		return this.log;
-	}
-
-	// for use in handler-classes
-	public void debugLog(String message) {
-		this.logDebug(this.log, message);
 	}
 
 	@Override
@@ -1411,6 +1377,11 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		return !this.config.readOnlyMode();
 	}
 
+	/**
+	 * Gets the configured {@link WorkMode}.
+	 *
+	 * @return the WorkMode
+	 */
 	public WorkMode workMode() {
 		return this.config.workMode();
 	}

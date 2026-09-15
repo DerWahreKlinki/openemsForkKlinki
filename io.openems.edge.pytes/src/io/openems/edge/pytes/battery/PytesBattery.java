@@ -43,7 +43,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.unit(Unit.MILLIVOLT)),
 
 		/**
-		 * Battery current magnitude at the inverter port (reg 33134, S16)
+		 * Battery current magnitude at the inverter port (reg 33134, S16).
 		 * Always positive - direction is carried separately in BATTERY_CURRENT_DIRECTION
 		 * Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 		 * Unit: mA
@@ -53,7 +53,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.unit(Unit.MILLIAMPERE)),
 		
 		/**
-		 * Battery current direction (reg 33135, U16)
+		 * Battery current direction (reg 33135, U16).
 		 * 0 = charging (power flowing into battery)
 		 * 1 = discharging (power flowing out of battery)
 		 * Combined with CURRENT_WITHOUT_DIRECTION to derive signed current/power
@@ -62,7 +62,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * LLC internal DC bus voltage between battery and inverter (reg 33136, U16)
+		 * LLC internal DC bus voltage between battery and inverter (reg 33136, U16).
 		 * Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 		 * Unit: mV
 		 */
@@ -75,7 +75,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		// -----------------------------------------------------------------------
 		
 		/**
-		 * Battery voltage as reported by BMS (reg 33141, U16)
+		 * Battery voltage as reported by BMS (reg 33141, U16).
 		 * The register added in the implementation file by the name VOLTAGE under file name BATTERY
 		 * Datasheet: 0.01 V -> SCALE_FACTOR_1 -> mV
 		 * Unit: mV
@@ -85,7 +85,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.unit(Unit.MILLIVOLT)),
 
 		/**
-		 * Battery current as reported by BMS (reg 33142, S16)
+		 * Battery current as reported by BMS (reg 33142, S16).
 		 * Signed: Positive = charging, negative = discharging
 		 * Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 		 * Unit: mA
@@ -95,7 +95,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.unit(Unit.MILLIAMPERE)),
 		
 		/**
-		 * BMS maximum charge current limit (reg 33143, U16)
+		 * BMS maximum charge current limit (reg 33143, U16).
 		 * Dynamically adjusted by BMS based on SoC and temperature
 		 * Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 		 * Unit: mA
@@ -105,7 +105,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 				.unit(Unit.MILLIAMPERE)),
 
 		/**
-		 * BMS maximum discharge current limit (reg 33144, U16)
+		 * BMS maximum discharge current limit (reg 33144, U16).
 		 * Dynamically adjusted by BMS based on SoC and temperature
 		 * Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 		 * Unit: mA
@@ -120,14 +120,14 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		// -----------------------------------------------------------------------
 
 		/**
-		 * Raw battery fault status word 01 (reg 33145, U16)
+		 * Raw battery fault status word 01 (reg 33145, U16).
 		 * See Appendix 9 and BMS_FAULT01_* channels below for decoded bits
 		 */
 		BMS_BATTERY_FAULT_STATUS01(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)),
 
 		/**
-		 * Raw battery fault status word 02 (reg 33146, U16)
+		 * Raw battery fault status word 02 (reg 33146, U16).
 		 * See Appendix 9 and BMS_FAULT02_* channels below for decoded bits
 		 */
 		BMS_BATTERY_FAULT_STATUS02(Doc.of(INTEGER)//
@@ -259,7 +259,7 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		// -----------------------------------------------------------------------
 
 		/**
-		 * Battery power - signed, calculated programmatically (reg 33149, S32)
+		 * Battery power - signed, calculated programmatically (reg 33149, S32).
 		 * Set by calculateAndSetBatteryPower() from:
 		 * 		BATTERY_VOLTAGE x CURRENT_WITHOUT_DIRECTION X sign(BATTERY_CURRENT_DIRECTION)
 		 * Sign convention: positive = charging, negative = discharging
@@ -300,17 +300,29 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// -----------------------------------------------------------------------
 
 	
-	/** @return Channel for {@link ChannelId#STARTER_BATTERY_VOLTAGE} */
+	/**
+	 * Channel for {@link ChannelId#STARTER_BATTERY_VOLTAGE}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getStarterBatteryVoltageChannel() {
 		return this.channel(ChannelId.STARTER_BATTERY_VOLTAGE);
 	}
 
-	/** @return Starter battery voltage [V]. See {@link ChannelId#STARTER_BATTERY_VOLTAGE} */
+	/**
+	 * Starter battery voltage [V]. See {@link ChannelId#STARTER_BATTERY_VOLTAGE}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getStarterBatteryVoltage() {
 		return this.getStarterBatteryVoltageChannel().value();
 	}
 
-	/** Sets the starter battery voltage (manual setter until Modbus mapping is known). */
+	/**
+	 * Sets the starter battery voltage (manual setter until Modbus mapping is known).
+	 *
+	 * @param value the next value
+	 */
 	public default void _setStarterBatteryVoltage(Integer value) {
 		this.getStarterBatteryVoltageChannel().setNextValue(value);
 	}
@@ -319,42 +331,74 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessors methods - Inverter battery port (reg 33133-33138)
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#BATTERY_VOLTAGE} */
+	/**
+	 * Channel for {@link ChannelId#BATTERY_VOLTAGE}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBatteryVoltageChannel() {
 		return this.channel(ChannelId.BATTERY_VOLTAGE);
 	}
 
-	/** @return Battery port voltage [mV]. See {@link ChannelId#BATTERY_VOLTAGE} */
+	/**
+	 * Battery port voltage [mV]. See {@link ChannelId#BATTERY_VOLTAGE}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBatteryVoltage() {
 		return this.getBatteryVoltageChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#CURRENT_WITHOUT_DIRECTION} */
+	/**
+	 * Channel for {@link ChannelId#CURRENT_WITHOUT_DIRECTION}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getCurrentWithoutDirectionChannel() {
 		return this.channel(ChannelId.CURRENT_WITHOUT_DIRECTION);
 	}
 
-	/** @return Battery current magnitude (no sign) [mA]. See {@link ChannelId#CURRENT_WITHOUT_DIRECTION} */
+	/**
+	 * Battery current magnitude (no sign) [mA]. See {@link ChannelId#CURRENT_WITHOUT_DIRECTION}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getCurrentWithoutDirection() {
 		return this.getCurrentWithoutDirectionChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BATTERY_CURRENT_DIRECTION} */
+	/**
+	 * Channel for {@link ChannelId#BATTERY_CURRENT_DIRECTION}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBatteryCurrentDirectionChannel() {
 		return this.channel(ChannelId.BATTERY_CURRENT_DIRECTION);
 	}
 
-	/** @return 0 = charging, 1 = discharging. See {@link ChannelId#BATTERY_CURRENT_DIRECTION} */
+	/**
+	 * 0 = charging, 1 = discharging. See {@link ChannelId#BATTERY_CURRENT_DIRECTION}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBatteryCurrentDirection() {
 		return this.getBatteryCurrentDirectionChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#LLC_BUS_VOLTAGE} */
+	/**
+	 * Channel for {@link ChannelId#LLC_BUS_VOLTAGE}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getLlcBusVoltageChannel() {
 		return this.channel(ChannelId.LLC_BUS_VOLTAGE);
 	}
 
-	/** @return LLC internal DC bus voltage [mV]. See {@link ChannelId#LLC_BUS_VOLTAGE} */
+	/**
+	 * LLC internal DC bus voltage [mV]. See {@link ChannelId#LLC_BUS_VOLTAGE}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getLlcBusVoltage() {
 		return this.getLlcBusVoltageChannel().value();
 	}
@@ -363,42 +407,74 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessor methods – BMS values (reg 33142–33144)
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#BMS_BATTERY_VOLTAGE} */
+	/**
+	 * Channel for {@link ChannelId#BMS_BATTERY_VOLTAGE}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBmsBatteryVoltageChannel() {
 		return this.channel(ChannelId.BMS_BATTERY_VOLTAGE);
 	}
 
-	/** @return BMS battery current [mA], signed. See {@link ChannelId#BMS_BATTERY_VOLTAGE} */
+	/**
+	 * BMS battery current [mA], signed. See {@link ChannelId#BMS_BATTERY_VOLTAGE}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBmsBatteryVoltage() {
 		return this.getBmsBatteryVoltageChannel().value();
 	}	
 	
-	/** @return Channel for {@link ChannelId#BMS_BATTERY_CURRENT} */
+	/**
+	 * Channel for {@link ChannelId#BMS_BATTERY_CURRENT}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBmsBatteryCurrentChannel() {
 		return this.channel(ChannelId.BMS_BATTERY_CURRENT);
 	}
 
-	/** @return BMS battery current [mA], signed. See {@link ChannelId#BMS_BATTERY_CURRENT} */
+	/**
+	 * BMS battery current [mA], signed. See {@link ChannelId#BMS_BATTERY_CURRENT}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBmsBatteryCurrent() {
 		return this.getBmsBatteryCurrentChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_CHARGE_CURRENT_LIMIT} */
+	/**
+	 * Channel for {@link ChannelId#BMS_CHARGE_CURRENT_LIMIT}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBmsChargeCurrentLimitChannel() {
 		return this.channel(ChannelId.BMS_CHARGE_CURRENT_LIMIT);
 	}
 
-	/** @return BMS max charge current limit [mA]. See {@link ChannelId#BMS_CHARGE_CURRENT_LIMIT} */
+	/**
+	 * BMS max charge current limit [mA]. See {@link ChannelId#BMS_CHARGE_CURRENT_LIMIT}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBmsChargeCurrentLimit() {
 		return this.getBmsChargeCurrentLimitChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_DISCHARGE_CURRENT_LIMIT} */
+	/**
+	 * Channel for {@link ChannelId#BMS_DISCHARGE_CURRENT_LIMIT}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBmsDischargeCurrentLimitChannel() {
 		return this.channel(ChannelId.BMS_DISCHARGE_CURRENT_LIMIT);
 	}
 
-	/** @return BMS max discharge current limit [mA]. See {@link ChannelId#BMS_DISCHARGE_CURRENT_LIMIT} */
+	/**
+	 * BMS max discharge current limit [mA]. See {@link ChannelId#BMS_DISCHARGE_CURRENT_LIMIT}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBmsDischargeCurrentLimit() {
 		return this.getBmsDischargeCurrentLimitChannel().value();
 	}
@@ -407,22 +483,38 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessor methods – Raw fault status words (reg 33145–33146)
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#BMS_BATTERY_FAULT_STATUS01} */
+	/**
+	 * Channel for {@link ChannelId#BMS_BATTERY_FAULT_STATUS01}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBmsBatteryFaultStatus01Channel() {
 		return this.channel(ChannelId.BMS_BATTERY_FAULT_STATUS01);
 	}
 
-	/** @return Raw fault status word 01. See {@link ChannelId#BMS_BATTERY_FAULT_STATUS01} */
+	/**
+	 * Raw fault status word 01. See {@link ChannelId#BMS_BATTERY_FAULT_STATUS01}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBmsBatteryFaultStatus01() {
 		return this.getBmsBatteryFaultStatus01Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_BATTERY_FAULT_STATUS02} */
+	/**
+	 * Channel for {@link ChannelId#BMS_BATTERY_FAULT_STATUS02}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getBmsBatteryFaultStatus02Channel() {
 		return this.channel(ChannelId.BMS_BATTERY_FAULT_STATUS02);
 	}
 
-	/** @return Raw fault status word 02. See {@link ChannelId#BMS_BATTERY_FAULT_STATUS02} */
+	/**
+	 * Raw fault status word 02. See {@link ChannelId#BMS_BATTERY_FAULT_STATUS02}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getBmsBatteryFaultStatus02() {
 		return this.getBmsBatteryFaultStatus02Channel().value();
 	}
@@ -431,72 +523,128 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessor methods – Fault Status 01 decoded bits (reg 33145)
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_OVERVOLTAGE_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_OVERVOLTAGE_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01OvervoltageProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_OVERVOLTAGE_PRO);
 	}
 
-	/** @return true if overvoltage protection active. See {@link ChannelId#BMS_FAULT01_OVERVOLTAGE_PRO} */
+	/**
+	 * true if overvoltage protection active. See {@link ChannelId#BMS_FAULT01_OVERVOLTAGE_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01OvervoltagePro() {
 		return this.getBmsFault01OvervoltageProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_UNDERVOLTAGE_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_UNDERVOLTAGE_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01UndervoltageProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_UNDERVOLTAGE_PRO);
 	}
 
-	/** @return true if undervoltage protection active. See {@link ChannelId#BMS_FAULT01_UNDERVOLTAGE_PRO} */
+	/**
+	 * true if undervoltage protection active. See {@link ChannelId#BMS_FAULT01_UNDERVOLTAGE_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01UndervoltagePro() {
 		return this.getBmsFault01UndervoltageProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01OverTemperatureProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_OVER_TEMPERATURE_PRO);
 	}
 
-	/** @return true if over temperature protection active. See {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_PRO} */
+	/**
+	 * true if over temperature protection active. See {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01OverTemperaturePro() {
 		return this.getBmsFault01OverTemperatureProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01UnderTemperatureProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_UNDER_TEMPERATURE_PRO);
 	}
 
-	/** @return true if under temperature protection active. See {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_PRO} */
+	/**
+	 * true if under temperature protection active. See {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01UnderTemperaturePro() {
 		return this.getBmsFault01UnderTemperatureProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_CHARGE_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_CHARGE_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01OverTemperatureChargeProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_OVER_TEMPERATURE_CHARGE_PRO);
 	}
 
-	/** @return true if over temperature during charge active. See {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_CHARGE_PRO} */
+	/**
+	 * true if over temperature during charge active. See {@link ChannelId#BMS_FAULT01_OVER_TEMPERATURE_CHARGE_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01OverTemperatureChargePro() {
 		return this.getBmsFault01OverTemperatureChargeProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01UnderTemperatureChargeProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO);
 	}
 
-	/** @return true if under temperature during charge active. See {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO} */
+	/**
+	 * true if under temperature during charge active. See {@link ChannelId#BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01UnderTemperatureChargePro() {
 		return this.getBmsFault01UnderTemperatureChargeProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault01DischargeOvercurrentProChannel() {
 		return this.channel(ChannelId.BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO);
 	}
 
-	/** @return true if discharge overcurrent protection active. See {@link ChannelId#BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO} */
+	/**
+	 * true if discharge overcurrent protection active. See {@link ChannelId#BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault01DischargeOvercurrentPro() {
 		return this.getBmsFault01DischargeOvercurrentProChannel().value();
 	}
@@ -505,72 +653,128 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessor methods – Fault Status 02 decoded bits (reg 33146)
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_CHARGE_OVERCURRENT_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_CHARGE_OVERCURRENT_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02ChargeOvercurrentProChannel() {
 		return this.channel(ChannelId.BMS_FAULT02_CHARGE_OVERCURRENT_PRO);
 	}
 
-	/** @return true if charge overcurrent protection active. See {@link ChannelId#BMS_FAULT02_CHARGE_OVERCURRENT_PRO} */
+	/**
+	 * true if charge overcurrent protection active. See {@link ChannelId#BMS_FAULT02_CHARGE_OVERCURRENT_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02ChargeOvercurrentPro() {
 		return this.getBmsFault02ChargeOvercurrentProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02SystemLowTemperature1Channel() {
 		return this.channel(ChannelId.BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1);
 	}
 
-	/** @return true if system low temperature level 1 active. See {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1} */
+	/**
+	 * true if system low temperature level 1 active. See {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02SystemLowTemperature1() {
 		return this.getBmsFault02SystemLowTemperature1Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_2} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_2}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02SystemLowTemperature2Channel() {
 		return this.channel(ChannelId.BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_2);
 	}
 
-	/** @return true if system low temperature level 2 active. See {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_2} */
+	/**
+	 * true if system low temperature level 2 active. See {@link ChannelId#BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_2}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02SystemLowTemperature2() {
 		return this.getBmsFault02SystemLowTemperature2Channel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_BMS_INTERNAL_PRO} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_BMS_INTERNAL_PRO}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02BmsInternalProChannel() {
 		return this.channel(ChannelId.BMS_FAULT02_BMS_INTERNAL_PRO);
 	}
 
-	/** @return true if BMS internal protection active. See {@link ChannelId#BMS_FAULT02_BMS_INTERNAL_PRO} */
+	/**
+	 * true if BMS internal protection active. See {@link ChannelId#BMS_FAULT02_BMS_INTERNAL_PRO}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02BmsInternalPro() {
 		return this.getBmsFault02BmsInternalProChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_UNBALANCED_MODULES} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_UNBALANCED_MODULES}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02UnbalancedModulesChannel() {
 		return this.channel(ChannelId.BMS_FAULT02_UNBALANCED_MODULES);
 	}
 
-	/** @return true if battery modules are unbalanced. See {@link ChannelId#BMS_FAULT02_UNBALANCED_MODULES} */
+	/**
+	 * true if battery modules are unbalanced. See {@link ChannelId#BMS_FAULT02_UNBALANCED_MODULES}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02UnbalancedModules() {
 		return this.getBmsFault02UnbalancedModulesChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_FULL_CHARGE_REQUEST} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_FULL_CHARGE_REQUEST}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02FullChargeRequestChannel() {
 		return this.channel(ChannelId.BMS_FAULT02_FULL_CHARGE_REQUEST);
 	}
 
-	/** @return true if BMS requesting full charge cycle. See {@link ChannelId#BMS_FAULT02_FULL_CHARGE_REQUEST} */
+	/**
+	 * true if BMS requesting full charge cycle. See {@link ChannelId#BMS_FAULT02_FULL_CHARGE_REQUEST}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02FullChargeRequest() {
 		return this.getBmsFault02FullChargeRequestChannel().value();
 	}
 
-	/** @return Channel for {@link ChannelId#BMS_FAULT02_FORCE_CHARGE_REQUEST} */
+	/**
+	 * Channel for {@link ChannelId#BMS_FAULT02_FORCE_CHARGE_REQUEST}.
+	 *
+	 * @return the Channel
+	 */
 	public default BooleanReadChannel getBmsFault02ForceChargeRequestChannel() {
 		return this.channel(ChannelId.BMS_FAULT02_FORCE_CHARGE_REQUEST);
 	}
 
-	/** @return true if BMS requesting immediate forced charge. See {@link ChannelId#BMS_FAULT02_FORCE_CHARGE_REQUEST} */
+	/**
+	 * true if BMS requesting immediate forced charge. See {@link ChannelId#BMS_FAULT02_FORCE_CHARGE_REQUEST}.
+	 *
+	 * @return the value
+	 */
 	public default Value<Boolean> getBmsFault02ForceChargeRequest() {
 		return this.getBmsFault02ForceChargeRequestChannel().value();
 	}
@@ -579,12 +783,20 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Accessor methods – Battery power (reg 33149)
 	// -----------------------------------------------------------------------
 
-	/** @return Channel for {@link ChannelId#DC_DISCHARGE_POWER} */
+	/**
+	 * Channel for {@link ChannelId#DC_DISCHARGE_POWER}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcDischargePowerChannel() {
 		return this.channel(ChannelId.DC_DISCHARGE_POWER);
 	}
 
-	/** @return Battery power [W]. Positive = charging, negative = discharging. See {@link ChannelId#DC_DISCHARGE_POWER} */
+	/**
+	 * Battery power [W]. Positive = charging, negative = discharging. See {@link ChannelId#DC_DISCHARGE_POWER}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcDischargePower() {
 		return this.getDcDischargePowerChannel().value();
 	}
@@ -592,17 +804,27 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	/**
 	 * Sets the signed battery power calculated from voltage × current × direction.
 	 * Called by PytesBatteryImpl.calculateAndSetBatteryPower() every cycle.
+	 *
+	 * @param value the next value
 	 */
 	public default void _setDcDischargePower(Integer value) {
 		this.getDcDischargePowerChannel().setNextValue(value);
 	}
 
-	/** @return Channel for {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED} */
+	/**
+	 * Channel for {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED}.
+	 *
+	 * @return the Channel
+	 */
 	public default IntegerReadChannel getDcDischargePowerUnsignedChannel() {
 		return this.channel(ChannelId.DC_DISCHARGE_POWER_UNSIGNED);
 	}
 
-	/** @return Battery power raw from inverter [W]. See {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED} */
+	/**
+	 * Battery power raw from inverter [W]. See {@link ChannelId#DC_DISCHARGE_POWER_UNSIGNED}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
 	public default Value<Integer> getDcDischargePowerUnsigned() {
 		return this.getDcDischargePowerUnsignedChannel().value();
 	}
@@ -611,9 +833,24 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Abstract methods implemented by PytesBatteryImpl
 	// -----------------------------------------------------------------------
 
+	/**
+	 * Sets the minimum State-of-Charge percentage.
+	 *
+	 * @param minSocPercentage the minimum SoC in percent
+	 */
 	void setMinSocPercentage(int minSocPercentage);
 
+	/**
+	 * Gets the configured maximum charge current.
+	 *
+	 * @return the maximum charge current in mA
+	 */
 	int getConfiguredMaxChargeCurrent();
 
+	/**
+	 * Gets the configured maximum discharge current.
+	 *
+	 * @return the maximum discharge current in mA
+	 */
 	int getConfiguredMaxDischargeCurrent();
 }

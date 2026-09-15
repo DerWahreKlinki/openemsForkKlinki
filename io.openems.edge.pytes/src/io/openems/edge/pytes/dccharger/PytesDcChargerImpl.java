@@ -263,7 +263,7 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 	    return new ModbusSlaveTable(
 	            OpenemsComponent.getModbusSlaveNatureTable(accessMode),
 	            EssDcCharger.getModbusSlaveNatureTable(accessMode)
-	            // + ModbusSlaveNatureTable.of(PytesDcCharger.class, accessMode, 100).build()
+	    // + ModbusSlaveNatureTable.of(PytesDcCharger.class, accessMode, 100).build()
 	    );
 	}
 

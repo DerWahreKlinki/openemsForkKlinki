@@ -121,14 +121,14 @@ public class PytesInternalMeterBackupPortImpl extends AbstractOpenemsModbusCompo
 						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 						m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33137),
 								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V (Backup AC voltage Phase A / split
-																			// phase: L1-N) -> mV
+						// phase: L1-N) -> mV
 
 						// reg 33138 - Backup AC current phase A [mA]
 						// For split-phase: L1 current.
 						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 						m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33138),
 								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A (Backup AC current Phase A / split
-																			// phase: L1-N) -> mA
+						// phase: L1-N) -> mA
 						new DummyRegisterElement(33139, 33147), // Reserved
 
 						m(ElectricityMeter.ChannelId.ACTIVE_POWER, new UnsignedWordElement(33148)),
@@ -141,21 +141,21 @@ public class PytesInternalMeterBackupPortImpl extends AbstractOpenemsModbusCompo
 						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 						m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33153),
 								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V (Backup AC voltage Phase B / split
-																			// phase: L2-N) -> mV
+						// phase: L2-N) -> mV
 
 						// reg 33154 - Backup AC current Phase B [mA]
 						// For split-phase: L2-N current. For 3-phase: B phase current.
 						// Datasheet: 0.1 A -> SCALE_FACTOR_2 -> mA
 						m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33154),
 								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1A (Backup AC current Phase B / split
-																			// phase: L2-N) -> mA
+						// phase: L2-N) -> mA
 
 						// reg 33155 - Backup AC voltage Phase C [mV]
 						// For split-phase: 0. For 3-phase: C phase voltage.
 						// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 						m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33155),
 								ElementToChannelConverter.SCALE_FACTOR_2), // 0.1V (Backup AC voltage Phase C; for split
-																			// phase model this is 0) -> mV
+						// phase model this is 0) -> mV
 
 						// reg 33156 - Backup AC current Phase C [mA]
 						// For split-phase: 0. For 3-phase: C phase current.
@@ -263,6 +263,11 @@ public class PytesInternalMeterBackupPortImpl extends AbstractOpenemsModbusCompo
 		super.logInfo(log, message);
 	}
 
+	/**
+	 * Collects the current values of all Channels for debug logging.
+	 *
+	 * @return a formatted string of all Channel values
+	 */
 	public String collectDebugData() {
 		// Collect channel values in one stream
 		return Stream.of(OpenemsComponent.ChannelId.values(), //
@@ -287,8 +292,8 @@ public class PytesInternalMeterBackupPortImpl extends AbstractOpenemsModbusCompo
 			if (this.config.extendedDebugMode()) {
 				this.logInfo(this.log,
 						"\n ############################################## Meter Values Start #############################################");
-				this.logInfo(log, this.collectDebugData());
-				this.logInfo(log,
+				this.logInfo(this.log, this.collectDebugData());
+				this.logInfo(this.log,
 						"\n ############################################## Meter Values End #############################################");
 
 			}

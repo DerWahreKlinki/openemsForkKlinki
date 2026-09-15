@@ -37,6 +37,12 @@ public enum MeterTypeCode implements OptionsEnum {
         return UNDEFINED;
     }
 
+    /**
+     * Gets the {@link MeterTypeCode} matching the given raw value.
+     *
+     * @param value the raw value
+     * @return the matching {@link MeterTypeCode} or {@link #UNDEFINED}
+     */
     public static MeterTypeCode fromValue(int value) {
         for (var v : values()) {
             if (v.value == value) {

@@ -10,7 +10,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	protected static class Builder {
 		private String id;
-//		private String setting0;
+		//		private String setting0;
 
 		private Builder() {
 		}
@@ -23,7 +23,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 //		public Builder setSetting0(String setting0) {
 //			this.setting0 = setting0;
 //			return this;
-//		}
+		//		}
 
 		public MyConfig build() {
 			return new MyConfig(this);

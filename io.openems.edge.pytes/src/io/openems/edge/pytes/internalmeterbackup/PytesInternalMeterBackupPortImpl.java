@@ -168,7 +168,7 @@ public class PytesInternalMeterBackupPortImpl extends AbstractOpenemsModbusCompo
 				// Priority HIGH - real-time backup load monitoring.
 				// Note: Phase C registers are always 0 for split-phase models
 				// ------------------------------------------------------------------------
-				new FC4ReadInputRegistersTask(33521, Priority.HIGH,
+				new FC4ReadInputRegistersTask(33521, Priority.LOW, // per-phase details; total power comes from 33148
 
 						// reg 33521 - Backup Phase A active power [W]
 						// For split-phase: using L1-N voltage and L1 current.

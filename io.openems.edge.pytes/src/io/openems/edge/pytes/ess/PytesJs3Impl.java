@@ -6,7 +6,6 @@ import static org.osgi.service.component.annotations.ReferenceCardinality.MANDAT
 import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
 import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -45,16 +44,13 @@ import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
-import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.taskmanager.Priority;
-import io.openems.edge.ess.api.AsymmetricEss;
 import io.openems.edge.ess.api.HybridEss;
-import io.openems.edge.ess.api.ManagedAsymmetricEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
 import io.openems.edge.ess.power.api.Power;
@@ -80,8 +76,8 @@ import io.openems.edge.pytes.enums.WorkState;
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS, //
 })
 public class PytesJs3Impl extends AbstractOpenemsModbusComponent
-		implements PytesJs3, HybridEss, SymmetricEss, ManagedSymmetricEss, AsymmetricEss, ManagedAsymmetricEss,
-		OpenemsComponent, ModbusComponent, EventHandler, TimedataProvider, ClockProvider {
+		implements PytesJs3, HybridEss, SymmetricEss, ManagedSymmetricEss, OpenemsComponent, ModbusComponent,
+		EventHandler, TimedataProvider {
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -117,8 +113,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	private volatile ApplyPowerHandler applyPowerHandler = null;
 	private volatile AllowedChargeDischargeHandler allowedChargeDischargeHandler = null;
 
-	// Hysteresis guard for work state transitions
-	private LocalDateTime lastDefinedWorkStateTime = LocalDateTime.now();
+	// Raw BMS discharge limit in W (before bias/loss reduction of the reported
+	// AllowedDischargePower), used by ApplyPowerHandler to clamp the set-point
+	private volatile int batteryDischargeLimit = 0;
+
+	// Hysteresis guard for work state transitions (set in activate() from the
+	// ComponentManager clock so tests can use a time-leap clock)
+	private LocalDateTime lastDefinedWorkStateTime;
 
 	private final Logger log = LoggerFactory.getLogger(PytesJs3Impl.class);
 	private Config config = null;
@@ -135,8 +136,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				HybridEss.ChannelId.values(), //
 				SymmetricEss.ChannelId.values(), //
 				ManagedSymmetricEss.ChannelId.values(), //
-				AsymmetricEss.ChannelId.values(), //
-				ManagedAsymmetricEss.ChannelId.values(), //
 				PytesJs3.ChannelId.values() //
 		);
 	}
@@ -149,6 +148,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			return;
 		}
 		this.workMode = this.config.workMode();
+		this.lastDefinedWorkStateTime = LocalDateTime.now(this.componentManager.getClock());
 		this._setWorkState(WorkState.UNDEFINED);
 		this.installListeners();
 	}
@@ -164,10 +164,20 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			// Guard against null - battery registers itself asynchronously after activation
 			if (this.battery != null) {
 				this._setSoc(this.battery.getSoc().get()); // Integer value
-				Integer dcDischargePower = this.battery.getDcDischargePower().get();
-				this._setDcDischargePower(dcDischargePower);
-				this.logDebug(this.log, "DcDischargePower: " + dcDischargePower + "W");
 			}
+			// DcDischargePower is derived as ActivePower - PV instead of taking the
+			// BMS measurement: the BMS value lags ~6 s behind ActivePower, which made
+			// the controller's PV estimate (ActivePower - DcDischargePower) wrong on
+			// every transient and caused the setpoint to oscillate (see live log
+			// 2026-09-16). Derived this way, ActivePower - DcDischargePower == PV by
+			// construction. The measured value is still available on the battery.
+			// NextValue is used so AC, PV and DC end up in the same process image.
+			Integer acPower = this.getActivePowerChannel().getNextValue().get();
+			int pvPower = this.charger != null ? this.charger.getActualPowerChannel().getNextValue().orElse(0) : 0;
+			Integer dcDischargePower = acPower == null ? null : acPower - pvPower;
+			this._setDcDischargePower(dcDischargePower);
+			this.logDebug(this.log, "DcDischargePower: " + dcDischargePower + "W (AC " + acPower + " - PV " + pvPower
+					+ ", BMS " + (this.battery != null ? this.battery.getDcDischargePower().get() : null) + ")");
 			if (this.allowedChargeDischargeHandler != null) {
 				this.allowedChargeDischargeHandler.accept(this.componentManager);
 			}
@@ -352,7 +362,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_FUNCTION_SWITCH,
 								new UnsignedWordElement(44108))),
 
-				new FC3ReadRegistersTask(44100, Priority.HIGH,
+				new FC3ReadRegistersTask(44100, Priority.LOW, // read-back only, values rarely change
 
 						// reg 44100 – Remote dispatch switch [read-back]
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SWITCH, new UnsignedWordElement(44100)),
@@ -384,16 +394,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// 4=Off-grid/EPS, 5=Off-grid to on-grid, 6=Bypass, 7=Generator
 						m(PytesJs3.ChannelId.INVERTER_OPERATING_STATUS, new UnsignedWordElement(33287))),
 				
-				new FC4ReadInputRegistersTask(33151, Priority.HIGH,
-						m(PytesJs3.ChannelId.ACTIVE_POWER_151, new SignedDoublewordElement(33151)),	
-						//m(SymmetricEss.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(33151)),						
-						new DummyRegisterElement(33153, 33156),				
-						m(PytesJs3.ChannelId.ACTIVE_POWER_157, new SignedWordElement(33157),
-								ElementToChannelConverter.SCALE_FACTOR_1)
-						
-						
-						),				
-
 				new FC4ReadInputRegistersTask(33067, Priority.HIGH, //
 
 						m(SymmetricEss.ChannelId.MAX_APPARENT_POWER, new UnsignedWordElement(33067),
@@ -485,7 +485,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_1)),
 
 				// Datasheet 3.2: max. 50 registers per frame -> 33067-33125 split here
-				new FC4ReadInputRegistersTask(33095, Priority.HIGH, //
+				new FC4ReadInputRegistersTask(33095, Priority.LOW, // diagnostics and fault bits; a few seconds delay is fine
 
 						// reg 33095 – Inverter current status (Appendix 2)
 						// Datasheet: See Appendix 2.
@@ -916,9 +916,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			}
 			break;
 		case WorkState.INITIALIZING:
-			//if (!this.setDefaultValues()) {
-			//	break; // still writing defaults — wait
-			//}
+			// Deliberately NOT calling setDefaultValues(): the SoC limits and the
+			// backup port setting configured in the inverter itself are
+			// authoritative and must not be overwritten by the OpenEMS config
+			// (decision 2026-09-16). The method is kept for a possible opt-in.
 			if (this.getState() == Level.OK) {
 				this.changeState(WorkState.NORMAL);
 			}
@@ -959,6 +960,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	/**
 	 * Writes the configured default values to the inverter during INITIALIZING.
+	 * Currently unused on purpose - see the INITIALIZING case in
+	 * defineWorkState(): the values set in the inverter are authoritative.
 	 * Returns true only when all values have been confirmed by read-back. Each call
 	 * writes one register at a time and returns false to re-check next cycle.
 	 *
@@ -1013,21 +1016,27 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	}
 
 	/**
-	 * Transitions to a new work state with a 20-second hysteresis guard.
-	 * 
+	 * Transitions to a new work state. Transitions out of a fault or warning
+	 * state are delayed by a 20-second hysteresis guard. The start-up path
+	 * (UNDEFINED -> INITIALIZING -> NORMAL) is not delayed: while the ESS is not
+	 * NORMAL no set-points are written and the inverter runs in self-use mode
+	 * (charging the battery from PV surplus), which used to cost 40 s after
+	 * every restart.
+	 *
 	 * @param nextState the target state
 	 * @return true if the state was actually changed
 	 */
 	private boolean changeState(WorkState nextState) {
-		var now = LocalDateTime.now();
-		// avoid early transitions
-		if (!now.minusSeconds(20).isAfter(this.lastDefinedWorkStateTime)) {
+		var current = this.getWorkState();
+		if (current == nextState) {
 			return false;
+		}
+		var now = LocalDateTime.now(this.componentManager.getClock());
+		boolean startup = current == WorkState.UNDEFINED || current == WorkState.INITIALIZING;
+		if (!startup && !now.minusSeconds(20).isAfter(this.lastDefinedWorkStateTime)) {
+			return false; // avoid flapping between states
 		}
 		this.lastDefinedWorkStateTime = now;
-		if (this.getWorkState() == nextState) {
-			return false;
-		}
 		this._setWorkState(nextState);
 		return true;
 	}
@@ -1258,8 +1267,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	public String debugLog() {
 		if (this.config.debugMode()) {
 			return "SoC:" + this.getSoc().asString() //
-					+ "|L:" + this.getActivePower().asString()
-
+					+ "|L:" + this.getActivePower().asString() + "\nVoltageL1="
 					+ this.channel(PytesJs3.ChannelId.VOLTAGE_L1).value().asString() + "\nVoltageL2="
 					+ this.channel(PytesJs3.ChannelId.VOLTAGE_L2).value().asString() + "\nVoltageL3="
 					+ this.channel(PytesJs3.ChannelId.VOLTAGE_L3).value().asString() + "\nCurrentL1="
@@ -1300,19 +1308,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	}
 
 	@Override
-	public void retryModbusCommunication() {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void applyPower(int activePowerL1, int reactivePowerL1, int activePowerL2, int reactivePowerL2,
-			int activePowerL3, int reactivePowerL3) throws OpenemsNamedException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
 	public void applyPower(int targetActivePower, int reactivePower) throws OpenemsNamedException {
 
 		if (this.battery == null) {
@@ -1342,8 +1337,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				HybridEss.ChannelId.values(), //
 				SymmetricEss.ChannelId.values(), //
 				ManagedSymmetricEss.ChannelId.values(), //
-				AsymmetricEss.ChannelId.values(), //
-				ManagedAsymmetricEss.ChannelId.values(), //
 				PytesJs3.ChannelId.values() // //
 		).flatMap(Arrays::stream).map(id -> {
 			try {
@@ -1397,8 +1390,38 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	@Override
 	public Integer getSurplusPower() {
-		// TODO Auto-generated method stub
-		return null;
+		// PV production that the battery cannot absorb (full or limited by the
+		// BMS) has to leave the inverter on the AC side. AllowedChargePower is the
+		// DC-side battery limit (negative or 0), so the surplus is PV + limit.
+		// Used by Controller.Ess.Hybrid.SurplusFeedToGrid; null means no surplus.
+		if (this.charger == null) {
+			return null;
+		}
+		Integer pv = this.charger.getActualPower().get();
+		Integer allowedCharge = this.getAllowedChargePower().get();
+		if (pv == null || allowedCharge == null || pv <= 0) {
+			return null;
+		}
+		int surplus = pv + Math.min(0, allowedCharge);
+		return surplus > 0 ? surplus : null;
+	}
+
+	/**
+	 * Sets the raw battery discharge limit in W (BMS/config, DC side).
+	 *
+	 * @param limit the limit in W, positive
+	 */
+	void setBatteryDischargeLimit(int limit) {
+		this.batteryDischargeLimit = limit;
+	}
+
+	/**
+	 * Gets the raw battery discharge limit in W (BMS/config, DC side).
+	 *
+	 * @return the limit in W, positive
+	 */
+	int getBatteryDischargeLimit() {
+		return this.batteryDischargeLimit;
 	}
 
 	public int getCycleTime() {
@@ -1422,12 +1445,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Override
 	public Timedata getTimedata() {
 		return this.timedata;
-	}
-
-	@Override
-	public Clock getClock() {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 }

@@ -300,7 +300,7 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 		// ---------------------------------------------------------------
 		// Backflow power (reg 43074)
 		// ---------------------------------------------------------------
-		modbusProtocol.addTask(new FC3ReadRegistersTask(43074, Priority.HIGH,
+		modbusProtocol.addTask(new FC3ReadRegistersTask(43074, Priority.LOW, // setting, rarely changes
 
 			    m(PytesMeterGrid.ChannelId.BACKFLOW_POWER, new SignedWordElement(43074))
 		));		

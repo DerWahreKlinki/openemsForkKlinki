@@ -833,12 +833,6 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	// Abstract methods implemented by PytesBatteryImpl
 	// -----------------------------------------------------------------------
 
-	/**
-	 * Sets the minimum State-of-Charge percentage.
-	 *
-	 * @param minSocPercentage the minimum SoC in percent
-	 */
-	void setMinSocPercentage(int minSocPercentage);
 
 	/**
 	 * Gets the configured maximum charge current.

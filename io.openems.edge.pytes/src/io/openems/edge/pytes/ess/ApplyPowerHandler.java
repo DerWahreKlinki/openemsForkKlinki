@@ -18,8 +18,51 @@ public class ApplyPowerHandler {
 	private final PytesDcCharger dcCharger;
 	private final Logger log;
 
-	// === Smoothing & state ===
-	private final AverageCalculator targetBatteryPowerAvg = new AverageCalculator(5);
+	// === Feed-forward ===
+	// Measured 2026-09-16 on the live system: the inverter applies a constant
+	// bias of ~190-220 W towards charging to the commanded battery power (500 W
+	// discharge commanded -> 300 W delivered; 200 W charge commanded -> 418 W
+	// delivered), and conversion losses between battery and AC side that grow
+	// with the total inverter throughput (battery + PV): ~50 W @ 0.8 kW,
+	// ~160 W @ 4.2 kW, ~210 W @ 6.5 kW. Both are compensated up-front so a new
+	// set-point is right within the inverter's own dead time (~10 s). The bias
+	// does not apply at 0 W. The model is kept slightly conservative; the trim
+	// covers the rest. Shared with AllowedChargeDischargeHandler so the limits
+	// reported to the solver are what actually arrives on the AC side.
+	static final int BIAS_W = 190;
+	static final int LOSS_BASE_W = 30;
+	static final double LOSS_FACTOR = 0.03; // of |battery| + PV
+	private static final int MIN_TARGET_W = 50; // below this the inverter is treated as idle
+	private static final int FAILSAFE_MINUTES = 5; // reg 44101: inverter falls back to self-use after this
+
+	// === Setpoint trim ===
+	// A slow integral correction on the AC-side battery contribution
+	// (ActivePower - PV, which is what Sum, UI and all OpenEMS controllers use)
+	// removes what the feed-forward model does not cover. The residual differs
+	// by direction, so charge and discharge keep their own trim and a sign
+	// change needs no re-settling. All time constants are in milliseconds and
+	// scaled with the configured cycle time.
+	private static final double TRIM_GAIN_PER_S = 0.04; // -> ~25 s time constant
+	private static final int TRIM_LIMIT = 300; // W, anti-windup
+	private static final int TRIM_WARMUP_MS = 30_000; // BMS values are unreliable right after start
+	private static final int TRIM_FREEZE_MS = 12_000; // no integration while the inverter follows a step
+	private static final int TRIM_FREEZE_STEP_W = 100; // step size that triggers the freeze
+	private double trimDischarge = 0;
+	private double trimCharge = 0;
+	private long elapsedMs = 0;
+	private long freezeUntilMs = 0;
+	private Integer lastAcBatteryTarget = null;
+
+	/**
+	 * Expected conversion losses between battery and AC side.
+	 *
+	 * @param batteryPower battery power in W (sign irrelevant)
+	 * @param pvPower      PV power in W
+	 * @return losses in W
+	 */
+	static int expectedLosses(int batteryPower, int pvPower) {
+		return LOSS_BASE_W + (int) Math.round(LOSS_FACTOR * (Math.abs(batteryPower) + Math.max(0, pvPower)));
+	}
 
 	public ApplyPowerHandler(PytesJs3Impl ess, PytesBattery battery, PytesDcCharger dcCharger) {
 		this.ess = ess;
@@ -47,59 +90,47 @@ public class ApplyPowerHandler {
 		}
 		
 		if (this.ess.getWorkState() != WorkState.NORMAL) {
-			this.log.warn("ESS not in normal mode. Skipping ApplyPower");
+			this.log.debug("ESS not in normal mode. Skipping ApplyPower");
 			return;
 		}
-		/*		
-		if (ess.internalControlMode()) {
-			this.writeInternalControlFlags();
-			log.debug("[ApplyPower] Internal Control Mode enabled.Setting grid feed-in to 0. Skip ApplyPower");
-			return;
-		}		
-*/
-		/*
-		 * ToDo if (ess.getWorkState() != WorkState.NORMAL) {
-		 * log.error("ESS not in normal state. Skipping ApplyPower"); return; }
-		 *
-		 */
 		Integer maxAllowedChargePower = this.ess.getAllowedChargePower().get();
 		Integer maxAllowedDischargePower = this.ess.getAllowedDischargePower().get(); // includes PV
 
 		Integer maxApparentPower = this.ess.getMaxApparentPower().get();
 
 		if (maxApparentPower == null) {
-			this.log.error("[ApplyPower] maxApparentPower is null. Skipping ApplyPower");
+			this.log.debug("[ApplyPower] maxApparentPower is null. Skipping ApplyPower");
 			return;
 		}
 
 		if (maxAllowedChargePower == null) {
-			this.log.error("[ApplyPower] maxAllowedChargePower is null. Skipping ApplyPower");
+			this.log.debug("[ApplyPower] maxAllowedChargePower is null. Skipping ApplyPower");
 			return;
 		}
 
 		if (maxAllowedDischargePower == null) {
-			this.log.error("[ApplyPower] maxAllowedDischargePower is null. Skipping ApplyPower");
+			this.log.debug("[ApplyPower] maxAllowedDischargePower is null. Skipping ApplyPower");
 			return;
 		}
 
 		Integer batteryPower = this.battery.getDcDischargePower().get();
 
 		if (batteryPower == null) {
-			this.log.error("[ApplyPower] batteryPower is null. Skipping ApplyPower");
+			this.log.debug("[ApplyPower] batteryPower is null. Skipping ApplyPower");
 			return;
 		}
 
 		Integer essActivePower = this.ess.getActivePower().get();
 
 		if (essActivePower == null) {
-			this.log.error("[ApplyPower] essActivePower is null. Skipping ApplyPower");
+			this.log.debug("[ApplyPower] essActivePower is null. Skipping ApplyPower");
 			return;
 		}
 
 		Integer essDcDischargePower = this.ess.getDcDischargePower().get();
 
 		if (essDcDischargePower == null) {
-			this.log.error("[ApplyPower] essDcDischargePower is null. Skipping ApplyPower");
+			this.log.debug("[ApplyPower] essDcDischargePower is null. Skipping ApplyPower");
 			return;
 		}
 
@@ -118,56 +149,76 @@ public class ApplyPowerHandler {
 		int batteryPowerTarget = 0;
 
 		if (essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL) {
-			// guards for DC
-			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower - pvPower);
+			// guards for DC: clamp on the raw BMS limit, not on the (reduced) AC-side
+			// value reported to the solver
+			maxAllowedBatteryDischargePower = Math.max(0, this.ess.getBatteryDischargeLimit());
 			batteryPowerTarget = activePowerTarget - pvPower;
 			sign = -1; // negative setpoint at batteryControl setpoint
 		} else {
-			batteryPowerTarget = activePowerTarget; // Testing
-			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);		// Testing
+			// grid point / AC port control: the value is an AC power
+			batteryPowerTarget = activePowerTarget;
+			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);
 		}
 
 
 
-		// DC-side clamp
+		// AC-side battery target (positive = discharge) - this is what has to show
+		// up as ActivePower - PV.
+		int acBatteryTarget = batteryPowerTarget;
+		boolean idle = Math.abs(acBatteryTarget) < MIN_TARGET_W;
+
+		// Feed-forward: bias and losses always act in discharge direction.
+		final int feedForward = idle ? 0 : BIAS_W + expectedLosses(acBatteryTarget, pvPower);
+
+		// Time base, scaled with the configured cycle time
+		int cycleTimeMs = this.ess.getCycleTime();
+		this.elapsedMs += cycleTimeMs;
+		if (this.lastAcBatteryTarget != null
+				&& Math.abs(acBatteryTarget - this.lastAcBatteryTarget) > TRIM_FREEZE_STEP_W) {
+			this.freezeUntilMs = this.elapsedMs + TRIM_FREEZE_MS;
+		}
+		this.lastAcBatteryTarget = acBatteryTarget;
+
+		// Integral trim on the AC-side battery contribution. Only integrate when
+		// the set-point is not sitting on a BMS limit (anti-windup: with the
+		// current trim applied), not idle, not right after a step (the inverter
+		// needs its dead time first) and the measurements are plausible (BMS
+		// values are garbage right after start).
+		int acBatteryPower = essActivePower - pvPower;
+		int plausibleLimit = Math.max(maxAllowedDischargePower, -maxAllowedChargePower) + 500;
+		boolean plausible = Math.abs(batteryPower) <= plausibleLimit && Math.abs(acBatteryPower) <= plausibleLimit;
+		boolean discharging = acBatteryTarget > 0;
+		double currentTrim = discharging ? this.trimDischarge : this.trimCharge;
+		int untrimmedSetPoint = acBatteryTarget + feedForward + (int) Math.round(currentTrim);
+		boolean limited = untrimmedSetPoint > maxAllowedBatteryDischargePower
+				|| untrimmedSetPoint < maxAllowedChargePower;
+		boolean settled = this.elapsedMs > TRIM_WARMUP_MS && this.elapsedMs >= this.freezeUntilMs;
+		if (!idle && !limited && settled && plausible) {
+			double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (acBatteryTarget - acBatteryPower);
+			if (discharging) {
+				this.trimDischarge = Math.max(-TRIM_LIMIT, Math.min(TRIM_LIMIT, this.trimDischarge + delta));
+			} else {
+				this.trimCharge = Math.max(-TRIM_LIMIT, Math.min(TRIM_LIMIT, this.trimCharge + delta));
+			}
+		}
+		double trim = idle ? 0 : discharging ? this.trimDischarge : this.trimCharge;
+
+		// Battery set-point = AC-side target + feed-forward + trim, clamped to the
+		// BMS limits.
+		batteryPowerTarget = acBatteryTarget + feedForward + (int) Math.round(trim);
 		if (batteryPowerTarget > 0) { // discharge
 			batteryPowerTarget = Math.min(batteryPowerTarget, maxAllowedBatteryDischargePower);
 		} else { // charge
 			batteryPowerTarget = Math.max(batteryPowerTarget, maxAllowedChargePower); // already negative
 		}
 
-		this.targetBatteryPowerAvg.addValue(batteryPowerTarget);
-
-		// int averageBatteryTargetPower = this.targetBatteryPowerAvg.getAverage();
-
-		int averageBatteryTargetPower = batteryPowerTarget; // Testing
-		
-		batteryPowerTarget = (int) Math.round(averageBatteryTargetPower / 10.0); // Applied value has to be diveded by
-		// 10
+		batteryPowerTarget = (int) Math.round(batteryPowerTarget / 10.0); // Applied value has to be divided by 10
 
 		this.writeExternalControlFlags();
-		/*
-		 * Definition is determined by44105 control switch 1->10W Default : 0W
-		 * • When 44105=1, this register’s value is not effective
-		 * • When 44105=2, Negative value is battery discharge power, positive value is battery charge power.
-		 * Range: Negative maxcharge/discharge power* parallel unit number ~Positive max
-		 * charge/discharge power* parallelunit number
-		 * • When 44105=3, Negative value is Import power, positive value is Export power. Range:Negative inverter max
-		 * output power* parallelunit number ~ Positiveinverter max outputpower*
-		 * parallel unit number
-		 * • When 44105=4, Negative value is Import power, positive
-		 * value is Export power. Range:Negative inverter max output power* parallelunit
-		 * number ~ Positiveinverter max outputpower* parallel unit number
-		 *
-		 *
-		 */
-
-		//batteryPowerTarget = batteryPowerTarget * -1;
-		batteryPowerTarget = batteryPowerTarget * sign; // Testing
-
-		//batteryPowerTarget = 50;
-		
-		//ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.GRID_POINT_CONTROL); // Battery Charge/Discharge Control
+		// Reg 44106 (1 = 10 W): with 44105 = 2 (battery control) a negative value is
+		// battery discharge, positive is charge; with 44105 = 3/4 negative is import,
+		// positive is export.
+		batteryPowerTarget = batteryPowerTarget * sign;
 		this.ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); 
 		this.ess.setRemoteDispatchRealtimeControlPower(batteryPowerTarget);
 		
@@ -177,6 +228,9 @@ public class ApplyPowerHandler {
 				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower
 				+ "\n[ApplyPower] ESS DC DischargePower: " + essDcDischargePower
 				+ "\n[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget
+				+ "\n[ApplyPower] FeedForward: " + feedForward + " W, Trim: " + Math.round(trim) + " W (AC-PV "
+				+ acBatteryPower + " W, BMS " + batteryPower + " W, trimD " + Math.round(this.trimDischarge)
+				+ " trimC " + Math.round(this.trimCharge) + ")"
 				+ "\n[ApplyPower]   PV Power " + pvPower);		
 
 
@@ -185,49 +239,24 @@ public class ApplyPowerHandler {
 	// ========================= Helper =========================
 
 	/**
-	 * ToDo: Read before Write.
+	 * Writes the remote dispatch settings that select external (EMS) control.
+	 *
+	 * @throws OpenemsNamedException on write error
 	 */
 	private void writeExternalControlFlags() throws OpenemsNamedException {
-		//ess.setRemoteControlMode(0);		
-		
-		/*
-		if (ess.getRemoteDispatchSwitch() != EnableDisable.ENABLE) { // 44100
-			ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);	
-		}
-		
-		
-		if (ess.getRemoteDispatchFailsafeSetting().get() != 5) {
-			ess.setRemoteDispatchFailsafeSetting(5); // in Minutes	
-		}
-		
-		if (ess.getRemoteDispatchSystemLimitSwitch() != RemoteDispatchSystemLimitSwitch.DISABLE ) {
-			ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0			
-		}
-		
-		if (ess.getRemoteDispatchRealtimeControlSwitch() != RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL ) {
-			ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL ); // Battery Charge/Discharge Control
-		}
-
-		if (ess.getPvShutdownSwitch() != EnableDisable.DISABLE || ess.getDoControl()  != EnableDisable.DISABLE || ess.getGridChargeAllowed() != EnableDisable.ENABLE || ess.getOffGridBatteryStandby() != EnableDisable.DISABLE ) {
-			// ToDo: make configurable
-			ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); // PvShutdown, DO Control, Allow Grid Charge, BatteryStandby			
-		}
-		 */
-		
-		//ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false); 
-		this.ess.setRemoteDispatchSwitch(EnableDisable.ENABLE);	
-		this.ess.setRemoteDispatchFailsafeSetting(5); // in Minutes
-		this.ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102 0
-		// ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL ); // 44105
-		
-			
-
-	}
-	
-	private void writeInternalControlFlags() throws OpenemsNamedException {
-		this.ess.setRemoteDispatchSwitch(EnableDisable.ENABLE); // reg 44100
-		this.ess.setRemoteDispatchRealtimeControlSwitch(RemoteDispatchRealtimeControlSwitch.AC_GRID_POINT_CONTROL); // 44105 
-		this.ess.setRemoteDispatchRealtimeControlPower(0);
+		// The remote dispatch block 44100-44108 is re-written every cycle: the
+		// inverter does not persist it and the failsafe expects periodic writes.
+		// All nine registers get a value so the bridge sends ONE FC16 frame;
+		// registers without a value (44103/44104/44108) would split it into two.
+		// 44105/44106 are set by apply() in the same cycle.
+		this.ess.setRemoteDispatchSwitch(EnableDisable.ENABLE); // 44100
+		this.ess.setRemoteDispatchFailsafeSetting(FAILSAFE_MINUTES); // 44101
+		this.ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102
+		this.ess.setRemoteDispatchSystemImportLimit(0); // 44103, unused while the limit switch is disabled
+		this.ess.setRemoteDispatchSystemExportLimit(0); // 44104
+		// 44108: PV on, DO off, grid charge allowed, no off-grid standby. Same value
+		// the inverter reports by default. ToDo: make grid charge configurable.
+		this.ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false);
 	}
 
 }

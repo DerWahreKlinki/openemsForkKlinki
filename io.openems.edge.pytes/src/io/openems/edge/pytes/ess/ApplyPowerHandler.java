@@ -144,57 +144,65 @@ public class ApplyPowerHandler {
 		}
 
 		int pvPower = this.dcCharger != null ? this.dcCharger.getActualPower().orElse(0) : 0; // Maybe no pv connected
-		int maxAllowedBatteryDischargePower = 0;
-		int sign = 1;
-		int batteryPowerTarget = 0;
+		final boolean batteryControl = essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
-		if (essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL) {
-			// guards for DC: clamp on the raw BMS limit, not on the (reduced) AC-side
-			// value reported to the solver
-			maxAllowedBatteryDischargePower = Math.max(0, this.ess.getBatteryDischargeLimit());
-			batteryPowerTarget = activePowerTarget - pvPower;
-			sign = -1; // negative setpoint at batteryControl setpoint
+		// The controlled quantity (positive = discharge / export):
+		// - Battery control (44105 = 2): the AC-side battery contribution
+		//   ActivePower - PV. The inverter gets a battery set-point, so its bias
+		//   and the conversion losses are compensated up-front. Clamp: raw BMS
+		//   limits.
+		// - AC output control (44105 = 4): the inverter's AC output ActivePower. The
+		//   inverter splits PV/battery itself and covers its own losses, so no
+		//   feed-forward. Clamp: the AC-side range reported to the solver.
+		final int target;
+		final int measured;
+		final int upperLimit;
+		final int lowerLimit;
+		final int sign;
+		if (batteryControl) {
+			target = activePowerTarget - pvPower;
+			measured = essActivePower - pvPower;
+			upperLimit = Math.max(0, this.ess.getBatteryDischargeLimit());
+			lowerLimit = Math.min(0, maxAllowedChargePower);
+			sign = -1; // reg 44106: negative = battery discharge
 		} else {
-			// grid point / AC port control: the value is an AC power
-			batteryPowerTarget = activePowerTarget;
-			maxAllowedBatteryDischargePower = Math.max(0, maxAllowedDischargePower);
+			target = activePowerTarget;
+			measured = essActivePower;
+			// The inverter enforces the AC set-point regardless of the battery, so
+			// the DC limits have to be translated here: AC = battery + PV. The lower
+			// bound can be positive (PV above the charge limit must be exported);
+			// OpenEMS itself only knows that bound via getSurplusPower().
+			upperLimit = Math.max(0, maxAllowedDischargePower);
+			lowerLimit = Math.max(Math.min(0, maxAllowedChargePower), pvPower + this.ess.getBatteryChargeLimit());
+			sign = 1; // reg 44106: positive = export
 		}
-
-
-
-		// AC-side battery target (positive = discharge) - this is what has to show
-		// up as ActivePower - PV.
-		int acBatteryTarget = batteryPowerTarget;
-		boolean idle = Math.abs(acBatteryTarget) < MIN_TARGET_W;
+		boolean idle = Math.abs(target) < MIN_TARGET_W;
 
 		// Feed-forward: bias and losses always act in discharge direction.
-		final int feedForward = idle ? 0 : BIAS_W + expectedLosses(acBatteryTarget, pvPower);
+		final int feedForward = batteryControl && !idle ? BIAS_W + expectedLosses(target, pvPower) : 0;
 
 		// Time base, scaled with the configured cycle time
 		int cycleTimeMs = this.ess.getCycleTime();
 		this.elapsedMs += cycleTimeMs;
-		if (this.lastAcBatteryTarget != null
-				&& Math.abs(acBatteryTarget - this.lastAcBatteryTarget) > TRIM_FREEZE_STEP_W) {
+		if (this.lastAcBatteryTarget != null && Math.abs(target - this.lastAcBatteryTarget) > TRIM_FREEZE_STEP_W) {
 			this.freezeUntilMs = this.elapsedMs + TRIM_FREEZE_MS;
 		}
-		this.lastAcBatteryTarget = acBatteryTarget;
+		this.lastAcBatteryTarget = target;
 
-		// Integral trim on the AC-side battery contribution. Only integrate when
-		// the set-point is not sitting on a BMS limit (anti-windup: with the
-		// current trim applied), not idle, not right after a step (the inverter
-		// needs its dead time first) and the measurements are plausible (BMS
-		// values are garbage right after start).
-		int acBatteryPower = essActivePower - pvPower;
+		// Integral trim on the controlled quantity. Only integrate when the
+		// set-point is not sitting on a limit (anti-windup: with the current trim
+		// applied), not idle, not right after a step (the inverter needs its dead
+		// time first) and the measurements are plausible (BMS values are garbage
+		// right after start).
 		int plausibleLimit = Math.max(maxAllowedDischargePower, -maxAllowedChargePower) + 500;
-		boolean plausible = Math.abs(batteryPower) <= plausibleLimit && Math.abs(acBatteryPower) <= plausibleLimit;
-		boolean discharging = acBatteryTarget > 0;
+		boolean plausible = Math.abs(batteryPower) <= plausibleLimit && Math.abs(measured) <= plausibleLimit;
+		boolean discharging = target > 0;
 		double currentTrim = discharging ? this.trimDischarge : this.trimCharge;
-		int untrimmedSetPoint = acBatteryTarget + feedForward + (int) Math.round(currentTrim);
-		boolean limited = untrimmedSetPoint > maxAllowedBatteryDischargePower
-				|| untrimmedSetPoint < maxAllowedChargePower;
+		int untrimmedSetPoint = target + feedForward + (int) Math.round(currentTrim);
+		boolean limited = untrimmedSetPoint > upperLimit || untrimmedSetPoint < lowerLimit;
 		boolean settled = this.elapsedMs > TRIM_WARMUP_MS && this.elapsedMs >= this.freezeUntilMs;
 		if (!idle && !limited && settled && plausible) {
-			double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (acBatteryTarget - acBatteryPower);
+			double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (target - measured);
 			if (discharging) {
 				this.trimDischarge = Math.max(-TRIM_LIMIT, Math.min(TRIM_LIMIT, this.trimDischarge + delta));
 			} else {
@@ -203,35 +211,27 @@ public class ApplyPowerHandler {
 		}
 		double trim = idle ? 0 : discharging ? this.trimDischarge : this.trimCharge;
 
-		// Battery set-point = AC-side target + feed-forward + trim, clamped to the
-		// BMS limits.
-		batteryPowerTarget = acBatteryTarget + feedForward + (int) Math.round(trim);
-		if (batteryPowerTarget > 0) { // discharge
-			batteryPowerTarget = Math.min(batteryPowerTarget, maxAllowedBatteryDischargePower);
-		} else { // charge
-			batteryPowerTarget = Math.max(batteryPowerTarget, maxAllowedChargePower); // already negative
-		}
-
-		batteryPowerTarget = (int) Math.round(batteryPowerTarget / 10.0); // Applied value has to be divided by 10
+		// Set-point = target + feed-forward + trim, clamped to the limits
+		int setPoint = Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
 
 		this.writeExternalControlFlags();
 		// Reg 44106 (1 = 10 W): with 44105 = 2 (battery control) a negative value is
 		// battery discharge, positive is charge; with 44105 = 3/4 negative is import,
 		// positive is export.
-		batteryPowerTarget = batteryPowerTarget * sign;
-		this.ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint); 
-		this.ess.setRemoteDispatchRealtimeControlPower(batteryPowerTarget);
+		int registerValue = (int) Math.round(setPoint / 10.0) * sign;
+		this.ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint);
+		this.ess.setRemoteDispatchRealtimeControlPower(registerValue);
 		
 		this.ess.debugLog(""
-				+ "\n[ApplyPower] TargetPower: " + activePowerTarget
+				+ "\n[ApplyPower] Mode: " + essSetpoint + ", TargetPower: " + activePowerTarget
 				+ "\n[ApplyPower] EssPower: " + essActivePower
-				+ "\n[ApplyPower] Allowed Charge/Discharge Power: " + maxAllowedChargePower + "/" +  maxAllowedBatteryDischargePower
+				+ "\n[ApplyPower] Limits: " + lowerLimit + "/" + upperLimit
 				+ "\n[ApplyPower] ESS DC DischargePower: " + essDcDischargePower
-				+ "\n[ApplyPower] Battery hardware SetPoint: " + batteryPowerTarget
-				+ "\n[ApplyPower] FeedForward: " + feedForward + " W, Trim: " + Math.round(trim) + " W (AC-PV "
-				+ acBatteryPower + " W, BMS " + batteryPower + " W, trimD " + Math.round(this.trimDischarge)
+				+ "\n[ApplyPower] Battery hardware SetPoint: " + registerValue
+				+ "\n[ApplyPower] FeedForward: " + feedForward + " W, Trim: " + Math.round(trim) + " W (target " + target
+				+ " W, measured " + measured + " W, BMS " + batteryPower + " W, trimD " + Math.round(this.trimDischarge)
 				+ " trimC " + Math.round(this.trimCharge) + ")"
-				+ "\n[ApplyPower]   PV Power " + pvPower);		
+				+ "\n[ApplyPower]   PV Power " + pvPower);
 
 
 	}

@@ -113,9 +113,11 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	private volatile ApplyPowerHandler applyPowerHandler = null;
 	private volatile AllowedChargeDischargeHandler allowedChargeDischargeHandler = null;
 
-	// Raw BMS discharge limit in W (before bias/loss reduction of the reported
-	// AllowedDischargePower), used by ApplyPowerHandler to clamp the set-point
+	// Raw BMS limits in W (DC side, before the AC-side conversion of the
+	// reported Allowed*Power channels); discharge positive, charge negative.
+	// Used by ApplyPowerHandler (set-point clamp) and getSurplusPower().
 	private volatile int batteryDischargeLimit = 0;
+	private volatile int batteryChargeLimit = 0;
 
 	// Hysteresis guard for work state transitions (set in activate() from the
 	// ComponentManager clock so tests can use a time-leap clock)
@@ -1391,18 +1393,17 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Override
 	public Integer getSurplusPower() {
 		// PV production that the battery cannot absorb (full or limited by the
-		// BMS) has to leave the inverter on the AC side. AllowedChargePower is the
-		// DC-side battery limit (negative or 0), so the surplus is PV + limit.
-		// Used by Controller.Ess.Hybrid.SurplusFeedToGrid; null means no surplus.
+		// BMS) has to leave the inverter on the AC side: surplus = PV + raw DC
+		// charge limit (negative or 0). Used by
+		// Controller.Ess.Hybrid.SurplusFeedToGrid; null means no surplus.
 		if (this.charger == null) {
 			return null;
 		}
 		Integer pv = this.charger.getActualPower().get();
-		Integer allowedCharge = this.getAllowedChargePower().get();
-		if (pv == null || allowedCharge == null || pv <= 0) {
+		if (pv == null || pv <= 0) {
 			return null;
 		}
-		int surplus = pv + Math.min(0, allowedCharge);
+		int surplus = pv + Math.min(0, this.batteryChargeLimit);
 		return surplus > 0 ? surplus : null;
 	}
 
@@ -1422,6 +1423,24 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 */
 	int getBatteryDischargeLimit() {
 		return this.batteryDischargeLimit;
+	}
+
+	/**
+	 * Sets the raw battery charge limit in W (BMS/config, DC side).
+	 *
+	 * @param limit the limit in W, negative or 0
+	 */
+	void setBatteryChargeLimit(int limit) {
+		this.batteryChargeLimit = limit;
+	}
+
+	/**
+	 * Gets the raw battery charge limit in W (BMS/config, DC side).
+	 *
+	 * @return the limit in W, negative or 0
+	 */
+	int getBatteryChargeLimit() {
+		return this.batteryChargeLimit;
 	}
 
 	public int getCycleTime() {

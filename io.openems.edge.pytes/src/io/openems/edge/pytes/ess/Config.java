@@ -23,7 +23,7 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "WorkMode", description = "Work Mode. ExternalMode -> device is controlled by OpenEMS")
 	WorkMode workMode() default WorkMode.EXTERNAL;
 
-	@AttributeDefinition(name = "ESS SetPoint", description = "SetPoint")
+	@AttributeDefinition(name = "ESS SetPoint", description = "How the OpenEMS AC set-point is applied: BATTERY_CONTROL = EMS computes and sets the battery power (with bias/loss compensation); AC_OUTPUT_CONTROL = inverter regulates its own AC output to the set-point. Note: with AC_OUTPUT_CONTROL the OpenEMS-side battery current limits are not enforced by the inverter.")
 	RemoteDispatchRealtimeControlSwitch essSetpoint() default RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
 	@AttributeDefinition(name = "Max. Apparent Power", description = "Inverter´s apparent power limit")

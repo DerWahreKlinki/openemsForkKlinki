@@ -17,12 +17,14 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 
 	private final PytesBattery battery;
 	private final PytesDcCharger dcCharger;
+	private final RemoteDispatchRealtimeControlSwitch essSetpoint;
 	private final Logger log;
 
 	public AllowedChargeDischargeHandler(PytesJs3Impl parent, PytesBattery battery, PytesDcCharger dcCharger, RemoteDispatchRealtimeControlSwitch essSetpoint) {
 		super(parent);
 		this.battery = battery;
 		this.dcCharger = dcCharger;
+		this.essSetpoint = essSetpoint;
 		this.log = this.parent.getLogger();
 	}
 
@@ -106,19 +108,32 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		// is the same value one cycle later)
 		int pvProduction = this.dcCharger != null ? Math.max(0, this.dcCharger.getActualPower().orElse(0)) : 0;
 
-		// Report what actually arrives on the AC side: the inverter delivers
-		// BIAS_W less battery power than commanded and conversion losses sit in
-		// between (see ApplyPowerHandler). Without this the solver asks for e.g.
-		// 2000 W although only ~1700 W are achievable at a 2112 W BMS limit.
-		// Charging is left as-is (the bias works in favour there).
-		this.parent.setBatteryDischargeLimit(allowedDischargePower); // raw BMS limit for the set-point clamp
-		if (allowedDischargePower > 0) {
-			allowedDischargePower = Math.max(0, allowedDischargePower - ApplyPowerHandler.BIAS_W
-					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction));
+		this.parent.setBatteryDischargeLimit(allowedDischargePower); // raw BMS limits (DC side)
+		this.parent.setBatteryChargeLimit(allowedChargePower);
+
+		final int reportedCharge;
+		final int reportedDischarge;
+		if (this.essSetpoint == RemoteDispatchRealtimeControlSwitch.AC_OUTPUT_CONTROL) {
+			// The inverter regulates its AC output and does not know the OpenEMS
+			// battery limits, so the solver must never ask for an AC power the
+			// battery cannot cover: AC = battery + PV. The bias is handled by the
+			// inverter itself; the losses are subtracted on the discharge side so
+			// the DC current stays below the limit.
+			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
+			reportedDischarge = Math.max(0, allowedDischargePower
+					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
+		} else {
+			// Battery control: report what actually arrives on the AC side. The
+			// inverter delivers BIAS_W less battery power than commanded and the
+			// conversion losses sit in between (see ApplyPowerHandler). Charging is
+			// left as-is (the bias works in favour there; the set-point is clamped
+			// on the DC side anyway).
+			reportedCharge = allowedChargePower;
+			reportedDischarge = Math.max(0, allowedDischargePower - ApplyPowerHandler.BIAS_W
+					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
 		}
-		// Apply AllowedChargePower and AllowedDischargePower
-		this._setAllowedChargePower((int) allowedChargePower); // 0 or negative
-		this.parent._setAllowedDischargePower((int) Math.min(maxApparentPower, allowedDischargePower + pvProduction)); // positive
+		this._setAllowedChargePower(reportedCharge); // 0 or negative
+		this.parent._setAllowedDischargePower(Math.min(maxApparentPower, reportedDischarge)); // positive
 	}
 
 	

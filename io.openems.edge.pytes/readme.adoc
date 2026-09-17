@@ -1,3 +1,109 @@
-= io.openems.edge.pytes
+= Pytes JS3 Hybrid Inverter
+
+Driver for the Pytes JS3 hybrid inverter (Modbus TCP, RS485 protocol Ver 3.2 register map,
+input registers 33xxx, holding registers 43xxx/44xxx). All components share one Modbus
+bridge and unit id; the inverter accepts only **one** TCP connection at a time.
+
+== Components
+
+[cols="1,1,3"]
+|===
+|Factory PID |Natures |Description
+
+|`Pytes.Hybrid.ESS`
+|`ManagedSymmetricEss`, `HybridEss`
+|The inverter itself. Receives the OpenEMS AC set-point, owns the work state machine
+and the remote dispatch registers 44100–44108. Battery and DC charger register
+themselves at the ESS (`addBattery()` / `addCharger()`).
+
+|`Pytes.Battery`
+|`Battery`
+|Battery values from the inverter's battery port and the BMS (regs 33133–33150):
+voltage, current, SoC, BMS current limits, fault words. `DcDischargePower` is
+calculated from BMS current × voltage × direction. Also reads the backup port load
+(reg 33148), because it sits in the same register block.
+
+|`Pytes.Hybrid.DcCharger`
+|`EssDcCharger`
+|PV strings 1–4 and total PV power (regs 33049–33058), energy counters.
+
+|`Meter.Pytes.Grid`
+|`ElectricityMeter` (GRID)
+|The inverter's own grid meter at the grid connection point (regs 33251 ff.).
+
+|`Meter.Pytes.Backup`
+|`ElectricityMeter` (CONSUMPTION_METERED)
+|Loads on the inverter's backup port (regs 33137 ff., total in 33148).
+|===
+
+== How the AC set-point is applied
+
+OpenEMS always hands the ESS an AC set-point for the whole inverter output
+(`ActivePower`, register 33079, *including* PV). The ESS config `essSetpoint` selects how
+this is translated for the inverter (register 44105/44106):
+
+`BATTERY_CONTROL` (44105 = 2)::
+The EMS computes the battery power: `set-point − PV + bias + losses + trim`, clamped to the
+raw BMS limits, written to 44106 (negative = discharge). The inverter applies a constant
+bias of ~190–220 W towards charging to the commanded value and conversion losses of roughly
+30 W + 3 % of the total throughput (battery + PV) sit between battery and AC side; both are
+compensated by a feed-forward, the residual by a slow integral trim (separate for charge and
+discharge). Measured accuracy ±50–100 W, set-point reached after ~10 s (inverter dead time).
+
+`AC_OUTPUT_CONTROL` (44105 = 4, recommended)::
+The set-point is written directly and the inverter regulates its own AC output (PV/battery
+split, losses and bias are its business). Measured accuracy ±20 W, reached after ~10 s, no
+overshoot. Two things the inverter does *not* do in this mode and the ESS therefore does:
+* It regulates only the **grid-side AC port**; loads on the **backup port** are supplied on
+  top. The register value is therefore `set-point − backup load` (reg 33148).
+* It does **not** know the OpenEMS battery limits (it charged with 55 A against a 40 A
+  config / 50 A BMS limit). `AllowedChargePower` / `AllowedDischargePower` are reported
+  AC-side (`limit ± PV`) and the set-point is clamped to
+  `[PV − charge limit, PV + discharge limit − losses]` regardless of what a controller asks
+  for. The lower bound can be positive: PV above the charge limit has to be exported.
+
+`GRID_POINT_CONTROL` (44105 = 3) lets the inverter regulate the grid connection point with
+its own meter. Not usable together with OpenEMS controllers (two controllers on the same
+grid point).
+
+Register 44106 is in steps of 10 W. The whole block 44100–44108 is re-written every cycle as
+one FC16 frame: the inverter does not persist these registers and falls back to its own
+self-use mode after the failsafe timeout (44101, 5 min) without writes. The same happens
+while the ESS is not in work state NORMAL (e.g. the first 2–3 cycles after start).
+
+== Values the inverter reports
+
+* `ess0/DcDischargePower` is derived as `ActivePower − PV` (the AC-side battery
+  contribution, what Sum, UI and all OpenEMS controllers use). The measured DC value is
+  `battery0/DcDischargePower`; the DC energy counters use the measured value.
+* `ActivePower` follows a set-point change after ~5 s, the BMS values after ~11 s.
+* The inverter's own battery power reading (reg 33149) and the BMS calculation agree within a
+  few watts.
+* `getSurplusPower()` = PV + raw DC charge limit (for `Controller.Ess.Hybrid.SurplusFeedToGrid`).
+
+== Grid feed-in limitation (e.g. 70 % rule)
+
+Follows the GoodWe implementation: the limit is configured centrally in `Core.Meta`
+(`gridFeedInLimitationType = DYNAMIC_LIMITATION`, `maximumGridFeedInLimit` in W). The dynamic
+part is done by controllers (e.g. `Controller.Ess.GridOptimizedCharge`), which keep the
+export below the limit by charging the battery. With `feedPowerEnable = ENABLE` in the ESS
+config the hard limit from Meta is additionally written into the inverter (reg 44102 export
+limit switch, reg 44104 limit in 100 W steps) as hardware backstop: the inverter then limits
+the export at its grid meter and curtails PV when the battery cannot take the surplus.
+Channels: `GridFeedInLimit` (applied value), `GridFeedInLimitMismatch` (warning when the
+inverter's read-back differs for more than 30 s).
+
+== Settings that are not touched
+
+The SoC limits (regs 43010/43011/43018) and the backup port setting (reg 43111) configured
+in the inverter are authoritative; `setDefaultValues()` exists but is intentionally not
+called.
+
+== Modbus load
+
+Every frame costs ~35 ms plus ~2.3 ms per register on this inverter. The bundle uses
+5 HIGH-priority read tasks, one FC16 write and one LOW task per cycle (~560 ms of a 1 s
+cycle). Changing the bridge configuration (e.g. log verbosity) forces a reconnect and the
+inverter refuses new connections for ~60 s until the old session is released.
 
 https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.pytes[Source Code icon:github[]]

@@ -1,6 +1,7 @@
 package io.openems.edge.pytes.ess;
 
 import io.openems.common.test.AbstractComponentConfig;
+import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.WorkMode;
 
@@ -132,6 +133,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public boolean enableBackupPort() {
 		return this.builder.enableBackupPort;
+	}
+
+	@Override
+	public EnableDisable feedPowerEnable() {
+		return EnableDisable.DISABLE;
 	}
 
 	@Override

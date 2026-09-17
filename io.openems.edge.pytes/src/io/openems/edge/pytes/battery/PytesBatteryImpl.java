@@ -283,7 +283,9 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 							.bit(6, PytesBattery.ChannelId.BMS_FAULT02_FULL_CHARGE_REQUEST)
 							.bit(7, PytesBattery.ChannelId.BMS_FAULT02_FORCE_CHARGE_REQUEST)),
 
-						new DummyRegisterElement(33147, 33148), // Reserved
+						new DummyRegisterElement(33147, 33147), // Reserved
+						// reg 33148 - Backup port load power [W], see BACKUP_LOAD_POWER
+						m(PytesBattery.ChannelId.BACKUP_LOAD_POWER, new UnsignedWordElement(33148)),
 
 						// reg 33149-33150 - Battery power, same frame
 						// reg 33149–33150 – Battery power [W] (S32, two registers)

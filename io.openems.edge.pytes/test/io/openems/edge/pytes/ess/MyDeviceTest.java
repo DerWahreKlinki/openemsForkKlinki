@@ -8,6 +8,7 @@ import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
 import io.openems.edge.common.test.DummyComponentManager;
 import io.openems.edge.common.test.DummyCycle;
+import io.openems.edge.common.test.DummyMeta;
 import io.openems.edge.ess.test.DummyPower;
 
 public class MyDeviceTest {
@@ -19,6 +20,7 @@ public class MyDeviceTest {
 				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("power", new DummyPower()) //
 				.addReference("cycle", new DummyCycle(1000)) //
+				.addReference("meta", new DummyMeta()) //
 				.addReference("setModbus", new DummyModbusBridge("modbus0")) //
 				.activate(MyConfig.create() //
 						.setId("ess0") //

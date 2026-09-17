@@ -49,6 +49,23 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 * Managed by defineWorkState() in PytesJs3Impl.
 		 * Transitions: UNDEFINED → INITIALIZING → NORMAL | WARNING | ERROR | STANDBY.
 		 */
+		/**
+		 * Grid feed-in limit currently applied to the inverter (regs 44102/44104),
+		 * derived from Core.Meta; null when no limitation is active.
+		 */
+		GRID_FEED_IN_LIMIT(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)//
+				.persistencePriority(HIGH)),
+
+		/**
+		 * The feed-in limit read back from the inverter (regs 44102/44104) does not
+		 * match the applied one for more than 30 s, i.e. the inverter did not
+		 * accept it or lost it (e.g. after a power cycle).
+		 */
+		GRID_FEED_IN_LIMIT_MISMATCH(Doc.of(Level.WARNING)//
+				.text("Grid feed-in limit in the inverter differs from the applied one (regs 44102/44104)")),
+
 		WORK_STATE(Doc.of(WorkState.values())
 				.accessMode(READ_WRITE)
 				.persistencePriority(HIGH)),

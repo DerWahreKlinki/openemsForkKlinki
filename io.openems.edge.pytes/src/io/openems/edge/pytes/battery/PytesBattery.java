@@ -281,6 +281,16 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 		DC_DISCHARGE_POWER_UNSIGNED(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.unit(Unit.WATT)),
+		/**
+		 * Backup port load power (reg 33148, 1 W). Not a battery value, but the
+		 * register sits inside the battery block that is read every cycle anyway,
+		 * so it is mapped here to avoid an extra Modbus frame. Needed by the ESS:
+		 * in AC output control the inverter regulates the grid-side port only,
+		 * backup loads come on top.
+		 */
+		BACKUP_LOAD_POWER(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)),
 		;
 
 		private final Doc doc;
@@ -827,6 +837,25 @@ public interface PytesBattery extends Battery, OpenemsComponent {
 	 */
 	public default Value<Integer> getDcDischargePowerUnsigned() {
 		return this.getDcDischargePowerUnsignedChannel().value();
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#BACKUP_LOAD_POWER}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getBackupLoadPowerChannel() {
+		return this.channel(ChannelId.BACKUP_LOAD_POWER);
+	}
+
+	/**
+	 * Gets the backup port load power in W. See
+	 * {@link ChannelId#BACKUP_LOAD_POWER}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Integer> getBackupLoadPower() {
+		return this.getBackupLoadPowerChannel().value();
 	}
 
 	// -----------------------------------------------------------------------

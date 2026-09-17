@@ -44,10 +44,12 @@ import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
+import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
 import io.openems.edge.common.event.EdgeEventConstants;
+import io.openems.edge.common.meta.Meta;
 import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.HybridEss;
@@ -61,6 +63,7 @@ import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.InverterOperatingStatus;
+import io.openems.edge.pytes.enums.RemoteDispatchSystemLimitSwitch;
 import io.openems.edge.pytes.enums.WorkMode;
 import io.openems.edge.pytes.enums.WorkState;
 
@@ -100,6 +103,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Reference
 	private Cycle cycle;
 
+	@Reference
+	private Meta meta;
+
 	private final CalculateEnergyFromPower calculateAcChargeEnergy = new CalculateEnergyFromPower(this,
 			SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY);
 	private final CalculateEnergyFromPower calculateAcDischargeEnergy = new CalculateEnergyFromPower(this,
@@ -112,6 +118,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	// Power control handlers - created once both battery and charger are available
 	private volatile ApplyPowerHandler applyPowerHandler = null;
 	private volatile AllowedChargeDischargeHandler allowedChargeDischargeHandler = null;
+
+	// Consecutive cycles in which the feed-in limit read back from the inverter
+	// differs from the applied one (read-back is a LOW-priority task)
+	private int feedInLimitMismatchCycles = 0;
 
 	// Raw BMS limits in W (DC side, before the AC-side conversion of the
 	// reported Allowed*Power channels); discharge positive, charge negative.
@@ -193,6 +203,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 		case EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS:
 			this.defineWorkState();
+			this.checkGridFeedInLimit();
 			break;
 
 		}
@@ -211,7 +222,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			this.calculateAcDischargeEnergy.update(0);
 		}
 
-		var dcDischargePower = this.getDcDischargePower().get();
+		// DC energy from the measured battery power, not from the derived
+		// DcDischargePower channel (ActivePower - PV, includes the conversion
+		// losses); otherwise AC and DC energy would be identical.
+		var dcDischargePower = this.battery != null ? this.battery.getDcDischargePower().get() : null;
 		if (dcDischargePower == null) {
 			this.calculateDcChargeEnergy.update(null);
 			this.calculateDcDischargeEnergy.update(null);
@@ -1441,6 +1455,49 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 */
 	int getBatteryChargeLimit() {
 		return this.batteryChargeLimit;
+	}
+
+	/**
+	 * Gets the grid feed-in limit that has to be written into the inverter as
+	 * hardware backstop, analogous to GoodWeBatteryInverterImpl.handleGridFeed():
+	 * the hard limit from Core.Meta, if feed-in limitation is enabled in the
+	 * config and the limit is below the inverter's apparent power.
+	 *
+	 * @return the limit in W, or null for no limitation
+	 */
+	Integer getGridFeedInLimit() {
+		if (this.config.feedPowerEnable() != EnableDisable.ENABLE || this.meta == null) {
+			return null;
+		}
+		int maxApparentPower = this.getMaxApparentPower().orElse(this.config.maxApparentPower());
+		int hardLimit = this.meta.getGridSellHardLimit();
+		return hardLimit < maxApparentPower ? Math.max(0, hardLimit) : null;
+	}
+
+	/**
+	 * Publishes the applied grid feed-in limit and warns when the inverter's
+	 * read-back (regs 44102/44104, LOW-priority task) has not matched it for
+	 * more than 30 s.
+	 */
+	private void checkGridFeedInLimit() {
+		Integer applied = this.getGridFeedInLimit();
+		this.channel(PytesJs3.ChannelId.GRID_FEED_IN_LIMIT).setNextValue(applied);
+
+		var readBackSwitch = this.getRemoteDispatchSystemLimitSwitch();
+		IntegerReadChannel readBackChannel = this.channel(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT);
+		Integer readBackLimit = readBackChannel.value().get();
+		boolean matches;
+		if (applied == null) {
+			matches = readBackSwitch != RemoteDispatchSystemLimitSwitch.EXPORT_LIMIT_ENABLE
+					&& readBackSwitch != RemoteDispatchSystemLimitSwitch.IMPORT_EXPORT_LIMIT_ENABLE;
+		} else {
+			matches = readBackSwitch == RemoteDispatchSystemLimitSwitch.EXPORT_LIMIT_ENABLE //
+					&& readBackLimit != null && Math.abs(readBackLimit - applied) < 100; // register is in 100 W
+		}
+		int cyclesFor30s = Math.max(1, 30_000 / this.getCycleTime());
+		this.feedInLimitMismatchCycles = matches ? 0 : Math.min(this.feedInLimitMismatchCycles + 1, cyclesFor30s);
+		this.channel(PytesJs3.ChannelId.GRID_FEED_IN_LIMIT_MISMATCH)
+				.setNextValue(this.feedInLimitMismatchCycles >= cyclesFor30s);
 	}
 
 	public int getCycleTime() {

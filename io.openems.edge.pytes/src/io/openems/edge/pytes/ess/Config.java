@@ -3,6 +3,7 @@ package io.openems.edge.pytes.ess;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
+import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 import io.openems.edge.pytes.enums.WorkMode;
 
@@ -34,6 +35,9 @@ import io.openems.edge.pytes.enums.WorkMode;
 
 	@AttributeDefinition(name = "Enable Backup Port", description = "Activate Backup Port")
 	boolean enableBackupPort() default true;
+
+	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic part is done by controllers (e.g. GridOptimizedCharge).")
+	EnableDisable feedPowerEnable() default EnableDisable.DISABLE;
 
 	String webconsole_configurationFactory_nameHint() default "io.openems.edge.pytes [{id}]";
 

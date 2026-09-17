@@ -51,7 +51,7 @@ public class ApplyPowerHandler {
 	private double trimCharge = 0;
 	private long elapsedMs = 0;
 	private long freezeUntilMs = 0;
-	private Integer lastAcBatteryTarget = null;
+	private Integer lastInverterTarget = null;
 
 	/**
 	 * Expected conversion losses between battery and AC side.
@@ -178,16 +178,28 @@ public class ApplyPowerHandler {
 		}
 		boolean idle = Math.abs(target) < MIN_TARGET_W;
 
+		// Loads on the backup port: in AC output control the inverter regulates
+		// its GRID-SIDE port only and supplies the backup port on top, while
+		// ActivePower (and the OpenEMS set-point) is the total AC output. The
+		// backup load therefore has to be taken out of the register value (seen
+		// live on 2026-09-17: a 1.2 kW EV on the backup port led to 850 W grid
+		// export). In battery control the total is what matters, nothing to do.
+		int backupLoad = batteryControl ? 0 : Math.max(0, this.battery.getBackupLoadPower().orElse(0));
+
 		// Feed-forward: bias and losses always act in discharge direction.
 		final int feedForward = batteryControl && !idle ? BIAS_W + expectedLosses(target, pvPower) : 0;
 
 		// Time base, scaled with the configured cycle time
 		int cycleTimeMs = this.ess.getCycleTime();
 		this.elapsedMs += cycleTimeMs;
-		if (this.lastAcBatteryTarget != null && Math.abs(target - this.lastAcBatteryTarget) > TRIM_FREEZE_STEP_W) {
+		// Step detection on what the inverter sees (a backup load step is a step
+		// for the inverter as well)
+		int inverterTarget = target - backupLoad;
+		if (this.lastInverterTarget != null
+				&& Math.abs(inverterTarget - this.lastInverterTarget) > TRIM_FREEZE_STEP_W) {
 			this.freezeUntilMs = this.elapsedMs + TRIM_FREEZE_MS;
 		}
-		this.lastAcBatteryTarget = target;
+		this.lastInverterTarget = inverterTarget;
 
 		// Integral trim on the controlled quantity. Only integrate when the
 		// set-point is not sitting on a limit (anti-windup: with the current trim
@@ -216,9 +228,10 @@ public class ApplyPowerHandler {
 
 		this.writeExternalControlFlags();
 		// Reg 44106 (1 = 10 W): with 44105 = 2 (battery control) a negative value is
-		// battery discharge, positive is charge; with 44105 = 3/4 negative is import,
-		// positive is export.
-		int registerValue = (int) Math.round(setPoint / 10.0) * sign;
+		// battery discharge, positive is charge; with 44105 = 4 the inverter
+		// regulates its grid-side AC port (negative = import, positive = export),
+		// see backupLoad above.
+		int registerValue = (int) Math.round((setPoint - backupLoad) / 10.0) * sign;
 		this.ess.setRemoteDispatchRealtimeControlSwitch(essSetpoint);
 		this.ess.setRemoteDispatchRealtimeControlPower(registerValue);
 		
@@ -231,7 +244,8 @@ public class ApplyPowerHandler {
 				+ "\n[ApplyPower] FeedForward: " + feedForward + " W, Trim: " + Math.round(trim) + " W (target " + target
 				+ " W, measured " + measured + " W, BMS " + batteryPower + " W, trimD " + Math.round(this.trimDischarge)
 				+ " trimC " + Math.round(this.trimCharge) + ")"
-				+ "\n[ApplyPower]   PV Power " + pvPower);
+				+ "\n[ApplyPower]   PV Power " + pvPower + ", Backup load " + backupLoad + ", Feed-in limit "
+				+ this.ess.getGridFeedInLimit());
 
 
 	}
@@ -251,9 +265,18 @@ public class ApplyPowerHandler {
 		// 44105/44106 are set by apply() in the same cycle.
 		this.ess.setRemoteDispatchSwitch(EnableDisable.ENABLE); // 44100
 		this.ess.setRemoteDispatchFailsafeSetting(FAILSAFE_MINUTES); // 44101
-		this.ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE); // 44102
-		this.ess.setRemoteDispatchSystemImportLimit(0); // 44103, unused while the limit switch is disabled
-		this.ess.setRemoteDispatchSystemExportLimit(0); // 44104
+		// 44102-44104: grid feed-in hard limit as hardware backstop (see
+		// PytesJs3Impl.getGridFeedInLimit()). The inverter limits the export at
+		// its grid meter and curtails PV when the battery cannot take the surplus.
+		Integer feedInLimit = this.ess.getGridFeedInLimit();
+		if (feedInLimit != null) {
+			this.ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.EXPORT_LIMIT_ENABLE);
+			this.ess.setRemoteDispatchSystemExportLimit(feedInLimit); // W, register in 100 W steps
+		} else {
+			this.ess.setRemoteDispatchSystemLimitSwitch(RemoteDispatchSystemLimitSwitch.DISABLE);
+			this.ess.setRemoteDispatchSystemExportLimit(0);
+		}
+		this.ess.setRemoteDispatchSystemImportLimit(0); // 44103, import limit not used
 		// 44108: PV on, DO off, grid charge allowed, no off-grid standby. Same value
 		// the inverter reports by default. ToDo: make grid charge configurable.
 		this.ess.setRemoteDispatchRealtimeControlFunctionSwitch(false, false, true, false);

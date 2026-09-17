@@ -266,13 +266,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		if (currentActivePower == null) {
 			this.changeState(State.ERROR);
-			this.log.error("ActivePower is null.  Aborting execution.");
+			this.logDebug(this.log, "ActivePower not available (yet). Aborting execution.");
 			return;
 		}
 
 		if (this.currentSoc == null) {
 			this.changeState(State.ERROR);
-			this.log.error("SoC is null.  Aborting execution.");
+			this.logDebug(this.log, "SoC not available (yet). Aborting execution.");
 			return;
 		}
 

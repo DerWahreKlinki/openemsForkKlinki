@@ -30,11 +30,14 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "Max. Apparent Power", description = "Inverter´s apparent power limit")
 	int maxApparentPower() default 10000;
 
-	@AttributeDefinition(name = "Min SoC [5-100%]", description = "Minimum SoC. This value is written to hardware")
+	@AttributeDefinition(name = "Min SoC [5-100%]", description = "NOT applied: the SoC limits configured in the inverter are authoritative. Kept for a possible opt-in (see PytesJs3Impl.setDefaultValues()).")
 	int minSoc() default 10;
 
-	@AttributeDefinition(name = "Enable Backup Port", description = "Activate Backup Port")
+	@AttributeDefinition(name = "Enable Backup Port", description = "NOT applied: the backup port setting configured in the inverter is authoritative. Kept for a possible opt-in (see PytesJs3Impl.setDefaultValues()).")
 	boolean enableBackupPort() default true;
+
+	@AttributeDefinition(name = "Failsafe timeout [min]", description = "Minutes without an EMS write after which the inverter falls back to its own self-use mode (reg 44101, 1-1440). Keep it short if loads on the backup port depend on the EMS.")
+	int failsafeMinutes() default 5;
 
 	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic part is done by controllers (e.g. GridOptimizedCharge).")
 	EnableDisable feedPowerEnable() default EnableDisable.DISABLE;

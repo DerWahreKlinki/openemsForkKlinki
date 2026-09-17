@@ -50,6 +50,7 @@ import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.meta.Meta;
+import io.openems.edge.controller.ess.ripplecontrolreceiver.ControllerEssRippleControlReceiver;
 import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.HybridEss;
@@ -79,8 +80,8 @@ import io.openems.edge.pytes.enums.WorkState;
 		EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS, //
 })
 public class PytesJs3Impl extends AbstractOpenemsModbusComponent
-		implements PytesJs3, HybridEss, SymmetricEss, ManagedSymmetricEss, OpenemsComponent, ModbusComponent,
-		EventHandler, TimedataProvider {
+		implements PytesJs3, HybridEss, SymmetricEss, ManagedSymmetricEss, ApplyPowerEss, OpenemsComponent,
+		ModbusComponent, EventHandler, TimedataProvider {
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -105,6 +106,11 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	@Reference
 	private Meta meta;
+
+	// Optional ripple control receiver (like GoodWe): its dynamic feed-in limit
+	// is applied in addition to the Core.Meta limit
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
+	private volatile ControllerEssRippleControlReceiver rcr;
 
 	private final CalculateEnergyFromPower calculateAcChargeEnergy = new CalculateEnergyFromPower(this,
 			SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY);
@@ -1308,6 +1314,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 *
 	 * @param message the message to log
 	 */
+	@Override
 	public void debugLog(String message) {
 		this.logDebug(this.log, message);
 	}
@@ -1389,6 +1396,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 *
 	 * @return the Logger
 	 */
+	@Override
 	public Logger getLogger() {
 		return this.log;
 	}
@@ -1435,7 +1443,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 *
 	 * @return the limit in W, positive
 	 */
-	int getBatteryDischargeLimit() {
+	@Override
+	public int getBatteryDischargeLimit() {
 		return this.batteryDischargeLimit;
 	}
 
@@ -1453,7 +1462,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 *
 	 * @return the limit in W, negative or 0
 	 */
-	int getBatteryChargeLimit() {
+	@Override
+	public int getBatteryChargeLimit() {
 		return this.batteryChargeLimit;
 	}
 
@@ -1465,13 +1475,40 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 *
 	 * @return the limit in W, or null for no limitation
 	 */
-	Integer getGridFeedInLimit() {
-		if (this.config.feedPowerEnable() != EnableDisable.ENABLE || this.meta == null) {
-			return null;
-		}
+	@Override
+	public Integer getGridFeedInLimit() {
 		int maxApparentPower = this.getMaxApparentPower().orElse(this.config.maxApparentPower());
-		int hardLimit = this.meta.getGridSellHardLimit();
-		return hardLimit < maxApparentPower ? Math.max(0, hardLimit) : null;
+		Integer limit = null;
+
+		// Limit from the general feed-in limitation (Core.Meta), if enabled
+		if (this.config.feedPowerEnable() == EnableDisable.ENABLE && this.meta != null) {
+			int hardLimit = this.meta.getGridSellHardLimit();
+			if (hardLimit < maxApparentPower) {
+				limit = Math.max(0, hardLimit);
+			}
+		}
+
+		// Limit from a ripple control receiver (minimum of both). A grid
+		// operator's signal is mandatory, so it is applied whenever the
+		// controller exists and is enabled - independent of feedPowerEnable.
+		var rcr = this.rcr;
+		if (rcr != null && rcr.isEnabled()) {
+			int rcrLimit = Math.max(0, rcr.getDynamicGridFeedInLimit(maxApparentPower));
+			if (rcrLimit < maxApparentPower) {
+				limit = limit == null ? rcrLimit : Math.min(limit, rcrLimit);
+			}
+		}
+		return limit;
+	}
+
+	/**
+	 * Gets the configured failsafe timeout for the remote dispatch (reg 44101).
+	 *
+	 * @return minutes, 1..1440
+	 */
+	@Override
+	public int getFailsafeMinutes() {
+		return Math.max(1, Math.min(1440, this.config.failsafeMinutes()));
 	}
 
 	/**
@@ -1500,6 +1537,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				.setNextValue(this.feedInLimitMismatchCycles >= cyclesFor30s);
 	}
 
+	@Override
 	public int getCycleTime() {
 		return this.cycle != null ? this.cycle.getCycleTime() : DEFAULT_CYCLE_TIME;
 	}

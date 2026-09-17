@@ -17,8 +17,11 @@ public @interface Config {
 	@AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
 	boolean enabled() default true;
 
-	@AttributeDefinition(name = "Max. charge/discharge current [A]", description = "Maximum battery charge/discharge current")
-	int max_current() default 10;
+	@AttributeDefinition(name = "Max. charge current [A]", description = "Upper limit for the battery charge current; the BMS limit applies if lower")
+	int maxChargeCurrent() default 40;
+
+	@AttributeDefinition(name = "Max. discharge current [A]", description = "Upper limit for the battery discharge current; the BMS limit applies if lower")
+	int maxDischargeCurrent() default 40;
 
 	@AttributeDefinition(name = "Pytes ESS-ID", description = "ESS-ID to which the battery is connected to")
 	String ess_id() default "ess0";

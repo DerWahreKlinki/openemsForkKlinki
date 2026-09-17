@@ -9,7 +9,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	protected static class Builder {
 		private String id;
 		private String essId = "ess0";
-		private int maxCurrent = 40;
+		private int maxChargeCurrent = 40;
+		private int maxDischargeCurrent = 40;
 		private boolean debugMode = false;
 
 		private Builder() {
@@ -25,8 +26,13 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setMaxCurrent(int maxCurrent) {
-			this.maxCurrent = maxCurrent;
+		public Builder setMaxChargeCurrent(int maxChargeCurrent) {
+			this.maxChargeCurrent = maxChargeCurrent;
+			return this;
+		}
+
+		public Builder setMaxDischargeCurrent(int maxDischargeCurrent) {
+			this.maxDischargeCurrent = maxDischargeCurrent;
 			return this;
 		}
 
@@ -57,8 +63,13 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public int max_current() {
-		return this.builder.maxCurrent;
+	public int maxChargeCurrent() {
+		return this.builder.maxChargeCurrent;
+	}
+
+	@Override
+	public int maxDischargeCurrent() {
+		return this.builder.maxDischargeCurrent;
 	}
 
 	@Override

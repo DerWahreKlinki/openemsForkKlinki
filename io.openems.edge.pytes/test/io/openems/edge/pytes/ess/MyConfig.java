@@ -141,6 +141,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
+	public int failsafeMinutes() {
+		return 5;
+	}
+
+	@Override
 	public boolean debugMode() {
 		return this.builder.debugMode;
 	}

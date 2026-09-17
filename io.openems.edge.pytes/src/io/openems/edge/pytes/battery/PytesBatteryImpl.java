@@ -189,12 +189,12 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 
 	@Override
 	public int getConfiguredMaxChargeCurrent() {
-		return this.config.max_current(); // ToDo: different values for charge/discharge useful?
+		return this.config.maxChargeCurrent();
 	}
 
 	@Override
 	public int getConfiguredMaxDischargeCurrent() {
-		return this.config.max_current();
+		return this.config.maxDischargeCurrent();
 	}
 
 	@Override

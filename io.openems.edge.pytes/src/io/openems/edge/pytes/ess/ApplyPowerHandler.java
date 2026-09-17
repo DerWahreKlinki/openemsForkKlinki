@@ -13,7 +13,7 @@ import io.openems.edge.pytes.enums.WorkState;
 public class ApplyPowerHandler {
 
 	// === Dependencies ===
-	private final PytesJs3Impl ess;
+	private final ApplyPowerEss ess;
 	private final PytesBattery battery;
 	private final PytesDcCharger dcCharger;
 	private final Logger log;
@@ -33,7 +33,6 @@ public class ApplyPowerHandler {
 	static final int LOSS_BASE_W = 30;
 	static final double LOSS_FACTOR = 0.03; // of |battery| + PV
 	private static final int MIN_TARGET_W = 50; // below this the inverter is treated as idle
-	private static final int FAILSAFE_MINUTES = 5; // reg 44101: inverter falls back to self-use after this
 
 	// === Setpoint trim ===
 	// A slow integral correction on the AC-side battery contribution
@@ -64,7 +63,7 @@ public class ApplyPowerHandler {
 		return LOSS_BASE_W + (int) Math.round(LOSS_FACTOR * (Math.abs(batteryPower) + Math.max(0, pvPower)));
 	}
 
-	public ApplyPowerHandler(PytesJs3Impl ess, PytesBattery battery, PytesDcCharger dcCharger) {
+	public ApplyPowerHandler(ApplyPowerEss ess, PytesBattery battery, PytesDcCharger dcCharger) {
 		this.ess = ess;
 		this.battery = battery;
 		this.dcCharger = dcCharger;
@@ -264,7 +263,7 @@ public class ApplyPowerHandler {
 		// registers without a value (44103/44104/44108) would split it into two.
 		// 44105/44106 are set by apply() in the same cycle.
 		this.ess.setRemoteDispatchSwitch(EnableDisable.ENABLE); // 44100
-		this.ess.setRemoteDispatchFailsafeSetting(FAILSAFE_MINUTES); // 44101
+		this.ess.setRemoteDispatchFailsafeSetting(this.ess.getFailsafeMinutes()); // 44101
 		// 44102-44104: grid feed-in hard limit as hardware backstop (see
 		// PytesJs3Impl.getGridFeedInLimit()). The inverter limits the export at
 		// its grid meter and curtails PV when the battery cannot take the surplus.

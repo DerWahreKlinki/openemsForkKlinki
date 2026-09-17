@@ -17,10 +17,10 @@ public @interface Config {
 	@AttributeDefinition(name = "Is enabled?", description = "Is this Component enabled?")
 	boolean enabled() default true;
 
-	@AttributeDefinition(name = "Max. charge current [A]", description = "Upper limit for the battery charge current; the BMS limit applies if lower")
+	@AttributeDefinition(name = "Max. charge current [A]", description = "Additional EMS-side upper limit for the battery charge current. The smallest of this value, the BMS limit and the inverter's own setting (reg 43117, app 'max. charge current') is used. Only enforceable while the inverter follows the EMS set-point - with an active grid feed-in limit the inverter charges autonomously up to its own setting, so do not configure a value below the inverter setting.")
 	int maxChargeCurrent() default 40;
 
-	@AttributeDefinition(name = "Max. discharge current [A]", description = "Upper limit for the battery discharge current; the BMS limit applies if lower")
+	@AttributeDefinition(name = "Max. discharge current [A]", description = "Additional EMS-side upper limit for the battery discharge current. The smallest of this value, the BMS limit and the inverter's own setting (reg 43118, app 'max. discharge current') is used. Only enforceable while the inverter follows the EMS set-point.")
 	int maxDischargeCurrent() default 40;
 
 	@AttributeDefinition(name = "Pytes ESS-ID", description = "ESS-ID to which the battery is connected to")

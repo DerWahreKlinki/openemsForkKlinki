@@ -81,6 +81,26 @@ while the ESS is not in work state NORMAL (e.g. the first 2–3 cycles after sta
   few watts.
 * `getSurplusPower()` = PV + raw DC charge limit (for `Controller.Ess.Hybrid.SurplusFeedToGrid`).
 
+== Battery current limits
+
+Four sources exist; the smallest value wins in `AllowedChargeDischargeHandler`
+(measured 2026-09-17):
+
+* EMS config (`Pytes.Battery` maxChargeCurrent / maxDischargeCurrent) - enforced by
+  the EMS via the set-point clamps; only effective while the inverter follows the
+  EMS set-point.
+* BMS request (regs 33143/33144, "From BMS") - a request to the inverter; the BMS
+  itself only protects with its hard thresholds (fault words 33145/33146).
+* Inverter storage-control setting (regs 43117/43118) - the app's "max. charge /
+  discharge current", 1:1. **This is the limit the inverter actually uses** when it
+  runs autonomously (see below). It is read, never written.
+* Inverter battery-model setting (regs 43012/43013) - 999.0 A placeholder with
+  communicating lithium batteries; ignored when 0 or above 150 A.
+
+The inverter exceeds its own limit by ~10 % for a while when the AC set-point asks
+for more than the battery can deliver, so keep the EMS config at or above the
+inverter setting - a stricter EMS value cannot be enforced in autonomous mode.
+
 == Grid feed-in limitation (e.g. 70 % rule)
 
 Follows the GoodWe implementation: the limit is configured centrally in `Core.Meta`
@@ -92,6 +112,15 @@ limit switch, reg 44104 limit in 100 W steps) as hardware backstop: the inverter
 the export at its grid meter and curtails PV when the battery cannot take the surplus.
 Channels: `GridFeedInLimit` (applied value), `GridFeedInLimitMismatch` (warning when the
 inverter's read-back differs for more than 30 s).
+
+Measured behaviour with the limit active (2026-09-17, limit 400 W, PV 5.9 kW): the
+inverter keeps the export exactly at the limit, **ignores the AC set-point** and runs
+autonomously in this order: export up to the limit -> charge the battery up to its own
+setting (regs 43117/43118, exceeded by ~10 %) -> curtail PV. PV curtailment works
+(5.9 kW available, 3.5 kW produced). EMS-side battery limits and OpenEMS controllers
+(Balancing etc.) have no effect while the limit is active, so use the inverter limit
+only as a backstop with a margin above the real limit and let OpenEMS controllers do
+the dynamic limitation.
 
 == Settings that are not touched
 

@@ -90,8 +90,25 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		Integer configuredMaxChargeCurrent = this.battery.getConfiguredMaxChargeCurrent(); // A
 		Integer configuredMaxDischargeCurrent = this.battery.getConfiguredMaxDischargeCurrent();
 
-		int maxChargeCurrent = (int)    Math.min(configuredMaxChargeCurrent,batteryMaxChargeCurrent);
-		int maxDischargeCurrent = (int)    Math.min(configuredMaxDischargeCurrent,batteryMaxDischargeCurrent);
+		// The smallest of all known limits wins (measured 2026-09-17):
+		// - EMS config (battery0 maxCharge/DischargeCurrent) - enforced by us
+		// - BMS request (regs 33143/33144) - the BMS only protects hard, the
+		//   inverter is supposed to honour it (it exceeded it by ~10 % once)
+		// - inverter storage-control setting (regs 43117/43118) - what the
+		//   inverter's own control uses (e.g. 48.3 A discharge derating)
+		// - inverter battery-model setting (regs 43012/43013) - 999 A placeholder
+		//   with communicating lithium batteries, kept in case a battery model
+		//   sets it
+		int maxChargeCurrent = Math.min(configuredMaxChargeCurrent, batteryMaxChargeCurrent);
+		int maxDischargeCurrent = Math.min(configuredMaxDischargeCurrent, batteryMaxDischargeCurrent);
+		maxChargeCurrent = minWithInverterLimit(maxChargeCurrent,
+				this.parent.channel(PytesJs3.ChannelId.STORAGE_CTRL_MAX_CHARGE_CURRENT).value().get());
+		maxDischargeCurrent = minWithInverterLimit(maxDischargeCurrent,
+				this.parent.channel(PytesJs3.ChannelId.STORAGE_CTRL_MAX_DISCHARGE_CURRENT).value().get());
+		maxChargeCurrent = minWithInverterLimit(maxChargeCurrent,
+				this.parent.channel(PytesJs3.ChannelId.INVERTER_MAX_CHARGE_CURRENT).value().get());
+		maxDischargeCurrent = minWithInverterLimit(maxDischargeCurrent,
+				this.parent.channel(PytesJs3.ChannelId.INVERTER_MAX_DISCHARGE_CURRENT).value().get());
 
 		int allowedChargePower = (int) Math.min(0, Math.ceil(Math.round((maxChargeCurrent * batteryVoltage * -1) / 1000.0))); // Voltage is mV
 		int allowedDischargePower = (int) Math.max(0, Math.floor(Math.round((maxDischargeCurrent * batteryVoltage) / 1000.0)));
@@ -132,11 +149,28 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 			reportedDischarge = Math.max(0, allowedDischargePower - ApplyPowerHandler.BIAS_W
 					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
 		}
-		this._setAllowedChargePower(reportedCharge); // 0 or negative
+		// both directions are additionally capped by the inverter's apparent power
+		this._setAllowedChargePower(Math.max(-maxApparentPower, reportedCharge)); // 0 or negative
 		this.parent._setAllowedDischargePower(Math.min(maxApparentPower, reportedDischarge)); // positive
 	}
 
 	
+	/**
+	 * Applies an inverter-side current limit (mA, may be null) to a limit in A.
+	 * Values of 0 (not set) and above 150 A (placeholder such as 999.0 A, the
+	 * datasheet range ends at 100 A) are ignored.
+	 *
+	 * @param limitA         the limit so far in A
+	 * @param inverterLimitMa the inverter's limit in mA or null
+	 * @return the smaller limit in A
+	 */
+	static int minWithInverterLimit(int limitA, Object inverterLimitMa) {
+		if (!(inverterLimitMa instanceof Integer ma) || ma <= 0 || ma > 150_000) {
+			return limitA;
+		}
+		return Math.min(limitA, (int) Math.floor(ma / 1000.0));
+	}
+
 	// 2026 03 26 Helper to set allowed charge power via new method
 	private void _setAllowedChargePower(int allowedChargePower) {
 		setValue(this.parent, ManagedSymmetricEss.ChannelId.ALLOWED_CHARGE_POWER,

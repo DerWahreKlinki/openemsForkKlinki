@@ -132,6 +132,54 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 * Force Charge SOC — read-back channel (reg 43018, U16, FC3).
 		 * Unit: %
 		 */
+		/**
+		 * Inverter battery-model setting: max charge current (reg 43012, U16, 0.1 A,
+		 * read-only here). LV hybrid: 50.0-100.0 A, default 62.5 A. Unit: mA.
+		 */
+		INVERTER_MAX_CHARGE_CURRENT(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.MILLIAMPERE)),
+
+		/**
+		 * Inverter battery-model setting: max discharge current (reg 43013, U16,
+		 * 0.1 A, read-only here). LV hybrid: 50.0-100.0 A, default 62.5 A. Unit: mA.
+		 */
+		INVERTER_MAX_DISCHARGE_CURRENT(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.MILLIAMPERE)),
+
+		/**
+		 * Inverter storage-control setting: battery max charge current (reg 43117,
+		 * U16, 0.1 A, read-only here). S6: 0 .. max battery charge current. Unit: mA.
+		 */
+		STORAGE_CTRL_MAX_CHARGE_CURRENT(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.MILLIAMPERE)),
+
+		/**
+		 * Inverter storage-control setting: battery max discharge current (reg
+		 * 43118, U16, 0.1 A, read-only here). Unit: mA.
+		 */
+		STORAGE_CTRL_MAX_DISCHARGE_CURRENT(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.MILLIAMPERE)),
+
+		/**
+		 * Inverter status: battery max charge current (reg 33206, U16, 0.1 A). Max
+		 * 70 A, default 70 A. Unit: mA.
+		 */
+		BATTERY_MAX_CHARGE_CURRENT_STATUS(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.MILLIAMPERE)),
+
+		/**
+		 * Inverter status: battery max discharge current (reg 33207, U16, 0.1 A).
+		 * Max 70 A, default 70 A. Unit: mA.
+		 */
+		BATTERY_MAX_DISCHARGE_CURRENT_STATUS(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.MILLIAMPERE)),
+
 		FORCE_CHARGE_SOC(Doc.of(INTEGER)
 				.accessMode(READ_ONLY)
 				.unit(Unit.PERCENT)

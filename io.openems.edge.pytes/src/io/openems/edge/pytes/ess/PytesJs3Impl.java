@@ -297,7 +297,23 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 								.bit(15, PytesJs3.ChannelId.STORAGE_CTRL_RESERVED_15)),						
 
 						// reg 43111 - Backup circuit setting [read-back]
-						m(PytesJs3.ChannelId.BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111))),
+						m(PytesJs3.ChannelId.BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111)),
+
+						// reg 43112-43116 - storage control (enable, direction, current), not mapped
+						new DummyRegisterElement(43112, 43116),
+
+						// reg 43117/43118 - storage-control battery current limits [read-only]
+						m(PytesJs3.ChannelId.STORAGE_CTRL_MAX_CHARGE_CURRENT, new UnsignedWordElement(43117),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						m(PytesJs3.ChannelId.STORAGE_CTRL_MAX_DISCHARGE_CURRENT, new UnsignedWordElement(43118),
+								ElementToChannelConverter.SCALE_FACTOR_2)),
+
+				// reg 33206/33207 - inverter status: battery max charge/discharge current
+				new FC4ReadInputRegistersTask(33206, Priority.LOW,
+						m(PytesJs3.ChannelId.BATTERY_MAX_CHARGE_CURRENT_STATUS, new UnsignedWordElement(33206),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						m(PytesJs3.ChannelId.BATTERY_MAX_DISCHARGE_CURRENT_STATUS, new UnsignedWordElement(33207),
+								ElementToChannelConverter.SCALE_FACTOR_2)),
 
 				// ---------------------------------------------------------------
 				// SoC limit settings (reg 43010-43018, holding registers)
@@ -325,8 +341,14 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 43011 - Overdischarge SOC [read-back]
 						m(PytesJs3.ChannelId.OVERDISCHARGE_SOC, new UnsignedWordElement(43011)),
 
-						// reg 43012-43017 - Reserved
-						new DummyRegisterElement(43012, 43017),
+						// reg 43012/43013 - inverter battery-model current limits [read-only]
+						m(PytesJs3.ChannelId.INVERTER_MAX_CHARGE_CURRENT, new UnsignedWordElement(43012),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						m(PytesJs3.ChannelId.INVERTER_MAX_DISCHARGE_CURRENT, new UnsignedWordElement(43013),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+
+						// reg 43014-43017 - voltage thresholds, not mapped
+						new DummyRegisterElement(43014, 43017),
 
 						// reg 43018 – Force Charge SOC [read-back]
 						m(PytesJs3.ChannelId.FORCE_CHARGE_SOC, new UnsignedWordElement(43018))),

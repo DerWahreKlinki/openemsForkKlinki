@@ -173,10 +173,17 @@ public class ApplyPowerHandlerTest {
 	}
 
 	@Test
-	public void doesNotWriteWhileNotInNormalState() throws Exception {
-		this.ess.withWorkState(WorkState.WARNING);
+	public void doesNotWriteInErrorState() throws Exception {
+		this.ess.withWorkState(WorkState.ERROR);
 		this.handler.apply(500, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL);
 		assertFalse(this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER).isPresent());
 		assertFalse(this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SWITCH).isPresent());
+	}
+
+	@Test
+	public void keepsWritingInWarningState() throws Exception {
+		// a warning (derating, fan, ...) is informational - the inverter runs on
+		this.ess.withWorkState(WorkState.WARNING);
+		assertEquals(-2, this.applyBatteryControl(20));
 	}
 }

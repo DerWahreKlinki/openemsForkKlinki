@@ -48,6 +48,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		 * Internal OpenEMS work state (not a Modbus register).
 		 * Managed by defineWorkState() in PytesJs3Impl.
 		 * Transitions: UNDEFINED → INITIALIZING → NORMAL | WARNING | ERROR | STANDBY.
+		 * NORMAL and WARNING both apply set-points (a WARNING-level channel is
+		 * informational, the inverter keeps running); only ERROR (a FAULT-level
+		 * channel) stops the EMS control.
 		 */
 		/**
 		 * Grid feed-in limit currently applied to the inverter (regs 44102/44104),
@@ -595,6 +598,22 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.accessMode(READ_ONLY)
 				.unit(Unit.PERCENT)),
 
+		/**
+		 * Limited power setting - write channel (reg 43052, U16, FC6). Active power
+		 * limit of the inverter's AC output in % of rated power (0-110 %). Written
+		 * from the config acOutputLimitPercent on activation only (test step for a
+		 * dynamic feed-in limitation that keeps the EMS in control, unlike the
+		 * autonomous export limit 44102/44104).
+		 */
+		SET_LIMITED_POWER(Doc.of(INTEGER)
+				.accessMode(WRITE_ONLY)
+				.unit(Unit.PERCENT)),
+
+		/** Limited power setting - read-back (reg 43052, U16, FC3). Unit: %. */
+		LIMITED_POWER_SETTING(Doc.of(INTEGER)
+				.accessMode(READ_ONLY)
+				.unit(Unit.PERCENT)),
+
 		/** PF Adjustment Actual Value (reg 33105, S16, FC4).
 		 * Datasheet: 0.001 resolution. E.g. 1000 = 1.000 (unity PF), 800 = 0.800.
 		 * Range: –1.000 to +1.000. No unit declared. */
@@ -938,19 +957,23 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		OPERATING_STAT_NORMAL_OPERATION(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Normal Operation")),
 		OPERATING_STAT_INITIALIZING(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Initializing")),
 		OPERATING_STAT_CONTROLLED_OFF(Doc.of(BOOLEAN).accessMode(READ_ONLY).text("Controlled turning OFF (reg 33121 BIT02)")),
+		// Operating status bits (reg 33121). Only real faults are Level.FAULT: the
+		// component State drives the work state machine (ERROR stops ApplyPower).
+		// "Limited operation (external)" is set whenever reg 43052 < 100 %, i.e.
+		// whenever the EMS limits the AC output - a status, not a fault.
 		OPERATING_STAT_FAULT_OFF(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Fault leads to turning OFF")),
 		OPERATING_STAT_STANDBY(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Stand-by")),
-		OPERATING_STAT_LIMITED_TEMP_FREQ(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Limited Operation (temperature/frequency)")),
-		OPERATING_STAT_LIMITED_EXTERNAL(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Limited Operation (external reason)")),
+		OPERATING_STAT_LIMITED_TEMP_FREQ(Doc.of(Level.WARNING).accessMode(READ_ONLY).text("Limited Operation (temperature/frequency)")),
+		OPERATING_STAT_LIMITED_EXTERNAL(Doc.of(Level.INFO).accessMode(READ_ONLY).text("Limited Operation (external reason)")),
 		OPERATING_STAT_BACKUP_OVERLOAD(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Backup overload")),
 		OPERATING_STAT_LOAD_FAULT(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Load fault")),
 		OPERATING_STAT_GRID_FAULT(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Grid fault")),
 		OPERATING_STAT_BATTERY_FAULT(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Battery fault")),
-		OPERATING_STAT_RESERVED_11(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Reserved (OPSTAT BIT11)")),
-		OPERATING_STAT_GRID_SURGE_WARN(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Grid Surge (Warn)")),
-		OPERATING_STAT_FAN_FAULT_WARN(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Fan fault (Warn)")),
+		OPERATING_STAT_RESERVED_11(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (OPSTAT BIT11)")),
+		OPERATING_STAT_GRID_SURGE_WARN(Doc.of(Level.WARNING).accessMode(READ_ONLY).text("Grid Surge (Warn)")),
+		OPERATING_STAT_FAN_FAULT_WARN(Doc.of(Level.WARNING).accessMode(READ_ONLY).text("Fan fault (Warn)")),
 		OPERATING_STAT_EXTERNAL_FAN_FAIL(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("External fan failure")),
-		OPERATING_STAT_RESERVED_15(Doc.of(Level.FAULT).accessMode(READ_ONLY).text("Reserved (OPSTAT BIT15)")),
+		OPERATING_STAT_RESERVED_15(Doc.of(OpenemsType.BOOLEAN).accessMode(READ_ONLY).text("Reserved (OPSTAT BIT15)")),
 
 		/** Operating Mode Raw Register (reg 33122, U16, FC4).
 		 * Datasheet: "Only one bit is valid at any time." One-hot bitmask.

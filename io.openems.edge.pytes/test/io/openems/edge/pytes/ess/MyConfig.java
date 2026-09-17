@@ -146,6 +146,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
+	public int acOutputLimitPercent() {
+		return -1;
+	}
+
+	@Override
 	public boolean debugMode() {
 		return this.builder.debugMode;
 	}

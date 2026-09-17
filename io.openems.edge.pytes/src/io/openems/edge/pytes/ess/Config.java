@@ -48,7 +48,10 @@ import io.openems.edge.pytes.enums.WorkMode;
 	boolean debugMode() default false;
 
 	@AttributeDefinition(name = "Extended Debug mode", description = "Enables extended Debug mode")
-	boolean extendedDebugMode() default false;	
+	boolean extendedDebugMode() default false;
+
+	@AttributeDefinition(name = "TEST: AC output limit [%]", description = "Writes reg 43052 (limited power, % of rated power, 0-110) once on activation; -1 = do not write. Test step for a dynamic feed-in limitation: the inverter should curtail PV instead of overcharging the battery while still following the EMS set-point.")
+	int acOutputLimitPercent() default -1;
 
 	@AttributeDefinition(name = "ReadOnly Mode", description = "read only mode")
 	boolean readOnlyMode() default false;

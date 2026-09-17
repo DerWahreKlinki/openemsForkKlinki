@@ -88,7 +88,11 @@ public class ApplyPowerHandler {
 			return;
 		}
 		
-		if (this.ess.getWorkState() != WorkState.NORMAL) {
+		// WARNING (derating, fan, limit mismatch, ...) is informational: the
+		// inverter keeps running, so the EMS keeps controlling it. Only ERROR
+		// (a Level.FAULT channel), STANDBY and the start-up states stop writing.
+		var workState = this.ess.getWorkState();
+		if (workState != WorkState.NORMAL && workState != WorkState.WARNING) {
 			this.log.debug("ESS not in normal mode. Skipping ApplyPower");
 			return;
 		}

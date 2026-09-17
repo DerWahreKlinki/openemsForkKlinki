@@ -45,6 +45,7 @@ import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
 import io.openems.edge.common.channel.IntegerReadChannel;
+import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
@@ -169,6 +170,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		this.lastDefinedWorkStateTime = LocalDateTime.now(this.componentManager.getClock());
 		this._setWorkState(WorkState.UNDEFINED);
 		this.installListeners();
+		this.applyAcOutputLimitFromConfig();
 	}
 
 	@Override
@@ -259,6 +261,14 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 				new FC6WriteRegisterTask(43110,
 						m(PytesJs3.ChannelId.SET_STORAGE_CTRL_SWITCH, new UnsignedWordElement(43110))),
+
+				// reg 43052 - limited power (AC output limit in % of rated power)
+				new FC6WriteRegisterTask(43052,
+						m(PytesJs3.ChannelId.SET_LIMITED_POWER, new UnsignedWordElement(43052),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
+				new FC3ReadRegistersTask(43052, Priority.LOW,
+						m(PytesJs3.ChannelId.LIMITED_POWER_SETTING, new UnsignedWordElement(43052),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
 
 				new FC16WriteRegistersTask(43111,
 						m(PytesJs3.ChannelId.SET_BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111))),
@@ -964,7 +974,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			// backup port setting configured in the inverter itself are
 			// authoritative and must not be overwritten by the OpenEMS config
 			// (decision 2026-09-16). The method is kept for a possible opt-in.
-			if (this.getState() == Level.OK) {
+			// a warning (e.g. temperature derating) must not keep the ESS from
+			// starting; NORMAL -> WARNING follows in the next cycle
+			if (this.getState() != Level.FAULT) {
 				this.changeState(WorkState.NORMAL);
 			}
 			break;
@@ -1521,6 +1533,25 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			}
 		}
 		return limit;
+	}
+
+	/**
+	 * TEST step: writes the configured AC output limit (reg 43052) once. -1 means
+	 * "do not touch". The register is a setting, so it is deliberately not
+	 * written cyclically (possible flash wear).
+	 */
+	private void applyAcOutputLimitFromConfig() {
+		int percent = this.config.acOutputLimitPercent();
+		if (percent < 0) {
+			return;
+		}
+		try {
+			IntegerWriteChannel channel = this.channel(PytesJs3.ChannelId.SET_LIMITED_POWER);
+			channel.setNextWriteValue(Math.min(110, percent));
+			this.logInfo(this.log, "Writing AC output limit (reg 43052): " + Math.min(110, percent) + " %");
+		} catch (OpenemsNamedException e) {
+			this.logWarn(this.log, "Unable to write AC output limit: " + e.getMessage());
+		}
 	}
 
 	/**

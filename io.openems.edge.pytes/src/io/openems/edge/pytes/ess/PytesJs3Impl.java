@@ -50,6 +50,7 @@ import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
 import io.openems.edge.common.event.EdgeEventConstants;
+import io.openems.edge.common.meta.GridFeedInLimitationType;
 import io.openems.edge.common.meta.Meta;
 import io.openems.edge.controller.ess.ripplecontrolreceiver.ControllerEssRippleControlReceiver;
 import io.openems.edge.common.sum.GridMode;
@@ -58,6 +59,7 @@ import io.openems.edge.ess.api.HybridEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
 import io.openems.edge.ess.power.api.Power;
+import io.openems.edge.meter.api.ElectricityMeter;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
@@ -107,6 +109,16 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 	@Reference
 	private Meta meta;
+
+	// Grid meter for the dynamic feed-in limitation (optional). The target is
+	// bound to the config directly (like Controller.Ess.Balancing); a "Meter_target"
+	// config property would clash with the DS property "meter.target" (service
+	// properties are case-insensitive).
+	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL, //
+			target = "(&(id=${config.meter_id})(enabled=true))")
+	private volatile ElectricityMeter meter;
+
+	private final PvLimitHandler pvLimitHandler = new PvLimitHandler();
 
 	// Optional ripple control receiver (like GoodWe): its dynamic feed-in limit
 	// is applied in addition to the Core.Meta limit
@@ -170,7 +182,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		this.lastDefinedWorkStateTime = LocalDateTime.now(this.componentManager.getClock());
 		this._setWorkState(WorkState.UNDEFINED);
 		this.installListeners();
-		this.applyAcOutputLimitFromConfig();
 	}
 
 	@Override
@@ -212,6 +223,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_BEFORE_CONTROLLERS:
 			this.defineWorkState();
 			this.checkGridFeedInLimit();
+			this.applyDynamicFeedInLimit();
 			break;
 
 		}
@@ -1451,8 +1463,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		// PV production that the battery cannot absorb (full or limited by the
 		// BMS) has to leave the inverter on the AC side: surplus = PV + raw DC
 		// charge limit (negative or 0). Used by
-		// Controller.Ess.Hybrid.SurplusFeedToGrid; null means no surplus.
-		if (this.charger == null) {
+		// Controller.Ess.Hybrid.SurplusFeedToGrid; null means no surplus. While
+		// the dynamic feed-in limitation curtails PV the measured production is
+		// not the available one (SolarEdge finding), so no surplus is reported.
+		if (this.charger == null || this.pvLimitHandler.isLimiting()) {
 			return null;
 		}
 		Integer pv = this.charger.getActualPower().get();
@@ -1502,6 +1516,39 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	}
 
 	/**
+	 * Dynamic feed-in limitation (SolarEdge pattern of this fork): caps the AC
+	 * output via reg 43052 when the export exceeds the Core.Meta limit, see
+	 * {@link PvLimitHandler}. Needs the grid meter; the inverter's own export
+	 * limit (feedPowerEnable) stays the backstop at the limit itself, this
+	 * control keeps the export TOLERANCE_W below it so the backstop never has to
+	 * act.
+	 */
+	private void applyDynamicFeedInLimit() {
+		var meter = this.meter;
+		int ratedPower = this.getMaxApparentPower().orElse(this.config.maxApparentPower());
+		Integer limit = null;
+		if (meter != null && this.meta.getGridFeedInLimitationType() == GridFeedInLimitationType.DYNAMIC_LIMITATION) {
+			int hardLimit = this.meta.getGridSellHardLimit();
+			limit = hardLimit < ratedPower ? Math.max(0, hardLimit) : null;
+		}
+		var result = this.pvLimitHandler.compute(meter != null ? meter.getActivePower().get() : null,
+				this.getActivePower().get(), limit, ratedPower, this.getCycleTime());
+
+		this.channel(PytesJs3.ChannelId.PV_LIMIT_ACTIVE).setNextValue(result.limiting());
+		this.channel(PytesJs3.ChannelId.AC_OUTPUT_LIMIT).setNextValue(result.acLimitW());
+		if (result.writePercent() != null && !this.config.readOnlyMode()) {
+			try {
+				IntegerWriteChannel channel = this.channel(PytesJs3.ChannelId.SET_LIMITED_POWER);
+				channel.setNextWriteValue(result.writePercent());
+				this.logInfo(this.log, "Dynamic feed-in limit: reg 43052 = " + result.writePercent() + " %"
+						+ (result.limiting() ? " (AC output cap " + result.acLimitW() + " W)" : " (released)"));
+			} catch (OpenemsNamedException e) {
+				this.logWarn(this.log, "Unable to write AC output limit: " + e.getMessage());
+			}
+		}
+	}
+
+	/**
 	 * Gets the grid feed-in limit that has to be written into the inverter as
 	 * hardware backstop, analogous to GoodWeBatteryInverterImpl.handleGridFeed():
 	 * the hard limit from Core.Meta, if feed-in limitation is enabled in the
@@ -1533,25 +1580,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			}
 		}
 		return limit;
-	}
-
-	/**
-	 * TEST step: writes the configured AC output limit (reg 43052) once. -1 means
-	 * "do not touch". The register is a setting, so it is deliberately not
-	 * written cyclically (possible flash wear).
-	 */
-	private void applyAcOutputLimitFromConfig() {
-		int percent = this.config.acOutputLimitPercent();
-		if (percent < 0) {
-			return;
-		}
-		try {
-			IntegerWriteChannel channel = this.channel(PytesJs3.ChannelId.SET_LIMITED_POWER);
-			channel.setNextWriteValue(Math.min(110, percent));
-			this.logInfo(this.log, "Writing AC output limit (reg 43052): " + Math.min(110, percent) + " %");
-		} catch (OpenemsNamedException e) {
-			this.logWarn(this.log, "Unable to write AC output limit: " + e.getMessage());
-		}
 	}
 
 	/**

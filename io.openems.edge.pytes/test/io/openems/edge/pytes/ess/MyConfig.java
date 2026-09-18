@@ -11,6 +11,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	protected static class Builder {
 		private String id;
 		private String modbusId = "modbus0";
+		private String meterId = "";
 		private int modbusUnitId = 1;
 		private WorkMode workMode = WorkMode.EXTERNAL;
 		private RemoteDispatchRealtimeControlSwitch essSetpoint = RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
@@ -31,6 +32,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setModbusId(String modbusId) {
 			this.modbusId = modbusId;
+			return this;
+		}
+
+		public Builder setMeterId(String meterId) {
+			this.meterId = meterId;
 			return this;
 		}
 
@@ -146,8 +152,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public int acOutputLimitPercent() {
-		return -1;
+	public String meter_id() {
+		return this.builder.meterId;
 	}
 
 	@Override

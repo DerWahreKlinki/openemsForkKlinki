@@ -69,6 +69,19 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		GRID_FEED_IN_LIMIT_MISMATCH(Doc.of(Level.WARNING)//
 				.text("Grid feed-in limit in the inverter differs from the applied one (regs 44102/44104)")),
 
+		/**
+		 * Dynamic feed-in limitation is active: the AC output is capped via reg
+		 * 43052 so that the export stays below the Core.Meta limit; PV is curtailed.
+		 */
+		PV_LIMIT_ACTIVE(Doc.of(Level.INFO)//
+				.text("Dynamic feed-in limitation active: AC output capped, PV curtailed")),
+
+		/** The AC output cap applied by the dynamic feed-in limitation; null when inactive. */
+		AC_OUTPUT_LIMIT(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)//
+				.persistencePriority(HIGH)),
+
 		WORK_STATE(Doc.of(WorkState.values())
 				.accessMode(READ_WRITE)
 				.persistencePriority(HIGH)),
@@ -600,10 +613,9 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 
 		/**
 		 * Limited power setting - write channel (reg 43052, U16, FC6). Active power
-		 * limit of the inverter's AC output in % of rated power (0-110 %). Written
-		 * from the config acOutputLimitPercent on activation only (test step for a
-		 * dynamic feed-in limitation that keeps the EMS in control, unlike the
-		 * autonomous export limit 44102/44104).
+		 * limit of the inverter's AC output in % of rated power (0-110 %). Driven
+		 * by the dynamic feed-in limitation (PvLimitHandler); written only when the
+		 * value changes.
 		 */
 		SET_LIMITED_POWER(Doc.of(INTEGER)
 				.accessMode(WRITE_ONLY)

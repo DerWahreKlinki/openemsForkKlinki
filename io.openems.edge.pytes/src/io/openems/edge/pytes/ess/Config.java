@@ -39,8 +39,11 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "Failsafe timeout [min]", description = "Minutes without an EMS write after which the inverter falls back to its own self-use mode (reg 44101, 1-1440). Keep it short if loads on the backup port depend on the EMS.")
 	int failsafeMinutes() default 5;
 
-	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic part is done by controllers (e.g. GridOptimizedCharge).")
+	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic limitation (Grid-Meter-ID) aims 500 W below the limit, so the backstop only acts during its reaction time.")
 	EnableDisable feedPowerEnable() default EnableDisable.DISABLE;
+
+	@AttributeDefinition(name = "Grid-Meter-ID", description = "Grid meter for the dynamic feed-in limitation (Core.Meta gridFeedInLimitationType = DYNAMIC_LIMITATION): when the export exceeds the limit, the inverter AC output is capped via reg 43052 so that PV is curtailed. Leave empty to disable.")
+	String meter_id() default "meter0";
 
 	String webconsole_configurationFactory_nameHint() default "io.openems.edge.pytes [{id}]";
 
@@ -49,9 +52,6 @@ import io.openems.edge.pytes.enums.WorkMode;
 
 	@AttributeDefinition(name = "Extended Debug mode", description = "Enables extended Debug mode")
 	boolean extendedDebugMode() default false;
-
-	@AttributeDefinition(name = "TEST: AC output limit [%]", description = "Writes reg 43052 (limited power, % of rated power, 0-110) once on activation; -1 = do not write. Test step for a dynamic feed-in limitation: the inverter should curtail PV instead of overcharging the battery while still following the EMS set-point.")
-	int acOutputLimitPercent() default -1;
 
 	@AttributeDefinition(name = "ReadOnly Mode", description = "read only mode")
 	boolean readOnlyMode() default false;

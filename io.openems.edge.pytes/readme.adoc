@@ -13,8 +13,8 @@ bridge and unit id; the inverter accepts only **one** TCP connection at a time.
 |`Pytes.Hybrid.ESS`
 |`ManagedSymmetricEss`, `HybridEss`
 |The inverter itself. Receives the OpenEMS AC set-point, owns the work state machine
-and the remote dispatch registers 44100–44108. Battery and DC charger register
-themselves at the ESS (`addBattery()` / `addCharger()`).
+and the remote dispatch registers 44100–44108, does the dynamic feed-in limitation.
+Battery and DC charger register themselves at the ESS (`addBattery()` / `addCharger()`).
 
 |`Pytes.Battery`
 |`Battery`
@@ -79,7 +79,8 @@ while the ESS is not in work state NORMAL (e.g. the first 2–3 cycles after sta
 * `ActivePower` follows a set-point change after ~5 s, the BMS values after ~11 s.
 * The inverter's own battery power reading (reg 33149) and the BMS calculation agree within a
   few watts.
-* `getSurplusPower()` = PV + raw DC charge limit (for `Controller.Ess.Hybrid.SurplusFeedToGrid`).
+* `getSurplusPower()` = PV + raw DC charge limit (for `Controller.Ess.Hybrid.SurplusFeedToGrid`);
+  null while the dynamic feed-in limitation curtails PV (the measured PV is not the available one).
 
 == Battery current limits
 
@@ -103,24 +104,38 @@ inverter setting - a stricter EMS value cannot be enforced in autonomous mode.
 
 == Grid feed-in limitation (e.g. 70 % rule)
 
-Follows the GoodWe implementation: the limit is configured centrally in `Core.Meta`
-(`gridFeedInLimitationType = DYNAMIC_LIMITATION`, `maximumGridFeedInLimit` in W). The dynamic
-part is done by controllers (e.g. `Controller.Ess.GridOptimizedCharge`), which keep the
-export below the limit by charging the battery. With `feedPowerEnable = ENABLE` in the ESS
-config the hard limit from Meta is additionally written into the inverter (reg 44102 export
-limit switch, reg 44104 limit in 100 W steps) as hardware backstop: the inverter then limits
-the export at its grid meter and curtails PV when the battery cannot take the surplus.
-Channels: `GridFeedInLimit` (applied value), `GridFeedInLimitMismatch` (warning when the
-inverter's read-back differs for more than 30 s).
+The limit is configured centrally in `Core.Meta` (`gridFeedInLimitationType =
+DYNAMIC_LIMITATION`, `maximumGridFeedInLimit` in W). Controllers such as
+`Controller.Ess.GridOptimizedCharge` keep the export below the limit by charging the battery
+as long as the battery can take the surplus. Two mechanisms in the ESS handle the rest:
 
-Measured behaviour with the limit active (2026-09-17, limit 400 W, PV 5.9 kW): the
+Dynamic limitation (`meter_id`, ported from the SolarEdge implementation of this fork)::
+When the export at the grid meter exceeds the Meta limit, the ESS caps the inverter's AC
+output (reg 43052, "limited power" in % of the rated power) at
+`consumption + limit - 500 W`, where consumption = ESS AC power + grid power (house incl.
+backup port). The inverter then curtails PV; the EMS set-point (battery charge/discharge)
+stays in force below the cap. Grid and ESS power are averaged over 5 cycles, the register is
+written only on change and at most every 10 s. The cap is released (100 %) when it would
+exceed the rated power or when the inverter outputs clearly less than the cap it applies
+(PV dropped), evaluated 10 s after the last write. Channels: `PvLimitActive` (INFO),
+`AcOutputLimit` (W), read-back `LimitedPowerSetting` / `LimitedPowerActualValue`.
+The inverter reports the active cap in reg 33121 (`OperatingStatLimitedExternal`, INFO).
+
+Hardware backstop (`feedPowerEnable = ENABLE`)::
+Additionally writes the hard limit from Meta (and a ripple control receiver, if present)
+into the inverter (reg 44102 export limit switch, reg 44104 limit in 100 W steps). The
+inverter then limits the export at its grid meter itself. Channels: `GridFeedInLimit`
+(applied value), `GridFeedInLimitMismatch` (warning when the read-back differs for more than
+30 s). The dynamic limitation aims 500 W below the limit, so the backstop only acts during
+its ~5 s reaction time.
+
+Measured behaviour with the backstop active (2026-09-17, limit 400 W, PV 5.9 kW): the
 inverter keeps the export exactly at the limit, **ignores the AC set-point** and runs
 autonomously in this order: export up to the limit -> charge the battery up to its own
-setting (regs 43117/43118, exceeded by ~10 %) -> curtail PV. PV curtailment works
-(5.9 kW available, 3.5 kW produced). EMS-side battery limits and OpenEMS controllers
-(Balancing etc.) have no effect while the limit is active, so use the inverter limit
-only as a backstop with a margin above the real limit and let OpenEMS controllers do
-the dynamic limitation.
+setting (regs 43117/43118, exceeded by ~10 %) -> curtail PV. EMS-side battery limits and
+OpenEMS controllers (Balancing etc.) have no effect while the backstop is active; this is
+why the dynamic limitation via reg 43052 exists (measured: 43052 caps the AC output exactly,
+20 % = 3000 W of 15 kVA).
 
 == Settings that are not touched
 

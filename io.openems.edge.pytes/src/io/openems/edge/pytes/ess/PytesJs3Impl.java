@@ -195,6 +195,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			// Guard against null - battery registers itself asynchronously after activation
 			if (this.battery != null) {
 				this._setSoc(this.battery.getSoc().get()); // Integer value
+				this._setCapacity(this.battery.getCapacity().get());
 			}
 			// DcDischargePower is derived as ActivePower - PV instead of taking the
 			// BMS measurement: the BMS value lags ~6 s behind ActivePower, which made

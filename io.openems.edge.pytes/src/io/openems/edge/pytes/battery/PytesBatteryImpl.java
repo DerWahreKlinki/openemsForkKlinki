@@ -109,8 +109,8 @@ public class PytesBatteryImpl extends AbstractOpenemsModbusComponent
 
 	    this.ess.addBattery(this);
 
-
-
+	    // Not available from the inverter/BMS, see Config#capacity()
+	    this._setCapacity(config.capacity() > 0 ? config.capacity() : null);
 	}
 
 	@Override

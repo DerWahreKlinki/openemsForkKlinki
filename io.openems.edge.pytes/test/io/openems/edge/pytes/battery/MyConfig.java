@@ -11,6 +11,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private String essId = "ess0";
 		private int maxChargeCurrent = 40;
 		private int maxDischargeCurrent = 40;
+		private int capacity = 0;
 		private boolean debugMode = false;
 
 		private Builder() {
@@ -33,6 +34,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setMaxDischargeCurrent(int maxDischargeCurrent) {
 			this.maxDischargeCurrent = maxDischargeCurrent;
+			return this;
+		}
+
+		public Builder setCapacity(int capacity) {
+			this.capacity = capacity;
 			return this;
 		}
 
@@ -70,6 +76,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int maxDischargeCurrent() {
 		return this.builder.maxDischargeCurrent;
+	}
+
+	@Override
+	public int capacity() {
+		return this.builder.capacity;
 	}
 
 	@Override

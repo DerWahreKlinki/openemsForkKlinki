@@ -23,6 +23,9 @@ public @interface Config {
 	@AttributeDefinition(name = "Max. discharge current [A]", description = "Additional EMS-side upper limit for the battery discharge current. The smallest of this value, the BMS limit and the inverter's own setting (reg 43118, app 'max. discharge current') is used. Only enforceable while the inverter follows the EMS set-point.")
 	int maxDischargeCurrent() default 40;
 
+	@AttributeDefinition(name = "Capacity [Wh]", description = "Nominal battery capacity, e.g. 100 Ah x 51.2 V = 5120 Wh. The Pytes BMS does not report it via the inverter (BMS extension block 34345-34364 is empty, reg 43387 is a fixed 3.0 kWh placeholder that cannot be set in the app - verified 2026-09-18). 0 = unknown.")
+	int capacity() default 0;
+
 	@AttributeDefinition(name = "Pytes ESS-ID", description = "ESS-ID to which the battery is connected to")
 	String ess_id() default "ess0";
 

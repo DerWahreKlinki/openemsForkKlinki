@@ -65,9 +65,10 @@ public class PvLimitHandlerTest {
 		// consumption 2000 W: PV 5000 W -> ess 5000, export 3000
 		var r = this.run(-3000, 5000, LIMIT, 10);
 		assertTrue(r.limiting());
-		// cap = 2000 + 400 - 500 = 1900 W -> ceil(12.67 %) = 13 %
-		assertEquals(Integer.valueOf(1900), r.acLimitW());
-		assertEquals(13, r.percent());
+		// tolerance = min(500, 400 / 2) = 200: cap = 2000 + 400 - 200 = 2200 W
+		// -> ceil(14.67 %) = 15 %
+		assertEquals(Integer.valueOf(2200), r.acLimitW());
+		assertEquals(15, r.percent());
 	}
 
 	@Test
@@ -76,18 +77,18 @@ public class PvLimitHandlerTest {
 		// first cap is written immediately (MIN_WRITE_MS since the 100 % write
 		// has passed after 10 cycles)
 		var r = this.run(-3000, 5000, LIMIT, 10);
-		assertEquals(Integer.valueOf(13), r.writePercent());
-		// inverter follows the cap: ess 1900, grid +100 -> cap unchanged
-		r = this.run(100, 1900, LIMIT, 5);
+		assertEquals(Integer.valueOf(15), r.writePercent());
+		// inverter follows the cap: ess 2200, grid -200 -> cap unchanged
+		r = this.run(-200, 2200, LIMIT, 5);
 		assertTrue(r.limiting());
 		assertNull(r.writePercent());
 		// consumption rises by 1500 W: new percentage, but the write waits
-		// for MIN_WRITE_MS (10 s after the 13 % write, 5 s have passed)
-		r = this.run(1500, 1900, LIMIT, 3);
-		assertTrue(r.percent() > 13);
+		// for MIN_WRITE_MS (10 s after the 15 % write, 5 s have passed)
+		r = this.run(1300, 2200, LIMIT, 3);
+		assertTrue(r.percent() > 15);
 		assertNull(r.writePercent());
-		// cap = 3400 + 400 - 500 = 3300 W -> 22 %
-		assertEquals(Integer.valueOf(22), this.runUntilWrite(1500, 1900, LIMIT, 8));
+		// cap = 3500 + 400 - 200 = 3700 W -> 25 %
+		assertEquals(Integer.valueOf(25), this.runUntilWrite(1300, 2200, LIMIT, 8));
 	}
 
 	@Test
@@ -95,12 +96,13 @@ public class PvLimitHandlerTest {
 		this.run(0, 0, LIMIT, 1);
 		this.run(-3000, 5000, LIMIT, 10);
 		// consumption doubles -> cap rises so the house is still supplied by PV
-		assertEquals(Integer.valueOf(26), this.runUntilWrite(2100, 1900, LIMIT, 20));
+		// cap = 4000 + 400 - 200 = 4200 W -> 28 %
+		assertEquals(Integer.valueOf(28), this.runUntilWrite(1800, 2200, LIMIT, 20));
 		// the inverter follows within the settle time: stays limited
-		var r = this.run(100, 3900, LIMIT, 20);
+		var r = this.run(-200, 4200, LIMIT, 20);
 		assertTrue(r.limiting());
-		assertEquals(Integer.valueOf(3900), r.acLimitW());
-		assertEquals(26, r.percent());
+		assertEquals(Integer.valueOf(4200), r.acLimitW());
+		assertEquals(28, r.percent());
 	}
 
 	@Test
@@ -130,14 +132,35 @@ public class PvLimitHandlerTest {
 	public void releasesWhenPvCannotFollowRaisedCap() {
 		this.run(0, 0, LIMIT, 1);
 		this.run(-3000, 5000, LIMIT, 10);
-		// consumption rises, cap is raised, but PV stays at 1900 W: after the
+		// consumption rises, cap is raised, but PV stays at 2200 W: after the
 		// settle time the cap is not binding -> released; no export follows
-		assertEquals(Integer.valueOf(26), this.runUntilWrite(2100, 1900, LIMIT, 20));
-		var r = this.run(2100, 1900, LIMIT, 9);
+		assertEquals(Integer.valueOf(28), this.runUntilWrite(1800, 2200, LIMIT, 20));
+		var r = this.run(1800, 2200, LIMIT, 9);
 		assertTrue(r.limiting());
-		r = this.run(2100, 1900, LIMIT, 1);
+		r = this.run(1800, 2200, LIMIT, 1);
 		assertFalse(r.limiting());
 		assertEquals(Integer.valueOf(100), r.writePercent());
+	}
+
+	@Test
+	public void smallLimitNeverCapsBelowTheConsumption() {
+		// 30 W house consumption, 400 W limit: a fixed 500 W tolerance would cap
+		// the output at 0 W (house from the grid, never released)
+		this.run(0, 0, LIMIT, 1);
+		var r = this.run(-450, 480, LIMIT, 10);
+		assertTrue(r.limiting());
+		assertEquals(Integer.valueOf(30 + LIMIT - 200), r.acLimitW());
+		assertEquals(2, r.percent());
+
+		// 100 W limit: tolerance 50 -> cap 80 W, still above the consumption
+		var small = new PvLimitHandler();
+		PvLimitHandler.Result s = null;
+		for (int i = 0; i < 10; i++) {
+			s = small.compute(-150, 180, 100, RATED, CYCLE);
+		}
+		assertEquals(Integer.valueOf(80), s.acLimitW());
+		assertEquals(50, PvLimitHandler.tolerance(100));
+		assertEquals(500, PvLimitHandler.tolerance(5000));
 	}
 
 	@Test

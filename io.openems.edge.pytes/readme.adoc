@@ -172,7 +172,7 @@ as long as the battery can take the surplus. Two mechanisms in the ESS handle th
 Dynamic limitation (`meter_id`, ported from the SolarEdge implementation of this fork)::
 When the export at the grid meter exceeds the Meta limit, the ESS caps the inverter's AC
 output (reg 43052, "limited power" in % of the rated power) at
-`consumption + limit - 500 W`, where consumption = ESS AC power + grid power (house incl.
+`consumption + limit - tolerance` (tolerance 500 W, at most half of the limit; the cap is never below the consumption), where consumption = ESS AC power + grid power (house incl.
 backup port). The inverter then curtails PV; the EMS set-point (battery charge/discharge)
 stays in force below the cap. Grid and ESS power are averaged over 5 cycles, the register is
 written only on change and at most every 10 s. The cap is released (100 %) when it would
@@ -201,8 +201,11 @@ Additionally writes the hard limit from Meta (and a ripple control receiver, if 
 into the inverter (reg 44102 export limit switch, reg 44104 limit in 100 W steps). The
 inverter then limits the export at its grid meter itself. Channels: `GridFeedInLimit`
 (applied value), `GridFeedInLimitMismatch` (warning when the read-back differs for more than
-30 s). The dynamic limitation aims 500 W below the limit, so the backstop only acts during
-its ~5 s reaction time.
+30 s). The dynamic limitation aims below the limit, so the backstop only acts during its ~5 s
+reaction time - with a small limit the backstop is usually first. Measured 2026-09-19
+(BATTERY_CONTROL, limit 400 W, SoC 85 %, limiter blocks charging): the backstop held the
+export at ~365 W, curtailed the PV and **respected the battery set-point of 0 W** (the
+set-point is ignored only in AC_OUTPUT_CONTROL).
 
 Measured behaviour with the backstop active (2026-09-17, limit 400 W, PV 5.9 kW): the
 inverter keeps the export exactly at the limit, **ignores the AC set-point** and runs

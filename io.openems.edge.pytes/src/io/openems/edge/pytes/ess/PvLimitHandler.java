@@ -22,7 +22,11 @@ import java.util.Deque;
  */
 class PvLimitHandler {
 
-	/** Kept below the limit so that measurement jitter does not exceed it. */
+	/**
+	 * Kept below the limit so that measurement jitter does not exceed it. Scaled
+	 * down for small limits (see {@link #tolerance(int)}): with a 400 W limit a
+	 * fixed 500 W would cap the output at 0 % and never release.
+	 */
 	static final int TOLERANCE_W = 500;
 	/** Cycles used for averaging grid and ESS power. */
 	static final int AVERAGE_CYCLES = 5;
@@ -91,9 +95,11 @@ class PvLimitHandler {
 			return this.result(false, null, NO_LIMIT_PERCENT);
 		}
 
-		// consumption (house + backup) = ess + grid; allowed output = consumption + limit
+		// consumption (house + backup) = ess + grid; allowed output = consumption + limit,
+		// never below the consumption itself (the house is always served from PV)
 		int consumption = essAvg + gridAvg;
-		int acLimitW = Math.max(0, consumption + feedInLimitW - TOLERANCE_W);
+		int tolerance = tolerance(feedInLimitW);
+		int acLimitW = Math.max(Math.max(0, consumption), consumption + feedInLimitW - tolerance);
 		int percent = (int) Math.ceil(acLimitW * 100.0 / ratedPowerW);
 		// Release the cap when it is not binding anymore: the inverter outputs
 		// clearly less than the cap it currently applies (PV dropped), or the
@@ -102,12 +108,23 @@ class PvLimitHandler {
 		// simply raises the cap.
 		boolean settled = this.elapsedMs - this.lastWriteMs >= SETTLE_MS;
 		boolean capNotBinding = settled && this.writtenAcLimitW != null
-				&& essAvg < this.writtenAcLimitW - TOLERANCE_W;
+				&& essAvg < this.writtenAcLimitW - tolerance;
 		if (percent >= NO_LIMIT_PERCENT || capNotBinding) {
 			this.limiting = false;
 			return this.result(false, null, NO_LIMIT_PERCENT);
 		}
 		return this.result(true, acLimitW, Math.max(0, percent));
+	}
+
+	/**
+	 * The distance kept below the feed-in limit: {@link #TOLERANCE_W}, but at
+	 * most half of the limit.
+	 *
+	 * @param feedInLimitW the feed-in limit in W
+	 * @return the tolerance in W
+	 */
+	static int tolerance(int feedInLimitW) {
+		return Math.min(TOLERANCE_W, feedInLimitW / 2);
 	}
 
 	private Result result(boolean limiting, Integer acLimitW, int percent) {

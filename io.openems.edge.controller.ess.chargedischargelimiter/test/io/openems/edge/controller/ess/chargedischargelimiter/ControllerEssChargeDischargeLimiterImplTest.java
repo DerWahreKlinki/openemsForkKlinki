@@ -506,6 +506,58 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 	}
 
 	/**
+	 * The taper state is not left on BMS noise around 0 W: with the taper
+	 * constraint the battery may sit at a few watts, which used to bounce the
+	 * state to NORMAL (no constraint for the hysteresis time) and back.
+	 */
+	@Test
+	public void hybridTaperStateSurvivesBatteryNoise() throws Exception {
+		final var clock = createDummyClock();
+
+		new ControllerTest(new ControllerEssChargeDischargeLimiterImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("ess", new DummyHybridEss("ess0") //
+						.withSoc(50) //
+						.withActivePower(0) //
+						.withDcDischargePower(0) //
+						.withCapacity(10_000) //
+						.withAllowedChargePower(-10_000) //
+						.withAllowedDischargePower(10_000)) //
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setEssId("ess0") //
+						.setMinSoc(15) //
+						.setMaxSoc(90) //
+						.setEnergyBetweenBalancingCycles(0) //
+						.build()) //
+				.next(new TestCase("Initialize NORMAL") //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Charging from PV at 88 %: taper") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 2500) //
+						.input("ess0", DC_DISCHARGE_POWER, -500) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.next(new TestCase("Battery at +40 W (noise): stays in the taper state") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3040) //
+						.input("ess0", DC_DISCHARGE_POWER, 40) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.next(new TestCase("Clearly discharging: back to NORMAL") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.deactivate();
+	}
+
+	/**
 	 * Below minSoc the slow-charge constraint is shifted by PV as well: AC <= PV +
 	 * slowChargePower, with slowChargePower derived from the battery-side limit
 	 * (AllowedChargePower - PV) / 20.

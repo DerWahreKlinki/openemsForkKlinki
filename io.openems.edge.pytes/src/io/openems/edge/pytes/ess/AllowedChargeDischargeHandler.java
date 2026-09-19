@@ -45,15 +45,13 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 	 * Channels.
 	 *
 	 * <p>
-	 * Semantics (both derived from the BMS current limits):
-	 * <ul>
-	 * <li>AllowedChargePower is the DC-side battery limit (negative or 0). The
-	 * AC side can not go below limit + PV; that part is expressed via
-	 * {@code getSurplusPower()}.</li>
-	 * <li>AllowedDischargePower is AC-side: battery limit + PV, capped by
-	 * MaxApparentPower. {@code ApplyPowerHandler} subtracts PV again for the
-	 * battery set-point.</li>
-	 * </ul>
+	 * Semantics (both derived from the BMS current limits): AllowedChargePower
+	 * and AllowedDischargePower are AC-side in both modes, i.e. the range of
+	 * ActivePower the solver may ask for: battery limit + PV. A controller that
+	 * works on the battery (e.g. the ChargeDischargeLimiter's taper) subtracts
+	 * PV again and gets the DC limit back; the raw DC limits are kept in
+	 * {@code setBatteryChargeLimit()} / {@code setBatteryDischargeLimit()} for
+	 * the set-point clamp.
 	 *
 	 * @param clockProvider a {@link ClockProvider}
 	 */
@@ -142,10 +140,11 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		} else {
 			// Battery control: report what actually arrives on the AC side. The
 			// inverter delivers BIAS_W less battery power than commanded and the
-			// conversion losses sit in between (see ApplyPowerHandler). Charging is
-			// left as-is (the bias works in favour there; the set-point is clamped
-			// on the DC side anyway).
-			reportedCharge = allowedChargePower;
+			// conversion losses sit in between (see ApplyPowerHandler). Charging
+			// needs no correction (the bias works in favour there; the set-point is
+			// clamped on the DC side anyway), but is AC-side as well: the AC
+			// output cannot go below PV minus what the battery takes.
+			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
 			reportedDischarge = Math.max(0, allowedDischargePower - ApplyPowerHandler.BIAS_W
 					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
 		}

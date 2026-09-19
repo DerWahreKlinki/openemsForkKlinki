@@ -91,6 +91,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private Integer slowDischargePower = null;
 
 	static final int TAPER_PERCENT = 3; // decrease charge power during the last X percent before hitting the max. Soc
+	// Battery power below this is "idle": the taper states are only left when the
+	// battery clearly runs the other way, otherwise BMS noise around 0 W bounces
+	// the state to NORMAL (no constraint for the hysteresis time) and back.
+	static final int DIRECTION_NOISE_W = 100;
 	static final int BALANCING_SOC = 100;
 
 	private int fullChargePower = 0;
@@ -258,10 +262,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 
 		// Allowed*Power of a hybrid ESS is AC-side (battery limit + PV); the taper
-		// scales the battery power, so PV is taken out again. Approximation: a
-		// hybrid in battery-control mode reports the charge limit DC-side, the
-		// result is then too large by PV - harmless, the ESS clamps to its real
-		// limits anyway.
+		// scales the battery power, so PV is taken out again.
 		this.fullChargePower = Math.min(0, this.ess.getAllowedChargePower().get() - this.pvPower);
 		this.fullDischargePower = Math.max(0, this.ess.getAllowedDischargePower().get() - this.pvPower);
 		this.slowChargePower = this.fullChargePower / 20;
@@ -389,7 +390,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower = 0;
 				break;
 			}			
-			if (currentBatteryPower <= 0) {
+			if (currentBatteryPower < -DIRECTION_NOISE_W) { // clearly charging
 				this.changeState(State.NORMAL);
 				break;
 			}
@@ -431,8 +432,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower =0;
 				break;
 			}			
-			// wenn nicht mehr geladen wird, kein Grund für diesen State
-			if (currentBatteryPower >= 0) {
+			// wenn klar entladen wird, kein Grund für diesen State
+			if (currentBatteryPower > DIRECTION_NOISE_W) {
 				this.changeState(State.NORMAL);
 				break;
 			}

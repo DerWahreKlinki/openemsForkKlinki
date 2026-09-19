@@ -173,7 +173,7 @@ public class ApplyPowerHandler {
 			target = activePowerTarget - pvPower;
 			measured = essActivePower - pvPower;
 			upperLimit = Math.max(0, this.ess.getBatteryDischargeLimit());
-			lowerLimit = Math.min(0, maxAllowedChargePower);
+			lowerLimit = Math.min(0, this.ess.getBatteryChargeLimit());
 			sign = -1; // reg 44106: negative = battery discharge
 			surplusFloor = 0;
 		} else {

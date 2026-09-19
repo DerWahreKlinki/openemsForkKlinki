@@ -678,6 +678,14 @@ public interface SolaredgeDcCharger extends EssDcCharger, OpenemsComponent {
 	/**
 	 * Sets Limits for PV-Production. The limitation refers to AC-side
 	 * (PV-production + DC-Charging may exeed this value)
+	 *
+	 * <p>
+	 * Writes reg 0xF001 "Active Power Limit" in % of reg 0xF304. This caps the
+	 * inverter's AC output only; measured 19.09.2026: the inverter then charges
+	 * the PV surplus into the battery instead of curtailing PV (see
+	 * SolarEdgeHybridEssImpl#limitPvPower and
+	 * doc/handover/solaredge-pvlimit-findings-2026-09-19.md). There is no
+	 * DC/PV-side limit register.
 	 */
 	void _calculateAndSetPvPowerLimit(int maxPvPower);
 

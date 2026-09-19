@@ -350,6 +350,33 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	 * Limits PV production based on the configured feed-to-grid limit.
 	 *
 	 * This method intentionally does not include any battery charge/discharge target.
+	 *
+	 * <p>
+	 * READ BEFORE CHANGING (measured on the real inverter, 19.09.2026, see
+	 * doc/handover/solaredge-pvlimit-findings-2026-09-19.md):
+	 * <ul>
+	 * <li>The "PV limit" written here (charger reg 0xF001 "Active Power Limit") is
+	 * an <b>AC output cap</b> of the whole inverter (PV + battery). SolarEdge has no
+	 * DC/PV-side limit register (PCOP, SunSpec 101-103/160, battery block E1xx is
+	 * read-only).
+	 * <li>The inverter holds the cap exactly, but does <b>not</b> curtail PV: the
+	 * whole PV-minus-cap is charged into the battery, regardless of the remote
+	 * control set-point - with ChargeLimit 0 (Idle) as well as against an explicit
+	 * discharge command (3-5 kW charging measured at 92-98 % SoC). PV is only
+	 * curtailed once the battery is full. The battery set-point is meaningless
+	 * while the cap binds, so "feed-in limit" and "do not charge" cannot both be
+	 * enforced with the modes used here (3/4). Untested candidates: command mode 0
+	 * "Off" and storage control mode 0 "Disabled".
+	 * <li>The inverter stays ~500 W (~8 %) below the cap it is given; a "cap not
+	 * binding" release rule needs a margin of ~20 % of the cap or it oscillates.
+	 * <li>While the cap binds, measured PV equals the cap: this formula
+	 * (pvProduction + feedToGrid + limit - tolerance) ratchets the set-point down
+	 * cycle by cycle, and with small limits the fixed 500 W tolerance ends at 0 %.
+	 * A consumption-based cap without PV feedback exists on branch
+	 * klinki/solaredge-pvlimit (PvLimitHandler, ported from the Pytes bundle).
+	 * <li>60 s after the last remote command the inverter falls back to its default
+	 * mode 7 and charges the PV surplus on its own.
+	 * </ul>
 	 */
 	protected void limitPvPower() {
 
@@ -580,6 +607,17 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 	}
 	
 	
+	/**
+	 * Set-point 0: command mode 3 with 0 W charge and discharge limit.
+	 *
+	 * <p>
+	 * Measured 19.09.2026: while the AC output cap of {@link #limitPvPower()} binds,
+	 * the inverter ignores the 0 W limit and charges the PV surplus into the battery
+	 * at its own maximum (5 kW at 98 % SoC). Command mode 0 "Off" as an
+	 * alternative is implemented but untested on branch klinki/solaredge-pvlimit
+	 * (config property idleMode). See
+	 * doc/handover/solaredge-pvlimit-findings-2026-09-19.md.
+	 */
 	private void applyIdleMode() throws OpenemsNamedException {
 		this.setRemoteControlCommandMode(ChargeDischargeMode.SE_CHARGE_POLICY_PV_AC);
 		this.setMaxChargePower(0);

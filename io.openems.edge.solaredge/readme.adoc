@@ -6,3 +6,13 @@ Implemented Natures:
 - ElectricityMeter
 
 https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.solaredge[Source Code icon:github[]]
+== Hybrid ESS: feed-in limitation vs. battery (measured 19.09.2026)
+
+The "PV limit" of `SolarEdge.Hybrid.ESS` (`feedToGridPowerLimit`) is written to reg 0xF001
+"Active Power Limit", an *AC output cap* of the whole inverter. SolarEdge has no DC/PV-side
+limit register. While the cap binds, the inverter does not curtail PV but charges the
+surplus into the battery, regardless of the remote control set-point (ChargeLimit 0 and even
+against a discharge command). Feed-in limit and "do not charge" can therefore not both be
+enforced with command modes 3/4; command mode 0 "Off" is untested. Details, measurements and
+open items: `doc/handover/solaredge-pvlimit-findings-2026-09-19.md`; reworked limitation
+(consumption-based cap, `idleMode` option) on branch `klinki/solaredge-pvlimit`.

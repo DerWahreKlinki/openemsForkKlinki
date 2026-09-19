@@ -100,6 +100,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	// Ramp: max. change per cycle
 	private int rampPowerW = 500;
 
+	// DC-coupled PV of a hybrid ESS. AC = battery + PV, so every limit this
+	// controller calculates for the battery has to be shifted by PV before it is
+	// applied as an AC constraint. 0 for a plain AC-coupled ESS.
+	private int pvPower = 0;
+
 	@Reference
 	private ComponentManager componentManager;
 
@@ -214,6 +219,24 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		return this.timedata;
 	}
 
+	/**
+	 * PV production of a DC-coupled hybrid ESS (AC = battery + PV). 0 for a plain
+	 * AC-coupled ESS, while the channels are not available yet, and at night - in
+	 * all three cases the AC-side logic is exact.
+	 *
+	 * @return PV power in W, never negative
+	 */
+	private int calculatePvPower() {
+		if (this.ess instanceof HybridEss hss) {
+			Integer ac = this.ess.getActivePower().get();
+			Integer dc = hss.getDcDischargePower().get();
+			if (ac != null && dc != null) {
+				return Math.max(0, ac - dc);
+			}
+		}
+		return 0;
+	}
+
 	private void setEssProperties() {
 		// Initial values
 		this.slowChargePower = -500;
@@ -234,10 +257,15 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			return;
 		}
 
-		this.slowChargePower = this.ess.getAllowedChargePower().get() / 20;
-		this.slowDischargePower = this.ess.getAllowedDischargePower().get() / 20;
-		this.fullChargePower = this.ess.getAllowedChargePower().get();
-		this.fullDischargePower = this.ess.getAllowedDischargePower().get();
+		// Allowed*Power of a hybrid ESS is AC-side (battery limit + PV); the taper
+		// scales the battery power, so PV is taken out again. Approximation: a
+		// hybrid in battery-control mode reports the charge limit DC-side, the
+		// result is then too large by PV - harmless, the ESS clamps to its real
+		// limits anyway.
+		this.fullChargePower = Math.min(0, this.ess.getAllowedChargePower().get() - this.pvPower);
+		this.fullDischargePower = Math.max(0, this.ess.getAllowedDischargePower().get() - this.pvPower);
+		this.slowChargePower = this.fullChargePower / 20;
+		this.slowDischargePower = this.fullDischargePower / 20;
 
 		this.logDebug(this.log, "ESS properties set: "
 				+ "AllowedChargePower " + this.fullChargePower + "W "
@@ -251,6 +279,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	@Override
 	public void run() throws OpenemsNamedException {
 
+		this.pvPower = this.calculatePvPower();
 		this.setEssProperties();
 
 		if (this.ess == null) {
@@ -260,9 +289,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 
 		this.currentSoc = this.ess.getSoc().get();
-		//Integer currentActivePower = this.getEssChargePower().get(); // no matter if AC or DC charging
-		Integer currentActivePower = this.ess.getActivePower().get(); // AC Power
-		Integer calculatedPower = null; // No constraints
+		Integer currentActivePower = this.ess.getActivePower().get(); // AC = battery + PV
 
 		if (currentActivePower == null) {
 			this.changeState(State.ERROR);
@@ -275,6 +302,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.logDebug(this.log, "SoC not available (yet). Aborting execution.");
 			return;
 		}
+
+		// Direction and tapering refer to the battery, not to the inverter's AC
+		// side: with DC-coupled PV the AC power is positive while the battery is
+		// charging from PV.
+		final int currentBatteryPower = currentActivePower - this.pvPower;
+		Integer calculatedPower = null; // No constraints; battery power, negative = charge
 
 		this.updateUsableSocAndCapacity(this.currentSoc);
 		balanceDecision = this.shouldBalance();
@@ -323,13 +356,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 			// Tapering logic: Gradual power reduction as we approach maxSoc
-			if (currentActivePower < 0 && this.currentSoc >= (this.maxSoc - TAPER_PERCENT)) {
+			if (currentBatteryPower < 0 && this.currentSoc >= (this.maxSoc - TAPER_PERCENT)) {
 				this.logDebug(this.log, "Approaching max. SoC limit : " + this.currentSoc + "%/" + this.maxSoc + "%");
 				this.changeState(State.APPROACHING_MAX_SOC);
 				break;
 			}
 
-			if (currentActivePower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
+			if (currentBatteryPower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
 				this.logDebug(this.log, "Approaching min. SoC limit : " + this.currentSoc + "%/" + this.minSoc + "%");
 				this.changeState(State.APPROACHING_MIN_SOC);
 				break;
@@ -356,7 +389,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower = 0;
 				break;
 			}			
-			if (currentActivePower == null || currentActivePower <= 0) {
+			if (currentBatteryPower <= 0) {
 				this.changeState(State.NORMAL);
 				break;
 			}
@@ -369,8 +402,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		case MIN_SOC_REACHED:
 			if (this.currentSoc > this.minSoc) {
-				this.changeState(State.NORMAL);
-				calculatedPower =0;	
+				// Straight into the taper zone: via NORMAL the state hysteresis would
+				// allow full discharge for a few seconds right above minSoc
+				this.changeState(this.currentSoc <= (this.minSoc + TAPER_PERCENT) ? State.APPROACHING_MIN_SOC
+						: State.NORMAL);
+				calculatedPower =0;
 				break;
 			} else if (this.currentSoc < this.minSoc) {
 				this.changeState(State.BELOW_MIN_SOC,true);
@@ -396,7 +432,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}			
 			// wenn nicht mehr geladen wird, kein Grund für diesen State
-			if (currentActivePower == null || currentActivePower >= 0) {
+			if (currentBatteryPower >= 0) {
 				this.changeState(State.NORMAL);
 				break;
 			}
@@ -416,7 +452,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			}
 
 			if (this.currentSoc < this.maxSoc) {
-				this.changeState(State.NORMAL);
+				// Straight into the taper zone, see MIN_SOC_REACHED
+				this.changeState(this.currentSoc >= (this.maxSoc - TAPER_PERCENT) ? State.APPROACHING_MAX_SOC
+						: State.NORMAL);
 				calculatedPower = 0;
 				break;
 			} else if (this.currentSoc > this.maxSoc) {
@@ -425,7 +463,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 			calculatedPower =0;
-			
+
 			break;
 		case BELOW_MIN_SOC:
 			// block discharging and slowly charge
@@ -440,7 +478,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 
-			this.changeState(State.NORMAL);
+			this.changeState(this.currentSoc <= (this.minSoc + TAPER_PERCENT) ? State.APPROACHING_MIN_SOC
+					: State.NORMAL);
 			calculatedPower = 0;
 			break;
 		case ABOVE_MAX_SOC:
@@ -457,7 +496,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				this.changeState(State.MAX_SOC_REACHED);
 				calculatedPower = 0;
 			} else if (this.currentSoc < this.maxSoc) {
-				this.changeState(State.NORMAL);
+				this.changeState(this.currentSoc >= (this.maxSoc - TAPER_PERCENT) ? State.APPROACHING_MAX_SOC
+						: State.NORMAL);
 			}
 			break;
 		case FORCE_CHARGE_ACTIVE:
@@ -548,7 +588,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				// Avoid discharge below minSoc
 				if (this.currentSoc <= this.minSoc) { // min guard
 					calculatedPower = 0;
-				} else if (currentActivePower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
+				} else if (currentBatteryPower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
 					this.logDebug(this.log, "Approaching min. SoC limit : " + this.currentSoc + "%/" + this.minSoc + "%");
 
 					lin = (float) (this.currentSoc - this.minSoc) / (float) TAPER_PERCENT; // 0..1
@@ -597,10 +637,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		this.logDebug(this.log,
 				this.config.id() + "Current State " + this.state.getName() + "\n" + this.config.id() + "Current SoC "
 						+ this.ess.getSoc().get() + "% \n" + this.config.id() + "Current ActivePower "
-						+ this.ess.getActivePower().get() + "W \n" + this.config.id() + "Calculated ActivePower "
+						+ this.ess.getActivePower().get() + "W (battery " + currentBatteryPower + "W, PV "
+						+ this.pvPower + "W) \n" + this.config.id() + "Calculated battery power "
 						+ calculatedPower + "W \n" + this.config.id() + "Energy charged since last balancing "
 						+ this.getChargedEnergy().get() + "Wh \n");
 
+	}
+
+
+	private String formatAcPower(int acPower, int batteryPower) {
+		return acPower + "W (battery " + batteryPower + "W + PV " + this.pvPower + "W)";
 	}
 
 	/**
@@ -625,61 +671,72 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				return; // No constraints to set
 			}
 			
+			// calculatedPower is battery power; the ESS constraint is AC = battery + PV
+			int acPower = calculatedPower + this.pvPower;
+			
 			switch (this.state) {
 			case MAX_SOC_REACHED, ABOVE_MAX_SOC -> { // Block further charging
-				this.ess.setActivePowerGreaterOrEquals(calculatedPower);
-				this.logDebug(this.log, "ApplyPowerMethod -> setActivePowerGreaterOrEquals " + calculatedPower);
+				this.ess.setActivePowerGreaterOrEquals(acPower);
+				this.logDebug(this.log, "ApplyPowerMethod -> setActivePowerGreaterOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 
 			}
 
 			case MIN_SOC_REACHED, BELOW_MIN_SOC -> { // Block further discharging
-				this.ess.setActivePowerLessOrEquals(calculatedPower);
-				this.logDebug(this.log, "ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
+				this.ess.setActivePowerLessOrEquals(acPower);
+				this.logDebug(this.log, "ApplyPowerMethod -> setActivePowerLessOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 
 			}
 
 			case BALANCING_ACTIVE -> {
 				// Fit calculated power within min/max limits and apply
-				calculatedPower = this.ess.getPower().fitValueIntoMinMaxPower(this.id(), this.ess, SingleOrAllPhase.ALL,
-						Pwr.ACTIVE, calculatedPower);
-				this.ess.setActivePowerLessOrEquals(calculatedPower);
+				acPower = this.ess.getPower().fitValueIntoMinMaxPower(this.id(), this.ess, SingleOrAllPhase.ALL,
+						Pwr.ACTIVE, acPower);
+				this.ess.setActivePowerLessOrEquals(acPower);
 				this.logDebug(this.log,
-						"BALANCING_ACTIVE ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
+						"BALANCING_ACTIVE ApplyPowerMethod -> setActivePowerLessOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 
 			}
 
 			case FORCE_CHARGE_ACTIVE -> {
 				// Fit calculated power within min/max limits and apply
-				calculatedPower = this.ess.getPower().fitValueIntoMinMaxPower(this.id(), this.ess, SingleOrAllPhase.ALL,
-						Pwr.ACTIVE, calculatedPower);
-				this.ess.setActivePowerLessOrEquals(calculatedPower);
+				acPower = this.ess.getPower().fitValueIntoMinMaxPower(this.id(), this.ess, SingleOrAllPhase.ALL,
+						Pwr.ACTIVE, acPower);
+				this.ess.setActivePowerLessOrEquals(acPower);
 				this.logDebug(this.log,
-						"FORCE_CHARGE_ACTIVE ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
+						"FORCE_CHARGE_ACTIVE ApplyPowerMethod -> setActivePowerLessOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 
 			}
 
 			case APPROACHING_MAX_SOC -> {
-				this.ess.setActivePowerGreaterOrEquals(calculatedPower); // reduced power
+				this.ess.setActivePowerGreaterOrEquals(acPower); // reduced power
 				this.logDebug(this.log,
-						"APPROACHING_MAX_SOC< ApplyPowerMethod -> setActivePowerGreaterOrEquals " + calculatedPower);
+						"APPROACHING_MAX_SOC< ApplyPowerMethod -> setActivePowerGreaterOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 			}
 			case APPROACHING_MIN_SOC -> {
-				this.ess.setActivePowerLessOrEquals(calculatedPower); // reduced power
+				this.ess.setActivePowerLessOrEquals(acPower); // reduced power
 				this.logDebug(this.log,
-						"APPROACHING_MIN_SOC ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
+						"APPROACHING_MIN_SOC ApplyPowerMethod -> setActivePowerLessOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 			}
 			case NORMAL -> { // no constraint needed in normal operation
 			}
 			case BALANCING_WANTED -> {
 
 				if (this.currentSoc <= this.minSoc) {
-					this.ess.setActivePowerLessOrEquals(calculatedPower);
+					this.ess.setActivePowerLessOrEquals(acPower);
 					this.logDebug(this.log,
-							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerLessOrEquals " + calculatedPower);
+							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerLessOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 				} else if (this.currentSoc >= this.maxSoc) {
-					this.ess.setActivePowerGreaterOrEquals(calculatedPower);
+					this.ess.setActivePowerGreaterOrEquals(acPower);
 					this.logDebug(this.log,
-							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerGreaterOrEquals " + calculatedPower);
+							"BALANCING_WANTED ApplyPowerMethod -> setActivePowerGreaterOrEquals "
+						+ this.formatAcPower(acPower, calculatedPower));
 				}
 			}
 			case UNDEFINED -> { // do nothing

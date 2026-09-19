@@ -11,6 +11,7 @@ import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEs
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_POWER;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.SOC;
+import static io.openems.edge.ess.api.HybridEss.ChannelId.DC_DISCHARGE_POWER;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -26,6 +27,7 @@ import io.openems.common.test.DummyConfigurationAdmin;
 
 import io.openems.edge.controller.ess.chargedischargelimiter.enums.BalancingDeferralReason;
 import io.openems.edge.controller.ess.chargedischargelimiter.enums.State;
+import io.openems.edge.ess.test.DummyHybridEss;
 import io.openems.edge.ess.test.DummyManagedSymmetricEss;
 import io.openems.edge.timedata.test.DummyTimedata;
 import io.openems.edge.timeofusetariff.test.DummyTimeOfUseTariffProvider;
@@ -414,6 +416,139 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 0) //
 						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
 						.output(STATE_MACHINE, State.BALANCING_WANTED)) //
+				.deactivate();
+	}
+
+	/**
+	 * DC-coupled hybrid (AC = battery + PV): "do not charge" has to be expressed as
+	 * AC >= PV, otherwise the battery keeps charging from PV above maxSoc.
+	 */
+	@Test
+	public void testHybridAboveMaxSocBlocksPvCharging() throws Exception {
+		final var clock = createDummyClock();
+
+		new ControllerTest(new ControllerEssChargeDischargeLimiterImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("ess", new DummyHybridEss("ess0") //
+						.withSoc(80) //
+						.withActivePower(0) //
+						.withDcDischargePower(0) //
+						.withCapacity(10_000) //
+						.withAllowedChargePower(-10_000) //
+						.withAllowedDischargePower(10_000)) //
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setEssId("ess0") //
+						.setMinSoc(15) //
+						.setMaxSoc(90) //
+						.setEnergyBetweenBalancingCycles(0) //
+						.build()) //
+				.next(new TestCase("Initialize NORMAL") //
+						.input("ess0", SOC, 80) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Above maxSoc, PV 3000 W, battery charging 1000 W") //
+						.input("ess0", SOC, 91) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 3000)) //
+				.deactivate();
+	}
+
+	/**
+	 * Positive AC power of a hybrid is not "discharging" while the battery charges
+	 * from PV: no min-SoC taper (which used to cap the AC output and force grid
+	 * import). Charging from PV close to maxSoc is recognised as charging.
+	 */
+	@Test
+	public void testHybridDirectionFromBatteryPower() throws Exception {
+		final var clock = createDummyClock();
+
+		new ControllerTest(new ControllerEssChargeDischargeLimiterImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("ess", new DummyHybridEss("ess0") //
+						.withSoc(50) //
+						.withActivePower(0) //
+						.withDcDischargePower(0) //
+						.withCapacity(10_000) //
+						.withAllowedChargePower(-10_000) //
+						.withAllowedDischargePower(10_000)) //
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setEssId("ess0") //
+						.setMinSoc(15) //
+						.setMaxSoc(90) //
+						.setEnergyBetweenBalancingCycles(0) //
+						.build()) //
+				.next(new TestCase("Initialize NORMAL") //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Just above minSoc, PV 3000 W exported, battery charging 500 W") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 17) //
+						.input("ess0", ACTIVE_POWER, 2500) //
+						.input("ess0", DC_DISCHARGE_POWER, -500) //
+						.output(STATE_MACHINE, State.NORMAL) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null)) //
+				.next(new TestCase("Just below maxSoc, same flows: charging is recognised") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 2500) //
+						.input("ess0", DC_DISCHARGE_POWER, -500) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.deactivate();
+	}
+
+	/**
+	 * Below minSoc the slow-charge constraint is shifted by PV as well: AC <= PV +
+	 * slowChargePower, with slowChargePower derived from the battery-side limit
+	 * (AllowedChargePower - PV) / 20.
+	 */
+	@Test
+	public void testHybridBelowMinSocShiftsConstraintByPv() throws Exception {
+		final var clock = createDummyClock();
+
+		new ControllerTest(new ControllerEssChargeDischargeLimiterImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("ess", new DummyHybridEss("ess0") //
+						.withSoc(50) //
+						.withActivePower(0) //
+						.withDcDischargePower(0) //
+						.withCapacity(10_000) //
+						.withAllowedChargePower(-10_000) //
+						.withAllowedDischargePower(10_000)) //
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setEssId("ess0") //
+						.setMinSoc(15) //
+						.setMaxSoc(90) //
+						.setEnergyBetweenBalancingCycles(0) //
+						.build()) //
+				.next(new TestCase("Initialize NORMAL") //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Below minSoc with PV 3000 W: block discharging (battery <= 0)") //
+						.input("ess0", SOC, 14) //
+						.input("ess0", ACTIVE_POWER, 3000) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.BELOW_MIN_SOC) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, 3000)) //
+				.next(new TestCase("Still below minSoc: slow charge on top of PV") //
+						.input("ess0", SOC, 14) //
+						.input("ess0", ACTIVE_POWER, 3000) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.BELOW_MIN_SOC) //
+						// slowChargePower = (-10000 - 3000) / 20 = -650 -> AC <= 3000 - 650
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, 2350)) //
 				.deactivate();
 	}
 

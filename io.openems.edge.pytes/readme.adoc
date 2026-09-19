@@ -45,7 +45,7 @@ PV). The ESS config `essSetpoint` selects what that number means for the inverte
 (regs 44105/44106). The choice decides how the inverter behaves whenever the PV cannot be
 absorbed by the battery - which is most of a sunny day.
 
-=== `BATTERY_CONTROL` (44105 = 2) - "charge/discharge the battery with N watts"
+=== `BATTERY_CONTROL` (44105 = 2, default, recommended) - "charge/discharge the battery with N watts"
 
 What is written::
 The EMS computes the battery power `set-point − PV`, adds a feed-forward for the inverter's
@@ -73,7 +73,11 @@ Effects::
   handling: the total AC is what is controlled.
 
 Use it when the intent is battery-related: self-consumption with a limiter, "do not charge
-above x %", PV pass-through, robust operation on days with broken clouds.
+above x %", PV pass-through, robust operation on days with broken clouds. This is the
+default and the recommended mode: measured on 2026-09-19 over a full cycle (charging at
+the limit, taper at 82-85 %, stop at 85 %, PV exported and - with the inverter's export cap
+- curtailed) it did exactly what the controllers asked for, without any of the workarounds
+the AC mode needs.
 
 === `AC_OUTPUT_CONTROL` (44105 = 4) - "deliver N watts at the AC output"
 
@@ -113,9 +117,9 @@ Effects::
 * With the backstop export cap active the inverter ignores the set-point completely (see
   feed-in limitation).
 
-Use it when the grid point has to be exact: peak shaving, zero export as a hard target,
-tariff-driven grid charging. Not the best choice for plain self-consumption with a full
-battery on a sunny day.
+Use it only when the grid point has to be exact: peak shaving, zero export as a hard
+target, tariff-driven grid charging. Not for plain self-consumption: with a full battery on
+a sunny day it locks the PV at house consumption (see above).
 
 === `GRID_POINT_CONTROL` (44105 = 3)
 

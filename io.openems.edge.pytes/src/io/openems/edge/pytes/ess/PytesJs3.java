@@ -82,6 +82,15 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 				.unit(Unit.WATT)//
 				.persistencePriority(HIGH)),
 
+		/**
+		 * AC floor of the surplus search in AC output control (see
+		 * {@code PvSurplusProbe}); 0 while the search is off.
+		 */
+		SURPLUS_FLOOR(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)//
+				.persistencePriority(HIGH)),
+
 		WORK_STATE(Doc.of(WorkState.values())
 				.accessMode(READ_WRITE)
 				.persistencePriority(HIGH)),

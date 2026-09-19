@@ -63,6 +63,8 @@ public class ApplyPowerHandler {
 		return LOSS_BASE_W + (int) Math.round(LOSS_FACTOR * (Math.abs(batteryPower) + Math.max(0, pvPower)));
 	}
 
+	private final PvSurplusProbe surplusProbe = new PvSurplusProbe();
+
 	public ApplyPowerHandler(ApplyPowerEss ess, PytesBattery battery, PytesDcCharger dcCharger) {
 		this.ess = ess;
 		this.battery = battery;
@@ -149,6 +151,10 @@ public class ApplyPowerHandler {
 		int pvPower = this.dcCharger != null ? this.dcCharger.getActualPower().orElse(0) : 0; // Maybe no pv connected
 		final boolean batteryControl = essSetpoint == RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
+		// Time base, scaled with the configured cycle time
+		int cycleTimeMs = this.ess.getCycleTime();
+		this.elapsedMs += cycleTimeMs;
+
 		// The controlled quantity (positive = discharge / export):
 		// - Battery control (44105 = 2): the AC-side battery contribution
 		//   ActivePower - PV. The inverter gets a battery set-point, so its bias
@@ -162,12 +168,14 @@ public class ApplyPowerHandler {
 		final int upperLimit;
 		final int lowerLimit;
 		final int sign;
+		final int surplusFloor;
 		if (batteryControl) {
 			target = activePowerTarget - pvPower;
 			measured = essActivePower - pvPower;
 			upperLimit = Math.max(0, this.ess.getBatteryDischargeLimit());
 			lowerLimit = Math.min(0, maxAllowedChargePower);
 			sign = -1; // reg 44106: negative = battery discharge
+			surplusFloor = 0;
 		} else {
 			target = activePowerTarget;
 			measured = essActivePower;
@@ -176,9 +184,17 @@ public class ApplyPowerHandler {
 			// bound can be positive (PV above the charge limit must be exported);
 			// OpenEMS itself only knows that bound via getSurplusPower().
 			upperLimit = Math.max(0, maxAllowedDischargePower);
-			lowerLimit = Math.max(Math.min(0, maxAllowedChargePower), pvPower + this.ess.getBatteryChargeLimit());
+			int clampLower = Math.max(Math.min(0, maxAllowedChargePower), pvPower + this.ess.getBatteryChargeLimit());
+			// The measured PV is not the available one while the inverter curtails
+			// it to our set-point, so the lower bound above alone locks the PV at
+			// consumption level once the battery is full; see PvSurplusProbe.
+			surplusFloor = this.surplusProbe.compute(pvPower, essActivePower, this.ess.getGridPower(), batteryPower,
+					this.ess.getBatteryChargeLimit(), this.ess.getGridFeedInLimit(), maxApparentPower,
+					this.ess.isPvLimitActive(), cycleTimeMs);
+			lowerLimit = surplusFloor > 0 ? Math.max(clampLower, surplusFloor) : clampLower;
 			sign = 1; // reg 44106: positive = export
 		}
+		this.ess.channel(PytesJs3.ChannelId.SURPLUS_FLOOR).setNextValue(surplusFloor);
 		boolean idle = Math.abs(target) < MIN_TARGET_W;
 
 		// Loads on the backup port: in AC output control the inverter regulates
@@ -192,9 +208,6 @@ public class ApplyPowerHandler {
 		// Feed-forward: bias and losses always act in discharge direction.
 		final int feedForward = batteryControl && !idle ? BIAS_W + expectedLosses(target, pvPower) : 0;
 
-		// Time base, scaled with the configured cycle time
-		int cycleTimeMs = this.ess.getCycleTime();
-		this.elapsedMs += cycleTimeMs;
 		// Step detection on what the inverter sees (a backup load step is a step
 		// for the inverter as well)
 		int inverterTarget = target - backupLoad;
@@ -248,7 +261,8 @@ public class ApplyPowerHandler {
 				+ " W, measured " + measured + " W, BMS " + batteryPower + " W, trimD " + Math.round(this.trimDischarge)
 				+ " trimC " + Math.round(this.trimCharge) + ")"
 				+ "\n[ApplyPower]   PV Power " + pvPower + ", Backup load " + backupLoad + ", Feed-in limit "
-				+ this.ess.getGridFeedInLimit());
+				+ this.ess.getGridFeedInLimit() + ", Surplus floor " + surplusFloor
+				+ (this.surplusProbe.isProbing() ? " (probing)" : ""));
 
 
 	}

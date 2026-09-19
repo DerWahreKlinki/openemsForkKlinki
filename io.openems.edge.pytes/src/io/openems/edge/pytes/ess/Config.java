@@ -24,7 +24,7 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "WorkMode", description = "Work Mode. ExternalMode -> device is controlled by OpenEMS")
 	WorkMode workMode() default WorkMode.EXTERNAL;
 
-	@AttributeDefinition(name = "ESS SetPoint", description = "How the OpenEMS AC set-point is applied: BATTERY_CONTROL = EMS computes and sets the battery power (with bias/loss compensation); AC_OUTPUT_CONTROL = inverter regulates its own AC output to the set-point. Note: with AC_OUTPUT_CONTROL the OpenEMS-side battery current limits are not enforced by the inverter.")
+	@AttributeDefinition(name = "ESS SetPoint", description = "How the OpenEMS AC set-point is applied (see readme). BATTERY_CONTROL (reg 44105 = 2): the EMS commands the battery power (set-point - PV, with bias/loss compensation and trim); the PV passes through, 'battery 0 W' exports everything the PV has, no PV curtailment, no battery transients at clouds, grid-point accuracy +-50-100 W - for self-consumption, limiters and PV pass-through. AC_OUTPUT_CONTROL (44105 = 4): the inverter holds its AC output at the set-point and curtails PV above 'set-point + battery charging' without reporting it; with a full battery the measured PV then only reflects the set-point (surplus search workaround), clouds are bridged from the battery until the set-point follows, OpenEMS battery limits are not known to the inverter; grid-point accuracy +-20 W - for peak shaving / exact grid targets.")
 	RemoteDispatchRealtimeControlSwitch essSetpoint() default RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
 	@AttributeDefinition(name = "Max. Apparent Power", description = "Inverter´s apparent power limit")

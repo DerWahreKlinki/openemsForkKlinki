@@ -1620,6 +1620,17 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	}
 
 	@Override
+	public Integer getGridPower() {
+		var meter = this.meter;
+		return meter != null ? meter.getActivePower().get() : null;
+	}
+
+	@Override
+	public boolean isPvLimitActive() {
+		return this.pvLimitHandler.isLimiting();
+	}
+
+	@Override
 	public int getCycleTime() {
 		return this.cycle != null ? this.cycle.getCycleTime() : DEFAULT_CYCLE_TIME;
 	}

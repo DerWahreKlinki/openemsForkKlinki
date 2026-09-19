@@ -109,15 +109,35 @@ public class ApplyPowerHandlerTest {
 	@Test
 	public void acOutputControlExportsPvAboveChargeLimit() throws Exception {
 		// PV 5 kW, battery may take 2.1 kW: the inverter must export at least
-		// 2.9 kW regardless of the 800 W the controller asks for
+		// 2.9 kW regardless of the 800 W the controller asks for. The surplus
+		// search is off (as while reg 43052 limits) - this tests the clamp only.
 		this.charger.withActualPower(5000);
-		this.ess.withAllowedChargePower(0);
+		this.ess.withAllowedChargePower(0).withPvLimitActive(true);
 		assertEquals(290, this.applyAcOutputControl(800));
+	}
+
+	@Test
+	public void acOutputControlSurplusProbeRaisesTheLowerBound() throws Exception {
+		// Battery full (charge limit 0), PV curtailed to the 500 W the controller
+		// asks for: the probe lifts the lower bound one step above the measured PV
+		this.ess.withBatteryLimits(0, 2100).withAllowedChargePower(0).withActivePower(500).withGridPower(-100)
+				.withGridFeedInLimit(5000);
+		this.charger.withActualPower(500);
+		for (int i = 0; i < PvSurplusProbe.AVERAGE_CYCLES - 1; i++) {
+			assertEquals(50, this.applyAcOutputControl(500)); // steady window not full yet
+		}
+		assertEquals(80, this.applyAcOutputControl(500)); // 500 + STEP_W
+		assertEquals(800, (int) this.ess.channel(PytesJs3.ChannelId.SURPLUS_FLOOR).getNextValue().get());
+
+		// no search in battery control
+		this.handler.apply(500, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL);
+		assertEquals(0, (int) this.ess.channel(PytesJs3.ChannelId.SURPLUS_FLOOR).getNextValue().get());
 	}
 
 	@Test
 	public void acOutputControlClampsToAllowedRange() throws Exception {
 		this.charger.withActualPower(200);
+		this.ess.withPvLimitActive(true); // clamp only, no surplus search
 		assertEquals(230, this.applyAcOutputControl(5000)); // AllowedDischargePower 2300
 		assertEquals(-190, this.applyAcOutputControl(-5000)); // PV 200 + charge limit -2100
 	}

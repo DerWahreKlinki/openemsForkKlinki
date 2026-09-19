@@ -54,6 +54,20 @@ interface ApplyPowerEss extends PytesJs3, ManagedSymmetricEss, HybridEss {
 	int getFailsafeMinutes();
 
 	/**
+	 * Gets the grid meter power.
+	 *
+	 * @return the power in W (negative = export), or null without meter
+	 */
+	Integer getGridPower();
+
+	/**
+	 * Whether the dynamic feed-in limitation (reg 43052) currently curtails PV.
+	 *
+	 * @return true while limiting
+	 */
+	boolean isPvLimitActive();
+
+	/**
 	 * Logs a debug message.
 	 *
 	 * @param message the message

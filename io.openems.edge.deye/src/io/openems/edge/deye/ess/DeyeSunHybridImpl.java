@@ -2,7 +2,6 @@ package io.openems.edge.deye.ess;
 
 import static io.openems.edge.common.cycle.Cycle.DEFAULT_CYCLE_TIME;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 
@@ -43,7 +42,6 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
-import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.cycle.Cycle;
@@ -83,7 +81,7 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 })
 public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 		implements DeyeSunHybrid, HybridEss, ManagedSymmetricEss, SymmetricEss, ModbusComponent, OpenemsComponent,
-		EventHandler, ModbusSlave, TimedataProvider, ClockProvider {
+		EventHandler, ModbusSlave, TimedataProvider {
 
 	// protected static final int MAX_APPARENT_POWER = 20000;
 
@@ -820,13 +818,6 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 
 	public boolean getChargeMode() {
 		return this.chargeMode;
-	}
-
-	
-	@Override
-	public Clock getClock() {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 	/*

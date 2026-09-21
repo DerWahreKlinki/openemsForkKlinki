@@ -193,16 +193,16 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE:
 			this.calculateBatteryPower();
-			// DcDischargePower is derived as ActivePower - PV instead of taking the
-			// BMS measurement: the BMS value lags ~6 s behind ActivePower, which made
-			// the controller's PV estimate (ActivePower - DcDischargePower) wrong on
-			// every transient and caused the setpoint to oscillate (see live log
-			// 2026-09-16). Derived this way, ActivePower - DcDischargePower == PV by
-			// construction. The measured value stays in BatteryDcDischargePower.
-			// NextValue is used so AC, PV and DC end up in the same process image.
+			// DcDischargePower is derived from ActivePower - PV (plus the expected
+			// conversion losses) instead of taking the BMS measurement: the BMS value
+			// lags ~6 s behind ActivePower, which made the controller's PV estimate
+			// (ActivePower - DcDischargePower) wrong on every transient and caused the
+			// setpoint to oscillate (see live log 2026-09-16). The measured value
+			// stays in BatteryDcDischargePower. NextValue is used so AC, PV and DC end
+			// up in the same process image.
 			Integer acPower = this.getActivePowerChannel().getNextValue().get();
 			int pvPower = this.charger != null ? this.charger.getActualPowerChannel().getNextValue().orElse(0) : 0;
-			Integer dcDischargePower = acPower == null ? null : acPower - pvPower;
+			Integer dcDischargePower = ApplyPowerHandler.deriveDcDischargePower(acPower, pvPower);
 			this._setDcDischargePower(dcDischargePower);
 			this.logDebug(this.log, "DcDischargePower: " + dcDischargePower + "W (AC " + acPower + " - PV " + pvPower
 					+ ", BMS " + this.getBatteryDcDischargePowerChannel().getNextValue().get() + ")");

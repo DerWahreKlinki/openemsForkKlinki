@@ -136,7 +136,7 @@ cap - that is the only "give everything you have" the inverter knows.
 
 == Values the inverter reports
 
-* `ess0/DcDischargePower` is derived as `ActivePower − PV` (the AC-side battery
+* `ess0/DcDischargePower` is derived as `ActivePower − PV + expected losses` (the AC-side battery
   contribution, what Sum, UI and all OpenEMS controllers use). The measured DC value is
   `ess0/BatteryDcDischargePower`; the DC energy counters use the measured value.
 * `ActivePower` follows a set-point change after ~5 s, the BMS values after ~11 s.

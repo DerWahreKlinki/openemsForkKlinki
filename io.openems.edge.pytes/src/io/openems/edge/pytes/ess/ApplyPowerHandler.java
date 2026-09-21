@@ -61,6 +61,26 @@ public class ApplyPowerHandler {
 		return LOSS_BASE_W + (int) Math.round(LOSS_FACTOR * (Math.abs(batteryPower) + Math.max(0, pvPower)));
 	}
 
+	/**
+	 * The battery's AC-side contribution derived from the inverter output:
+	 * AC = PV + battery - losses, so battery = AC - PV + losses. Without the loss
+	 * term the derived value shows the conversion losses as charging (~130 W at
+	 * 3 kW PV with an idle battery, seen live 2026-09-21) although the BMS reads
+	 * ~30 W. The loss model is the same as for the feed-forward, with the plain
+	 * AC - PV as battery estimate.
+	 *
+	 * @param acPower the inverter AC output in W, null if unknown
+	 * @param pvPower the PV production in W
+	 * @return the battery power in W (positive = discharge), or null
+	 */
+	static Integer deriveDcDischargePower(Integer acPower, int pvPower) {
+		if (acPower == null) {
+			return null;
+		}
+		int raw = acPower - pvPower;
+		return raw + expectedLosses(raw, pvPower);
+	}
+
 	private final PvSurplusProbe surplusProbe = new PvSurplusProbe();
 
 	public ApplyPowerHandler(ApplyPowerEss ess, PytesDcCharger dcCharger) {

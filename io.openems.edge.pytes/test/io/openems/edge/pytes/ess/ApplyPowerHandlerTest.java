@@ -1,6 +1,7 @@
 package io.openems.edge.pytes.ess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertFalse;
 
 import java.util.Optional;
@@ -58,6 +59,19 @@ public class ApplyPowerHandlerTest {
 	private int applyAcOutputControl(int acTarget) throws Exception {
 		this.handler.apply(acTarget, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.AC_OUTPUT_CONTROL);
 		return (Integer) this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER).orElseThrow();
+	}
+
+	@Test
+	public void derivedDcPowerCompensatesTheConversionLosses() {
+		// idle battery, 3300 W PV: the inverter outputs PV minus ~130 W losses;
+		// without the loss term the derivation would show 130 W of charging
+		assertEquals(Integer.valueOf(4), ApplyPowerHandler.deriveDcDischargePower(3171, 3300));
+		// charging 2 kW from 5 kW PV: AC = 5000 - 2000 - (30 + 3 % * 7000) = 2760.
+		// The losses are estimated from AC - PV, so the result is a few watts off.
+		assertEquals(Integer.valueOf(-1993), ApplyPowerHandler.deriveDcDischargePower(2760, 5000));
+		// discharging 500 W at night: AC = 500 - 45
+		assertEquals(Integer.valueOf(499), ApplyPowerHandler.deriveDcDischargePower(455, 0));
+		assertNull(ApplyPowerHandler.deriveDcDischargePower(null, 1000));
 	}
 
 	@Test

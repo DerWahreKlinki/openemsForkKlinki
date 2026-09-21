@@ -15,13 +15,15 @@ import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischargeHandler<PytesJs3Impl> {
 
 	private final PytesDcCharger dcCharger;
+	private final InverterLossModel lossModel;
 	private final RemoteDispatchRealtimeControlSwitch essSetpoint;
 	private final Logger log;
 
 	public AllowedChargeDischargeHandler(PytesJs3Impl parent, PytesDcCharger dcCharger,
-			RemoteDispatchRealtimeControlSwitch essSetpoint) {
+			InverterLossModel lossModel, RemoteDispatchRealtimeControlSwitch essSetpoint) {
 		super(parent);
 		this.dcCharger = dcCharger;
+		this.lossModel = lossModel;
 		this.essSetpoint = essSetpoint;
 		this.log = this.parent.getLogger();
 	}
@@ -127,17 +129,17 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 			// the DC current stays below the limit.
 			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
 			reportedDischarge = Math.max(0, allowedDischargePower
-					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
+					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		} else {
 			// Battery control: report what actually arrives on the AC side. The
-			// inverter delivers BIAS_W less battery power than commanded and the
+			// inverter delivers the bias less battery power than commanded and the
 			// conversion losses sit in between (see ApplyPowerHandler). Charging
 			// needs no correction (the bias works in favour there; the set-point is
 			// clamped on the DC side anyway), but is AC-side as well: the AC
 			// output cannot go below PV minus what the battery takes.
 			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
-			reportedDischarge = Math.max(0, allowedDischargePower - ApplyPowerHandler.BIAS_W
-					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
+			reportedDischarge = Math.max(0, allowedDischargePower - this.lossModel.bias()
+					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		}
 		// both directions are additionally capped by the inverter's apparent power
 		this._setAllowedChargePower(Math.max(-maxApparentPower, reportedCharge)); // 0 or negative

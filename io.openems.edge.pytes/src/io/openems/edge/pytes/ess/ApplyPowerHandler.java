@@ -17,19 +17,15 @@ public class ApplyPowerHandler {
 	private final Logger log;
 
 	// === Feed-forward ===
-	// Measured 2026-09-16 on the live system: the inverter applies a constant
-	// bias of ~190-220 W towards charging to the commanded battery power (500 W
-	// discharge commanded -> 300 W delivered; 200 W charge commanded -> 418 W
-	// delivered), and conversion losses between battery and AC side that grow
-	// with the total inverter throughput (battery + PV): ~50 W @ 0.8 kW,
-	// ~160 W @ 4.2 kW, ~210 W @ 6.5 kW. Both are compensated up-front so a new
-	// set-point is right within the inverter's own dead time (~10 s). The bias
-	// does not apply at 0 W. The model is kept slightly conservative; the trim
-	// covers the rest. Shared with AllowedChargeDischargeHandler so the limits
-	// reported to the solver are what actually arrives on the AC side.
-	static final int BIAS_W = 190;
-	static final int LOSS_BASE_W = 30;
-	static final double LOSS_FACTOR = 0.03; // of |battery| + PV
+	// The inverter applies a constant bias towards charging to the commanded
+	// battery power and conversion losses between battery and AC side that grow
+	// with the total throughput (battery + PV). Both are compensated up-front so
+	// a new set-point is right within the inverter's own dead time (~10 s); the
+	// trim covers the rest. The parameters come from the self-calibrating
+	// InverterLossModel (shared with AllowedChargeDischargeHandler so the limits
+	// reported to the solver are what actually arrives on the AC side). The
+	// bias does not apply at 0 W.
+	private final InverterLossModel lossModel;
 	private static final int MIN_TARGET_W = 50; // below this the inverter is treated as idle
 
 	// === Setpoint trim ===
@@ -50,42 +46,12 @@ public class ApplyPowerHandler {
 	private long freezeUntilMs = 0;
 	private Integer lastInverterTarget = null;
 
-	/**
-	 * Expected conversion losses between battery and AC side.
-	 *
-	 * @param batteryPower battery power in W (sign irrelevant)
-	 * @param pvPower      PV power in W
-	 * @return losses in W
-	 */
-	static int expectedLosses(int batteryPower, int pvPower) {
-		return LOSS_BASE_W + (int) Math.round(LOSS_FACTOR * (Math.abs(batteryPower) + Math.max(0, pvPower)));
-	}
-
-	/**
-	 * The battery's AC-side contribution derived from the inverter output:
-	 * AC = PV + battery - losses, so battery = AC - PV + losses. Without the loss
-	 * term the derived value shows the conversion losses as charging (~130 W at
-	 * 3 kW PV with an idle battery, seen live 2026-09-21) although the BMS reads
-	 * ~30 W. The loss model is the same as for the feed-forward, with the plain
-	 * AC - PV as battery estimate.
-	 *
-	 * @param acPower the inverter AC output in W, null if unknown
-	 * @param pvPower the PV production in W
-	 * @return the battery power in W (positive = discharge), or null
-	 */
-	static Integer deriveDcDischargePower(Integer acPower, int pvPower) {
-		if (acPower == null) {
-			return null;
-		}
-		int raw = acPower - pvPower;
-		return raw + expectedLosses(raw, pvPower);
-	}
-
 	private final PvSurplusProbe surplusProbe = new PvSurplusProbe();
 
-	public ApplyPowerHandler(ApplyPowerEss ess, PytesDcCharger dcCharger) {
+	public ApplyPowerHandler(ApplyPowerEss ess, PytesDcCharger dcCharger, InverterLossModel lossModel) {
 		this.ess = ess;
 		this.dcCharger = dcCharger;
+		this.lossModel = lossModel;
 		this.log = ess.getLogger();
 	}
 
@@ -223,7 +189,9 @@ public class ApplyPowerHandler {
 		int backupLoad = batteryControl ? 0 : Math.max(0, this.ess.getBackupLoadPower().orElse(0));
 
 		// Feed-forward: bias and losses always act in discharge direction.
-		final int feedForward = batteryControl && !idle ? BIAS_W + expectedLosses(target, pvPower) : 0;
+		final int feedForward = batteryControl && !idle
+				? this.lossModel.bias() + this.lossModel.losses(target, pvPower)
+				: 0;
 
 		// Step detection on what the inverter sees (a backup load step is a step
 		// for the inverter as well)
@@ -258,6 +226,11 @@ public class ApplyPowerHandler {
 
 		// Set-point = target + feed-forward + trim, clamped to the limits
 		int setPoint = Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
+
+		// Learn losses and bias from steady-state measurements (the model itself
+		// waits for the set-point and the powers to be steady)
+		this.lossModel.update(pvPower, essActivePower, batteryPower, batteryControl ? setPoint : null,
+				settled && plausible);
 
 		this.writeExternalControlFlags();
 		// Reg 44106 (1 = 10 W): with 44105 = 2 (battery control) a negative value is

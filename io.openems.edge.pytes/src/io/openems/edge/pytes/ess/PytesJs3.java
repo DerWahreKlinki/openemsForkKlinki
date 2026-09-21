@@ -1305,7 +1305,29 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		/** LV only: the BMS requests a full charge cycle (calibration/balancing, not a fault). */
 		BMS_FAULT02_FULL_CHARGE_REQUEST(Doc.of(BOOLEAN).accessMode(READ_ONLY)),
 		/** LV only: the BMS requests an immediate charge (battery critically low). */
-		BMS_FAULT02_FORCE_CHARGE_REQUEST(Doc.of(BOOLEAN).accessMode(READ_ONLY)), //
+		BMS_FAULT02_FORCE_CHARGE_REQUEST(Doc.of(BOOLEAN).accessMode(READ_ONLY)),
+
+		// -----------------------------------------------------------------------
+		// Self-calibrating inverter loss model (see InverterLossModel)
+		// -----------------------------------------------------------------------
+
+		/** Learned base of the conversion losses. */
+		LOSS_MODEL_BASE(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)//
+				.persistencePriority(HIGH)),
+		/** Learned loss factor of the throughput (battery + PV), in permille. */
+		LOSS_MODEL_FACTOR(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.persistencePriority(HIGH)),
+		/** Learned battery set-point bias of the inverter in battery control. */
+		LOSS_MODEL_BIAS(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)//
+				.persistencePriority(HIGH)),
+		/** Steady-state loss samples learned since start. */
+		LOSS_MODEL_SAMPLES(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)), //
 		;
 
 		// -----------------------------------------------------------------------------------------------------------------------

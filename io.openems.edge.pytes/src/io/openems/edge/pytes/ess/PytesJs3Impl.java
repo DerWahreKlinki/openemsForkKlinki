@@ -118,6 +118,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	private volatile ElectricityMeter meter;
 
 	private final PvLimitHandler pvLimitHandler = new PvLimitHandler();
+	private final InverterLossModel lossModel = new InverterLossModel();
 
 	// Optional ripple control receiver (like GoodWe): its dynamic feed-in limit
 	// is applied in addition to the Core.Meta limit
@@ -202,8 +203,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			// up in the same process image.
 			Integer acPower = this.getActivePowerChannel().getNextValue().get();
 			int pvPower = this.charger != null ? this.charger.getActualPowerChannel().getNextValue().orElse(0) : 0;
-			Integer dcDischargePower = ApplyPowerHandler.deriveDcDischargePower(acPower, pvPower);
+			Integer dcDischargePower = this.lossModel.deriveDcDischargePower(acPower, pvPower);
 			this._setDcDischargePower(dcDischargePower);
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BASE).setNextValue(this.lossModel.getLossBaseW());
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_FACTOR)
+					.setNextValue((int) Math.round(this.lossModel.getLossFactor() * 1000));
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BIAS).setNextValue(this.lossModel.bias());
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_SAMPLES).setNextValue(this.lossModel.getSamples());
 			this.logDebug(this.log, "DcDischargePower: " + dcDischargePower + "W (AC " + acPower + " - PV " + pvPower
 					+ ", BMS " + this.getBatteryDcDischargePowerChannel().getNextValue().get() + ")");
 			if (this.allowedChargeDischargeHandler != null) {
@@ -1395,9 +1401,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 */
 	private void setPowerHandlers() {
 		if (this.charger != null) {
-			this.applyPowerHandler = new ApplyPowerHandler(this, this.charger);
+			this.applyPowerHandler = new ApplyPowerHandler(this, this.charger, this.lossModel);
 			this.allowedChargeDischargeHandler = new AllowedChargeDischargeHandler(this, this.charger,
-					this.config.essSetpoint());
+					this.lossModel, this.config.essSetpoint());
 		} else {
 			this.applyPowerHandler = null;
 			this.allowedChargeDischargeHandler = null;

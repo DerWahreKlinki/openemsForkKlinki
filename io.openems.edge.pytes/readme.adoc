@@ -52,6 +52,13 @@ constant bias (~190–220 W towards charging) and the conversion losses (~30 W +
 battery + PV throughput), plus a slow integral trim (separate for charge and discharge),
 clamps it to the raw BMS/config limits and writes it to 44106 (negative = discharge).
 
+Bias and losses are start values measured on one 15 kVA unit; a self-calibrating model
+(`InverterLossModel`) learns both at runtime from steady-state measurements (losses = PV +
+BMS battery power − AC, bias = commanded − BMS battery power; only when set-point, AC and PV
+have been steady for 15 cycles, two throughput bins, clamped). Channels `LossModelBase` (W),
+`LossModelFactor` (‰), `LossModelBias` (W), `LossModelSamples`. Other models of the
+inverter family therefore need no configuration.
+
 What the inverter does::
 It regulates the **battery** to that value and lets the PV pass through: AC output = PV +
 battery, with the MPPT always at the maximum power point. PV that the battery does not take

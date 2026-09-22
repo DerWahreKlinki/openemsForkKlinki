@@ -208,7 +208,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BASE).setNextValue(this.lossModel.getLossBaseW());
 			this.channel(PytesJs3.ChannelId.LOSS_MODEL_FACTOR)
 					.setNextValue((int) Math.round(this.lossModel.getLossFactor() * 1000));
-			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BIAS).setNextValue(this.lossModel.bias());
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BIAS_DISCHARGE).setNextValue(this.lossModel.bias(true));
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BIAS_CHARGE).setNextValue(this.lossModel.bias(false));
 			this.channel(PytesJs3.ChannelId.LOSS_MODEL_SAMPLES).setNextValue(this.lossModel.getSamples());
 			this.logDebug(this.log, "DcDischargePower: " + dcDischargePower + "W (AC " + acPower + " - PV " + pvPower
 					+ ", BMS " + this.getBatteryDcDischargePowerChannel().getNextValue().get() + ")");

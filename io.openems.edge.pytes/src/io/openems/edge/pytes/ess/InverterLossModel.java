@@ -10,8 +10,10 @@ import java.util.Deque;
  * <p>
  * The losses between battery and AC side grow with the total throughput
  * (battery + PV) and are modelled as a line {@code losses = base + factor *
- * throughput}. In battery control the inverter additionally delivers
- * {@code bias} less battery discharge power than commanded. Both are needed
+ * throughput}. In battery control the inverter additionally shifts the
+ * battery power towards charging by a {@code bias} against the command; the
+ * shift differs between charging and discharging (measured 2026-09-22: ~90 W
+ * discharging, ~220 W charging), so it is kept per direction. Both are needed
  * for the feed-forward of the battery set-point, for the AC-side allowed
  * discharge power and for the derived {@code DcDischargePower}. The start
  * values were measured on one Pytes JS3 (15 kVA) on 2026-09-16; other models
@@ -82,8 +84,9 @@ class InverterLossModel {
 
 	private final Bin low = new Bin();
 	private final Bin high = new Bin();
-	private double biasMean = 0;
-	private int biasSamples = 0;
+	/** Running bias means per direction: [0] discharging, [1] charging. */
+	private final double[] biasMean = new double[2];
+	private final int[] biasSamples = new int[2];
 
 	private final Deque<Integer> acValues = new ArrayDeque<>();
 	private final Deque<Integer> pvValues = new ArrayDeque<>();
@@ -91,7 +94,7 @@ class InverterLossModel {
 
 	private int lossBaseW = DEFAULT_LOSS_BASE_W;
 	private double lossFactor = DEFAULT_LOSS_FACTOR;
-	private int biasW = DEFAULT_BIAS_W;
+	private final int[] biasW = { DEFAULT_BIAS_W, DEFAULT_BIAS_W };
 
 	/**
 	 * Feeds one cycle of measurements.
@@ -118,15 +121,16 @@ class InverterLossModel {
 		this.fitLosses();
 
 		if (commandW != null && Math.abs(commandW) >= MIN_BIAS_COMMAND_W) {
+			int d = commandW > 0 ? 0 : 1;
 			int bias = commandW - batteryPower;
-			if (this.biasSamples == 0) {
-				this.biasMean = bias;
+			if (this.biasSamples[d] == 0) {
+				this.biasMean[d] = bias;
 			} else {
-				this.biasMean += ALPHA * (bias - this.biasMean);
+				this.biasMean[d] += ALPHA * (bias - this.biasMean[d]);
 			}
-			this.biasSamples++;
-			if (this.biasSamples >= MIN_SAMPLES) {
-				this.biasW = clamp((int) Math.round(this.biasMean), BIAS_MIN_W, BIAS_MAX_W);
+			this.biasSamples[d]++;
+			if (this.biasSamples[d] >= MIN_SAMPLES) {
+				this.biasW[d] = clamp((int) Math.round(this.biasMean[d]), BIAS_MIN_W, BIAS_MAX_W);
 			}
 		}
 	}
@@ -167,13 +171,14 @@ class InverterLossModel {
 	}
 
 	/**
-	 * The battery power the inverter delivers less than commanded (battery
-	 * control, discharge direction).
+	 * The shift towards charging the inverter applies to the commanded battery
+	 * power (battery control), for the given direction.
 	 *
+	 * @param discharging true for a discharge command, false for charging
 	 * @return the bias in W
 	 */
-	int bias() {
-		return this.biasW;
+	int bias(boolean discharging) {
+		return this.biasW[discharging ? 0 : 1];
 	}
 
 	/**
@@ -207,7 +212,7 @@ class InverterLossModel {
 	}
 
 	int getBiasSamples() {
-		return this.biasSamples;
+		return this.biasSamples[0] + this.biasSamples[1];
 	}
 
 	private static void push(Deque<Integer> values, int value) {

@@ -56,7 +56,7 @@ Bias and losses are start values measured on one 15 kVA unit; a self-calibrating
 (`InverterLossModel`) learns both at runtime from steady-state measurements (losses = PV +
 BMS battery power − AC, bias = commanded − BMS battery power; only when set-point, AC and PV
 have been steady for 15 cycles, two throughput bins, clamped). Channels `LossModelBase` (W),
-`LossModelFactor` (‰), `LossModelBias` (W), `LossModelSamples`. Other models of the
+`LossModelFactor` (‰), `LossModelBiasDischarge` / `LossModelBiasCharge` (W), `LossModelSamples`. Other models of the
 inverter family therefore need no configuration.
 
 What the inverter does::

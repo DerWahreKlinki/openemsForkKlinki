@@ -1320,8 +1320,13 @@ public interface PytesJs3 extends OpenemsComponent, EventHandler {
 		LOSS_MODEL_FACTOR(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.persistencePriority(HIGH)),
-		/** Learned battery set-point bias of the inverter in battery control. */
-		LOSS_MODEL_BIAS(Doc.of(INTEGER)//
+		/** Learned battery set-point bias of the inverter in battery control, discharging. */
+		LOSS_MODEL_BIAS_DISCHARGE(Doc.of(INTEGER)//
+				.accessMode(READ_ONLY)//
+				.unit(Unit.WATT)//
+				.persistencePriority(HIGH)),
+		/** Learned battery set-point bias of the inverter in battery control, charging. */
+		LOSS_MODEL_BIAS_CHARGE(Doc.of(INTEGER)//
 				.accessMode(READ_ONLY)//
 				.unit(Unit.WATT)//
 				.persistencePriority(HIGH)),

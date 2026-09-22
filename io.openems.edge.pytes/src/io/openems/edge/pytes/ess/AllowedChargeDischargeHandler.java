@@ -138,7 +138,7 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 			// clamped on the DC side anyway), but is AC-side as well: the AC
 			// output cannot go below PV minus what the battery takes.
 			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
-			reportedDischarge = Math.max(0, allowedDischargePower - this.lossModel.bias()
+			reportedDischarge = Math.max(0, allowedDischargePower - this.lossModel.bias(true)
 					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		}
 		// both directions are additionally capped by the inverter's apparent power

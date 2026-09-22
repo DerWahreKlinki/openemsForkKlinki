@@ -190,7 +190,7 @@ public class ApplyPowerHandler {
 
 		// Feed-forward: bias and losses always act in discharge direction.
 		final int feedForward = batteryControl && !idle
-				? this.lossModel.bias() + this.lossModel.losses(target, pvPower)
+				? this.lossModel.bias(target > 0) + this.lossModel.losses(target, pvPower)
 				: 0;
 
 		// Step detection on what the inverter sees (a backup load step is a step

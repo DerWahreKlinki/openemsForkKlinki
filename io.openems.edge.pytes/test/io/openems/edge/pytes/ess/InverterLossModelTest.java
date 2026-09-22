@@ -39,7 +39,8 @@ public class InverterLossModelTest {
 	public void startsWithTheMeasuredDefaults() {
 		assertEquals(DEFAULT_LOSS_BASE_W, this.sut.getLossBaseW());
 		assertEquals(DEFAULT_LOSS_FACTOR, this.sut.getLossFactor(), 1e-9);
-		assertEquals(DEFAULT_BIAS_W, this.sut.bias());
+		assertEquals(DEFAULT_BIAS_W, this.sut.bias(true));
+		assertEquals(DEFAULT_BIAS_W, this.sut.bias(false));
 		assertEquals(30 + 90, this.sut.losses(0, 3000));
 	}
 
@@ -73,14 +74,19 @@ public class InverterLossModelTest {
 	@Test
 	public void learnsTheBiasInBatteryControlOnly() {
 		this.steady(0, 800, 0, STEADY_CYCLES + MIN_SAMPLES); // 800 W discharge commanded
-		assertEquals(PLANT_BIAS, this.sut.bias());
+		assertEquals(PLANT_BIAS, this.sut.bias(true));
+		assertEquals(DEFAULT_BIAS_W, this.sut.bias(false)); // charging not learned yet
 		assertTrue(this.sut.getBiasSamples() >= MIN_SAMPLES);
+		// charging is learned separately (the plant shifts by the same bias here)
+		this.steady(3000, -1000, 0, STEADY_CYCLES + MIN_SAMPLES);
+		assertEquals(PLANT_BIAS, this.sut.bias(false));
+		assertEquals(PLANT_BIAS, this.sut.bias(true));
 
 		// AC output control (no command) and idle commands add no bias samples
 		var other = new InverterLossModel();
 		steadyOn(other, 2000, null, 0, STEADY_CYCLES + MIN_SAMPLES);
 		steadyOn(other, 2000, 100, 0, STEADY_CYCLES + MIN_SAMPLES);
-		assertEquals(DEFAULT_BIAS_W, other.bias());
+		assertEquals(DEFAULT_BIAS_W, other.bias(true));
 		assertEquals(0, other.getBiasSamples());
 	}
 
@@ -119,6 +125,6 @@ public class InverterLossModelTest {
 		for (int i = 0; i < STEADY_CYCLES + MIN_SAMPLES; i++) {
 			this.sut.update(0, 900, 1000, 800, true);
 		}
-		assertEquals(0, this.sut.bias());
+		assertEquals(0, this.sut.bias(true));
 	}
 }

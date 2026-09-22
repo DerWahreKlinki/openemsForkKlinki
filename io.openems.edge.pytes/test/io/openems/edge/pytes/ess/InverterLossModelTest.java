@@ -1,5 +1,6 @@
 package io.openems.edge.pytes.ess;
 
+import static io.openems.edge.pytes.ess.InverterLossModel.BIAS_MIN_W;
 import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_BIAS_W;
 import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_LOSS_BASE_W;
 import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_LOSS_FACTOR;
@@ -57,18 +58,30 @@ public class InverterLossModelTest {
 
 	@Test
 	public void learnsBaseAndFactorFromTwoOperatingPoints() {
-		// low throughput: idle battery, 800 W PV (AC output control)
-		this.steady(800, null, 0, STEADY_CYCLES + MIN_SAMPLES);
-		// only one bin: slope kept, base adapted through the point
-		assertEquals(DEFAULT_LOSS_FACTOR, this.sut.getLossFactor(), 1e-9);
-		int expectedBaseOneBin = (PLANT_BASE + 40) - (int) Math.round(DEFAULT_LOSS_FACTOR * 800);
-		assertEquals(expectedBaseOneBin, this.sut.getLossBaseW(), 2);
+		// one operating point only (idle battery, 800 W PV): the line moves
+		// through it, the prior keeps the slope near the default
+		this.steady(800, null, 0, STEADY_CYCLES + 200);
+		assertEquals(PLANT_BASE + 40, this.sut.losses(0, 800), 5);
+		assertEquals(DEFAULT_LOSS_FACTOR, this.sut.getLossFactor(), 0.01);
 
-		// high throughput: 5 kW PV, battery charging 1 kW
-		this.steady(5000, null, -1000, STEADY_CYCLES + MIN_SAMPLES);
-		assertEquals(PLANT_FACTOR, this.sut.getLossFactor(), 0.002);
-		assertEquals(PLANT_BASE, this.sut.getLossBaseW(), 5);
-		assertEquals(PLANT_BASE + 150, this.sut.losses(0, 3000), 8);
+		// second operating point far away (5 kW PV, battery charging 1 kW):
+		// base and factor follow the data
+		this.steady(5000, null, -1000, STEADY_CYCLES + 400);
+		assertEquals(PLANT_FACTOR, this.sut.getLossFactor(), 0.003);
+		assertEquals(PLANT_BASE, this.sut.getLossBaseW(), 8);
+		assertEquals(PLANT_BASE + 150, this.sut.losses(0, 3000), 10);
+	}
+
+	@Test
+	public void singleHighOperatingPointLowersTheFactor() {
+		// live 2026-09-22: ~0 W losses at 3.7 kW throughput; with the two-bin
+		// logic the default 3 % stayed and the derived DC power was 130 W off
+		var lossless = new InverterLossModel();
+		for (int i = 0; i < STEADY_CYCLES + 400; i++) {
+			lossless.update(2964, 2210, -754, null, true);
+		}
+		assertEquals(0, lossless.losses(-754, 2964), 15);
+		assertEquals(Integer.valueOf(-754), lossless.deriveDcDischargePower(2210, 2964), 20);
 	}
 
 	@Test
@@ -121,10 +134,10 @@ public class InverterLossModelTest {
 		}
 		assertTrue(this.sut.getLossBaseW() <= InverterLossModel.LOSS_BASE_MAX_W);
 		assertTrue(this.sut.getLossFactor() <= InverterLossModel.LOSS_FACTOR_MAX);
-		// negative "bias" (inverter delivers more than commanded) is clamped at 0
+		// inverter delivering far more than commanded: bias clamped at -200 W
 		for (int i = 0; i < STEADY_CYCLES + MIN_SAMPLES; i++) {
-			this.sut.update(0, 900, 1000, 800, true);
+			this.sut.update(0, 900, 1500, 800, true);
 		}
-		assertEquals(0, this.sut.bias(true));
+		assertEquals(BIAS_MIN_W, this.sut.bias(true));
 	}
 }

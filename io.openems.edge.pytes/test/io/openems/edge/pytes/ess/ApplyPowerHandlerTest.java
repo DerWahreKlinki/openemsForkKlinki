@@ -154,7 +154,9 @@ public class ApplyPowerHandlerTest {
 		for (int cycle = 31; cycle <= 45; cycle++) {
 			this.applyBatteryControl(500);
 		}
-		assertEquals(-86, this.applyBatteryControl(500)); // 735 + 128 = 863 W
+		// 735 + 128 = 863 W; the loss model meanwhile learns from the (synthetic)
+		// steady state and moves the feed-forward by a few watts
+		assertEquals(-86, this.applyBatteryControl(500), 1);
 	}
 
 	@Test

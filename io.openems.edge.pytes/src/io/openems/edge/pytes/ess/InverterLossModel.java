@@ -30,10 +30,14 @@ import java.util.Deque;
  * {@link #STEADY_BAND_W} for {@link #STEADY_CYCLES}
  * cycles, so that the BMS lag (~6-11 s), cloud edges and set-point steps are
  * excluded; the caller additionally masks the warm-up after start and
- * implausible BMS values. Loss samples are averaged per throughput bin (below
- * and above {@link #BIN_SPLIT_W}); with two valid bins the line runs through
- * both bin means, with one valid bin only the base is adapted. All parameters
- * are clamped to sane ranges. Pure computation, nothing is persisted.
+ * implausible BMS values. The loss line is a regularised least-squares fit
+ * over the samples (exponentially forgotten, see {@link #FORGET}) with a
+ * prior on the start values: while the operating points do not spread enough
+ * to identify base and factor, the prior keeps the line near the defaults,
+ * with enough spread both parameters follow the data. A constant offset
+ * between the AC, PV and BMS measurements ends up in the base, which may
+ * therefore be slightly negative. All parameters are clamped to sane ranges.
+ * Pure computation, nothing is persisted.
  */
 class InverterLossModel {
 
@@ -44,46 +48,33 @@ class InverterLossModel {
 
 	static final int STEADY_CYCLES = 15;
 	static final int STEADY_BAND_W = 150;
-	/** Throughput that separates the two loss bins. */
-	static final int BIN_SPLIT_W = 1500;
-	/** Samples a bin needs before it is used. */
+	/** Samples the bias needs before it is used. */
 	static final int MIN_SAMPLES = 20;
-	/** Weight of a new sample in the running means (~50 steady cycles). */
+	/** Weight of a new sample in the bias means (~50 steady cycles). */
 	static final double ALPHA = 0.02;
+	/** Forgetting factor of the loss regression per sample (~500 samples memory). */
+	static final double FORGET = 0.998;
+	/** Weight of the prior on the start values, in equivalent samples. */
+	static final double PRIOR_WEIGHT = 20;
+	/** Throughput at which the prior on the factor is as strong as on the base. */
+	static final double PRIOR_THROUGHPUT_W = 1500;
 	/** Commands below this are idle, no bias sample. */
 	static final int MIN_BIAS_COMMAND_W = 300;
 
-	static final int LOSS_BASE_MIN_W = 0;
+	static final int LOSS_BASE_MIN_W = -100;
 	static final int LOSS_BASE_MAX_W = 200;
 	static final double LOSS_FACTOR_MIN = 0.0;
 	static final double LOSS_FACTOR_MAX = 0.10;
-	static final int BIAS_MIN_W = 0;
+	static final int BIAS_MIN_W = -200;
 	static final int BIAS_MAX_W = 400;
 
-	/** Running mean of throughput and losses of one bin. */
-	private static final class Bin {
-		private double throughput = 0;
-		private double losses = 0;
-		private int samples = 0;
-
-		private void add(int t, int l) {
-			if (this.samples == 0) {
-				this.throughput = t;
-				this.losses = l;
-			} else {
-				this.throughput += ALPHA * (t - this.throughput);
-				this.losses += ALPHA * (l - this.losses);
-			}
-			this.samples++;
-		}
-
-		private boolean valid() {
-			return this.samples >= MIN_SAMPLES;
-		}
-	}
-
-	private final Bin low = new Bin();
-	private final Bin high = new Bin();
+	// weighted sums of the loss regression: n, sum T, sum L, sum T*T, sum T*L
+	private double n = 0;
+	private double sT = 0;
+	private double sL = 0;
+	private double sTT = 0;
+	private double sTL = 0;
+	private int samples = 0;
 	/** Running bias means per direction: [0] discharging, [1] charging. */
 	private final double[] biasMean = new double[2];
 	private final int[] biasSamples = new int[2];
@@ -117,7 +108,12 @@ class InverterLossModel {
 		}
 		int throughput = Math.abs(batteryPower) + Math.max(0, pvPower);
 		int losses = pvPower + batteryPower - acPower;
-		(throughput < BIN_SPLIT_W ? this.low : this.high).add(throughput, losses);
+		this.n = this.n * FORGET + 1;
+		this.sT = this.sT * FORGET + throughput;
+		this.sL = this.sL * FORGET + losses;
+		this.sTT = this.sTT * FORGET + (double) throughput * throughput;
+		this.sTL = this.sTL * FORGET + (double) throughput * losses;
+		this.samples++;
 		this.fitLosses();
 
 		if (commandW != null && Math.abs(commandW) >= MIN_BIAS_COMMAND_W) {
@@ -135,18 +131,26 @@ class InverterLossModel {
 		}
 	}
 
+	/**
+	 * Minimises sum(L - a - b*T)^2 + pa*(a - a0)^2 + pb*(b - b0)^2 over the
+	 * (forgotten) samples with the start values as prior.
+	 */
 	private void fitLosses() {
-		if (this.low.valid() && this.high.valid() && this.high.throughput - this.low.throughput > 500) {
-			double factor = (this.high.losses - this.low.losses) / (this.high.throughput - this.low.throughput);
-			this.lossFactor = clamp(factor, LOSS_FACTOR_MIN, LOSS_FACTOR_MAX);
-			this.lossBaseW = clamp((int) Math.round(this.low.losses - this.lossFactor * this.low.throughput),
-					LOSS_BASE_MIN_W, LOSS_BASE_MAX_W);
-		} else if (this.low.valid() || this.high.valid()) {
-			// one operating point only: keep the slope, move the line through it
-			Bin bin = this.low.valid() ? this.low : this.high;
-			this.lossBaseW = clamp((int) Math.round(bin.losses - this.lossFactor * bin.throughput), LOSS_BASE_MIN_W,
-					LOSS_BASE_MAX_W);
+		double pa = PRIOR_WEIGHT;
+		double pb = PRIOR_WEIGHT * PRIOR_THROUGHPUT_W * PRIOR_THROUGHPUT_W;
+		double a11 = this.n + pa;
+		double a12 = this.sT;
+		double a22 = this.sTT + pb;
+		double r1 = this.sL + pa * DEFAULT_LOSS_BASE_W;
+		double r2 = this.sTL + pb * DEFAULT_LOSS_FACTOR;
+		double det = a11 * a22 - a12 * a12;
+		if (det <= 0) {
+			return;
 		}
+		double base = (r1 * a22 - a12 * r2) / det;
+		double factor = (a11 * r2 - a12 * r1) / det;
+		this.lossFactor = clamp(factor, LOSS_FACTOR_MIN, LOSS_FACTOR_MAX);
+		this.lossBaseW = clamp((int) Math.round(base), LOSS_BASE_MIN_W, LOSS_BASE_MAX_W);
 	}
 
 	private boolean isSteady() {
@@ -208,7 +212,7 @@ class InverterLossModel {
 	}
 
 	int getSamples() {
-		return this.low.samples + this.high.samples;
+		return this.samples;
 	}
 
 	int getBiasSamples() {

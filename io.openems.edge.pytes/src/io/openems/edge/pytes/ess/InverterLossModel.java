@@ -24,8 +24,8 @@ import java.util.Deque;
  * </pre>
  *
  * <p>
- * A cycle counts as steady when the set-point has not changed and AC and PV
- * power stayed within {@link #STEADY_BAND_W} for {@link #STEADY_CYCLES}
+ * A cycle counts as steady when the set-point, AC and PV power stayed within
+ * {@link #STEADY_BAND_W} for {@link #STEADY_CYCLES}
  * cycles, so that the BMS lag (~6-11 s), cloud edges and set-point steps are
  * excluded; the caller additionally masks the warm-up after start and
  * implausible BMS values. Loss samples are averaged per throughput bin (below
@@ -149,8 +149,10 @@ class InverterLossModel {
 		if (this.acValues.size() < STEADY_CYCLES) {
 			return false;
 		}
+		// the command jitters by a few tens of watts with the trim and the
+		// controllers' targets; only a real step (or a mode change) counts
 		return spread(this.acValues) <= STEADY_BAND_W && spread(this.pvValues) <= STEADY_BAND_W
-				&& spread(this.commandValues) == 0;
+				&& spread(this.commandValues) <= STEADY_BAND_W;
 	}
 
 	/**

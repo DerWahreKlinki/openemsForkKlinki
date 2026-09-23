@@ -1,6 +1,7 @@
 package io.openems.edge.pytes.ess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
 import java.util.Optional;
@@ -58,6 +59,32 @@ public class ApplyPowerHandlerTest {
 	private int applyAcOutputControl(int acTarget) throws Exception {
 		this.handler.apply(acTarget, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.AC_OUTPUT_CONTROL);
 		return (Integer) this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER).orElseThrow();
+	}
+
+	@Test
+	public void lossModelDoesNotLearnWhileTheInverterLimitsItself() throws Exception {
+		// Inverter in its own export cap: commanded battery power is not what the
+		// battery does, those cycles must not reach the model (live 2026-09-22:
+		// the discharge bias ran into its clamp)
+		var model = new InverterLossModel();
+		var handler = new ApplyPowerHandler(this.ess, this.charger, model);
+		this.ess.withInverterLimited(true).withActivePower(4370).withBatteryDcDischargePower(-1513);
+		this.charger.withActualPower(6115);
+		for (int i = 0; i < 200; i++) {
+			handler.apply(5880, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL);
+			this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER);
+		}
+		assertEquals(0, model.getSamples());
+		assertEquals(InverterLossModel.DEFAULT_BIAS_W, model.bias(true));
+
+		// same cycles without the limitation: the model learns
+		this.ess.withInverterLimited(false).withActivePower(1170).withBatteryDcDischargePower(1100);
+		this.charger.withActualPower(100);
+		for (int i = 0; i < 200; i++) {
+			handler.apply(1170, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL);
+			this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER);
+		}
+		assertTrue(model.getSamples() > 0);
 	}
 
 	@Test

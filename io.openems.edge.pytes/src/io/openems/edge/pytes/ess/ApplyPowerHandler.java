@@ -40,6 +40,11 @@ public class ApplyPowerHandler {
 	private static final int TRIM_WARMUP_MS = 30_000; // BMS values are unreliable right after start
 	private static final int TRIM_FREEZE_MS = 12_000; // no integration while the inverter follows a step
 	private static final int TRIM_FREEZE_STEP_W = 100; // step size that triggers the freeze
+	// The inverter is only following our set-point while the AC output is near
+	// the target; with its own export cap active it runs autonomously (measured
+	// 2026-09-22: commanded -235 W battery, delivered -1513 W) and those cycles
+	// must not reach the loss model.
+	private static final int FOLLOWING_BAND_W = 300;
 	private double trimDischarge = 0;
 	private double trimCharge = 0;
 	private long elapsedMs = 0;
@@ -228,9 +233,14 @@ public class ApplyPowerHandler {
 		int setPoint = Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
 
 		// Learn losses and bias from steady-state measurements (the model itself
-		// waits for the set-point and the powers to be steady)
+		// waits for the set-point and the powers to be steady). Cycles in which
+		// the inverter does not follow the set-point are excluded: a clamped
+		// set-point, an AC output far off the target, or an active inverter-side
+		// limitation (export cap / reg 43052).
+		boolean following = !limited && Math.abs(measured - target) <= FOLLOWING_BAND_W
+				&& !this.ess.isInverterLimited();
 		this.lossModel.update(pvPower, essActivePower, batteryPower, batteryControl ? setPoint : null,
-				settled && plausible);
+				settled && plausible && following);
 
 		this.writeExternalControlFlags();
 		// Reg 44106 (1 = 10 W): with 44105 = 2 (battery control) a negative value is

@@ -55,7 +55,9 @@ clamps it to the raw BMS/config limits and writes it to 44106 (negative = discha
 Bias and losses are start values measured on one 15 kVA unit; a self-calibrating model
 (`InverterLossModel`) learns both at runtime from steady-state measurements (losses = PV +
 BMS battery power − AC, bias = commanded − BMS battery power; only when set-point, AC and PV
-have been steady for 15 cycles; regularised least squares with the start values as prior, so the
+have been steady for 15 cycles and the inverter actually follows the set-point - cycles with a
+clamped set-point, an AC output far off the target or an active inverter-side limitation are
+excluded; regularised least squares with the start values as prior, so the
 line only leaves the defaults once the operating points spread enough; clamped, the base may be
 slightly negative because measurement offsets end up in it). Channels `LossModelBase` (W),
 `LossModelFactor` (‰), `LossModelBiasDischarge` / `LossModelBiasCharge` (W), `LossModelSamples`. Other models of the

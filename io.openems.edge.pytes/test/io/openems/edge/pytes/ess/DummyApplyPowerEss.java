@@ -29,6 +29,7 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 	private int failsafeMinutes = 5;
 	private Integer gridPower = null;
 	private boolean pvLimitActive = false;
+	private boolean inverterLimited = false;
 
 	public DummyApplyPowerEss(String id) {
 		super(id, //
@@ -146,6 +147,11 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 		return this;
 	}
 
+	DummyApplyPowerEss withInverterLimited(boolean value) {
+		this.inverterLimited = value;
+		return this;
+	}
+
 	@Override
 	public Integer getGridPower() {
 		return this.gridPower;
@@ -154,6 +160,11 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 	@Override
 	public boolean isPvLimitActive() {
 		return this.pvLimitActive;
+	}
+
+	@Override
+	public boolean isInverterLimited() {
+		return this.inverterLimited || this.pvLimitActive;
 	}
 
 	@Override

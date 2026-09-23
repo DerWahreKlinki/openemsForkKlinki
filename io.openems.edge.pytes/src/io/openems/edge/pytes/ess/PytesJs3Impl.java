@@ -44,6 +44,7 @@ import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
+import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.component.ComponentManager;
@@ -1701,6 +1702,21 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Override
 	public boolean isPvLimitActive() {
 		return this.pvLimitHandler.isLimiting();
+	}
+
+	@Override
+	public boolean isInverterLimited() {
+		if (this.pvLimitHandler.isLimiting()) {
+			return true;
+		}
+		// The inverter reports its own limited operation in reg 33121; the AC
+		// output cap of reg 43052 shows up as a read-back below 100 %.
+		BooleanReadChannel limitedExternal = this.channel(PytesJs3.ChannelId.OPERATING_STAT_LIMITED_EXTERNAL);
+		if (limitedExternal.value().orElse(false)) {
+			return true;
+		}
+		Integer limitedPower = this.getLimitedPowerActualValue().get();
+		return limitedPower != null && limitedPower < 100;
 	}
 
 	@Override

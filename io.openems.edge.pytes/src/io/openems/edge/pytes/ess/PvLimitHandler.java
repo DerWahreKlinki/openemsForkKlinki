@@ -48,7 +48,7 @@ class PvLimitHandler {
 	 */
 	static final int PROBE_INTERVAL_MS = 60_000;
 	static final int PROBE_STEP_W = 300;
-	/** Safety margin below the limit at which the probe offset is dropped. */
+	/** Band below the limit in which the probe stops raising the cap. */
 	static final int PROBE_MARGIN_W = 100;
 
 	private final Deque<Integer> gridValues = new ArrayDeque<>();
@@ -121,8 +121,12 @@ class PvLimitHandler {
 		// rest of the day. The offset never exceeds the tolerance (the cap stays
 		// at or below consumption + limit), and an export at the limit takes it
 		// back immediately.
-		if (-gridAvg > feedInLimitW - PROBE_MARGIN_W) {
+		if (-gridAvg > feedInLimitW) {
+			// the limit is actually exceeded: take the offset back
 			this.probeOffsetW = 0;
+			this.lastProbeMs = this.elapsedMs;
+		} else if (-gridAvg > feedInLimitW - PROBE_MARGIN_W) {
+			// close enough to the limit: keep the offset, do not raise further
 			this.lastProbeMs = this.elapsedMs;
 		} else if (this.elapsedMs - this.lastProbeMs >= PROBE_INTERVAL_MS) {
 			this.probeOffsetW = Math.min(tolerance, this.probeOffsetW + PROBE_STEP_W);

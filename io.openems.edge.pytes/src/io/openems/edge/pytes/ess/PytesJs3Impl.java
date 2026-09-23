@@ -1651,9 +1651,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		int maxApparentPower = this.getMaxApparentPower().orElse(this.config.maxApparentPower());
 		Integer limit = null;
 
-		// Limit from the general feed-in limitation (Core.Meta), if enabled
+		// Limit from the general feed-in limitation (Core.Meta), if enabled. The
+		// configured reserve is added: the inverter's own cap is meant as a
+		// backstop for the ~5 s reaction time of the EMS-side limitation, and
+		// with both at the same value the EMS side never sees an export above
+		// the limit and cannot act at all (measured 2026-09-23).
 		if (this.config.feedPowerEnable() == EnableDisable.ENABLE && this.meta != null) {
-			int hardLimit = this.meta.getGridSellHardLimit();
+			int hardLimit = this.meta.getGridSellHardLimit() + Math.max(0, this.config.feedInBackstopReserve());
 			if (hardLimit < maxApparentPower) {
 				limit = Math.max(0, hardLimit);
 			}

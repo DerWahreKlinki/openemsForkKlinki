@@ -19,6 +19,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int maxChargeCurrent = 40;
 		private int maxDischargeCurrent = 40;
 		private int capacity = 0;
+		private int feedInBackstopReserve = 500;
 		private int minSoc = 10;
 		private boolean enableBackupPort = true;
 		private boolean debugMode = false;
@@ -75,6 +76,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setCapacity(int capacity) {
 			this.capacity = capacity;
+			return this;
+		}
+
+		public Builder setFeedInBackstopReserve(int feedInBackstopReserve) {
+			this.feedInBackstopReserve = feedInBackstopReserve;
 			return this;
 		}
 
@@ -162,6 +168,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int capacity() {
 		return this.builder.capacity;
+	}
+
+	@Override
+	public int feedInBackstopReserve() {
+		return this.builder.feedInBackstopReserve;
 	}
 
 	@Override

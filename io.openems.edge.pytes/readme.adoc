@@ -213,9 +213,13 @@ would ignore the set-point), never exceeds the measured PV outside a step, and i
 night and while reg 43052 limits. Channel: `SurplusFloor` (W, 0 = off). Not needed in
 `BATTERY_CONTROL`, where PV passes through by itself.
 
-Hardware backstop (`feedPowerEnable = ENABLE`)::
+Hardware backstop (`feedPowerEnable = ENABLE`, `feedInBackstopReserve`)::
 Additionally writes the hard limit from Meta (and a ripple control receiver, if present)
-into the inverter (reg 44102 export limit switch, reg 44104 limit in 100 W steps). The
+plus the configured reserve into the inverter (reg 44102 export limit switch, reg 44104
+limit in 100 W steps). The reserve matters: with both mechanisms at the same value the
+inverter caps the export first, the EMS-side limitation never sees an export above the limit
+and cannot act, and the inverter charges the battery with the surplus regardless of the EMS
+set-point (measured 2026-09-23). The
 inverter then limits the export at its grid meter itself. Channels: `GridFeedInLimit`
 (applied value), `GridFeedInLimitMismatch` (warning when the read-back differs for more than
 30 s). The dynamic limitation aims below the limit, so the backstop only acts during its ~5 s

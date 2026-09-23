@@ -51,6 +51,9 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic limitation (Grid-Meter-ID) aims below the limit (500 W, at most half of the limit), so the backstop usually acts first and the inverter respects the battery set-point in BATTERY_CONTROL while it curtails.")
 	EnableDisable feedPowerEnable() default EnableDisable.DISABLE;
 
+	@AttributeDefinition(name = "Feed-in backstop reserve [W]", description = "Written on top of the Meta limit into the inverter's own export cap (reg 44104), so that the EMS-side dynamic limitation (Grid-Meter-ID) acts first. With 0 the inverter caps at exactly the limit - it then holds the grid point itself, but charges the battery with the surplus regardless of the EMS set-point and the EMS limitation never sees an export above the limit (measured 2026-09-23). 500 W is a good starting point.")
+	int feedInBackstopReserve() default 500;
+
 	@AttributeDefinition(name = "Grid-Meter-ID", description = "Grid meter for the dynamic feed-in limitation (Core.Meta gridFeedInLimitationType = DYNAMIC_LIMITATION): when the export exceeds the limit, the inverter AC output is capped via reg 43052 so that PV is curtailed. Leave empty to disable.")
 	String meter_id() default "meter0";
 

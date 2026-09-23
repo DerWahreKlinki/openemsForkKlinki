@@ -113,8 +113,11 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	// Grid meter for the dynamic feed-in limitation (optional). The target is
 	// bound to the config directly (like Controller.Ess.Balancing); a "Meter_target"
 	// config property would clash with the DS property "meter.target" (service
-	// properties are case-insensitive).
-	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL, //
+	// properties are case-insensitive). The policy has to be DYNAMIC: the Pytes
+	// grid meter takes unit id and bridge from this ESS and is therefore always
+	// activated after it - a static reference would never bind and the dynamic
+	// feed-in limitation would silently stay inactive (found 2026-09-23).
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL, //
 			target = "(&(id=${config.meter_id})(enabled=true))")
 	private volatile ElectricityMeter meter;
 

@@ -48,6 +48,8 @@ class PvLimitHandler {
 	 */
 	static final int PROBE_INTERVAL_MS = 60_000;
 	static final int PROBE_STEP_W = 300;
+	/** Safety margin below the limit at which the probe offset is dropped. */
+	static final int PROBE_MARGIN_W = 100;
 
 	private final Deque<Integer> gridValues = new ArrayDeque<>();
 	private final Deque<Integer> essValues = new ArrayDeque<>();
@@ -115,13 +117,15 @@ class PvLimitHandler {
 		int acLimitW = Math.max(Math.max(0, consumption), consumption + feedInLimitW - tolerance);
 
 		// Probe: the cap is raised step by step as long as the export stays below
-		// the limit, so that a PV recovery is noticed. An export at the limit
-		// takes the offset back.
-		if (-gridAvg > feedInLimitW - tolerance / 2) {
+		// the limit, so that the cap does not stay at limit - tolerance for the
+		// rest of the day. The offset never exceeds the tolerance (the cap stays
+		// at or below consumption + limit), and an export at the limit takes it
+		// back immediately.
+		if (-gridAvg > feedInLimitW - PROBE_MARGIN_W) {
 			this.probeOffsetW = 0;
 			this.lastProbeMs = this.elapsedMs;
 		} else if (this.elapsedMs - this.lastProbeMs >= PROBE_INTERVAL_MS) {
-			this.probeOffsetW += PROBE_STEP_W;
+			this.probeOffsetW = Math.min(tolerance, this.probeOffsetW + PROBE_STEP_W);
 			this.lastProbeMs = this.elapsedMs;
 		}
 		acLimitW += this.probeOffsetW;

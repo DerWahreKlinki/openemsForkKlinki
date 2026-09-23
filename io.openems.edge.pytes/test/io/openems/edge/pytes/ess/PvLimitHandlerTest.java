@@ -164,6 +164,27 @@ public class PvLimitHandlerTest {
 	}
 
 	@Test
+	public void probeRaisesTheCapWhileTheExportStaysBelowTheLimit() {
+		// cap engaged, then the export stays clearly below the limit: the cap has
+		// to creep up again, otherwise the export sticks at limit - tolerance for
+		// the rest of the day (live 2026-09-23)
+		this.run(0, 0, LIMIT, 1);
+		var r = this.run(-3000, 5000, LIMIT, 10);
+		assertTrue(r.limiting());
+		int firstCap = r.acLimitW();
+
+		// inverter follows the cap, export only 100 W (well below the limit):
+		// after PROBE_INTERVAL_MS the cap is one step higher
+		int cycles = PvLimitHandler.PROBE_INTERVAL_MS / CYCLE + 5;
+		r = this.run(-100, firstCap, LIMIT, cycles);
+		assertTrue("cap " + r.acLimitW(), r.acLimitW() >= firstCap + PvLimitHandler.PROBE_STEP_W - 50);
+
+		// export back at the limit: the offset is dropped again
+		r = this.run(-LIMIT - 100, firstCap, LIMIT, 10);
+		assertTrue("cap " + r.acLimitW(), r.acLimitW() <= firstCap + 50);
+	}
+
+	@Test
 	public void releasesWhenCapWouldExceedRatedPower() {
 		this.run(0, 0, LIMIT, 1);
 		this.run(-3000, 5000, LIMIT, 10);

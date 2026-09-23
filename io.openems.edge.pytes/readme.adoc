@@ -189,7 +189,10 @@ output (reg 43052, "limited power" in % of the rated power) at
 `consumption + limit - tolerance` (tolerance 500 W, at most half of the limit; the cap is never below the consumption), where consumption = ESS AC power + grid power (house incl.
 backup port). The inverter then curtails PV; the EMS set-point (battery charge/discharge)
 stays in force below the cap. Grid and ESS power are averaged over 5 cycles, the register is
-written only on change and at most every 10 s. The cap is released (100 %) when it would
+written only on change and at most every 10 s. While the cap binds, the curtailed PV equals the cap,
+so the available production is unknown; the cap is therefore probed upwards by 300 W every
+60 s as long as the export stays below the limit (without it the export sticks at
+limit - tolerance once the cap engaged). The cap is released (100 %) when it would
 exceed the rated power or when the inverter outputs clearly less than the cap it applies
 (PV dropped), evaluated 10 s after the last write. Channels: `PvLimitActive` (INFO),
 `AcOutputLimit` (W), read-back `LimitedPowerSetting` / `LimitedPowerActualValue`.

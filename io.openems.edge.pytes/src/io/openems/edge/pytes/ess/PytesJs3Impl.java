@@ -110,18 +110,19 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Reference
 	private Meta meta;
 
-	// Grid meter for the dynamic feed-in limitation (optional). The target is
-	// bound to the config directly (like Controller.Ess.Balancing); a "Meter_target"
-	// config property would clash with the DS property "meter.target" (service
-	// properties are case-insensitive). The policy has to be DYNAMIC: the Pytes
-	// grid meter takes unit id and bridge from this ESS and is therefore always
-	// activated after it - a static reference would never bind and the dynamic
-	// feed-in limitation would silently stay inactive (found 2026-09-23).
-	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL, //
-			target = "(&(id=${config.meter_id})(enabled=true))")
+	// Grid meter for the dynamic feed-in limitation (optional). The filter is
+	// written into the configuration as "meter.target" by updateReferenceFilter()
+	// in activate(); a target attribute with a ${config...} placeholder is not
+	// resolved at runtime and the reference would never bind (found 2026-09-23:
+	// the limitation silently stayed inactive). The policy has to be DYNAMIC as
+	// well, because the Pytes grid meter takes unit id and Modbus bridge from
+	// this ESS and is therefore always activated after it.
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
+			cardinality = ReferenceCardinality.OPTIONAL)
 	private volatile ElectricityMeter meter;
 
 	private final PvLimitHandler pvLimitHandler = new PvLimitHandler();
+	private int feedInDiagnosticCounter = 0;
 	private final InverterLossModel lossModel = new InverterLossModel();
 
 	// Optional ripple control receiver (like GoodWe): its dynamic feed-in limit
@@ -179,6 +180,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		this.config = config;
 		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
 				"Modbus", config.modbus_id())) {
+			return;
+		}
+		if (config.meter_id() != null && !config.meter_id().isBlank() //
+				&& OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "meter", config.meter_id())) {
 			return;
 		}
 		this.workMode = this.config.workMode();
@@ -1611,6 +1616,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 		var result = this.pvLimitHandler.compute(meter != null ? meter.getActivePower().get() : null,
 				this.getActivePower().get(), limit, ratedPower, this.getCycleTime());
+		// Diagnostic: the inputs of the dynamic limitation, once per minute
+		if (this.feedInDiagnosticCounter++ % 60 == 0) {
+			this.logInfo(this.log, "Dynamic feed-in inputs: meter=" + (meter == null ? "null" : meter.id()) //
+					+ " grid=" + (meter != null ? meter.getActivePower().get() : null) //
+					+ " limit=" + limit + " rated=" + ratedPower + " ac=" + this.getActivePower().get() //
+					+ " -> limiting=" + result.limiting() + " percent=" + result.percent());
+		}
 
 		this.channel(PytesJs3.ChannelId.PV_LIMIT_ACTIVE).setNextValue(result.limiting());
 		this.channel(PytesJs3.ChannelId.AC_OUTPUT_LIMIT).setNextValue(result.acLimitW());

@@ -194,7 +194,11 @@ so the available production is unknown; the cap is therefore probed upwards by 3
 60 s as long as the export stays below the limit (without it the export sticks at
 limit - tolerance once the cap engaged). The cap is released (100 %) when it would
 exceed the rated power or when the inverter outputs clearly less than the cap it applies
-(PV dropped), evaluated 10 s after the last write. Channels: `PvLimitActive` (INFO),
+(PV dropped), evaluated 10 s after the last write. While the cap is active the battery charge is additionally limited to
+`PV - consumption`: the inverter curtails the PV within seconds, while the battery set-point
+still stems from the PV of the previous cycle, so the battery would eat the share of the
+house and the house would be served from the grid (measured 2026-09-24).
+Channels: `PvLimitActive` (INFO),
 `AcOutputLimit` (W), read-back `LimitedPowerSetting` / `LimitedPowerActualValue`.
 The inverter reports the active cap in reg 33121 (`OperatingStatLimitedExternal`, INFO).
 

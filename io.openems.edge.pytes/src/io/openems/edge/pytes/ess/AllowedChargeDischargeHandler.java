@@ -117,6 +117,19 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		int pvProduction = this.dcCharger != null ? Math.max(0, this.dcCharger.getActualPower().orElse(0)) : 0;
 
 		this.parent.setBatteryDischargeLimit(allowedDischargePower); // raw BMS limits (DC side)
+		// While the AC output is capped (dynamic feed-in limitation), the inverter
+		// curtails the PV within seconds. The battery set-point is computed from
+		// the PV of the previous cycle, so it asks for more charge than the
+		// curtailed PV can give and the house ends up on the grid (measured
+		// 2026-09-24: PV 4.08 -> 2.63 kW, battery kept at 2.0 kW, AC 0.78 kW
+		// against a 1.26 kW house -> 0.5 kW import). The charge is therefore
+		// limited to what is left after the house: PV - consumption.
+		if (this.parent.isPvLimitActive()) {
+			Integer gridPower = this.parent.getGridPower();
+			Integer essActivePower = this.parent.getActivePower().get();
+			allowedChargePower = chargeLimitWhileCurtailed(allowedChargePower, pvProduction,
+					gridPower != null && essActivePower != null ? essActivePower + gridPower : null);
+		}
 		this.parent.setBatteryChargeLimit(allowedChargePower);
 
 		final int reportedCharge;
@@ -147,6 +160,24 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 	}
 
 	
+	/**
+	 * The charge power that is left while the AC output is capped: the curtailed
+	 * PV serves the house first, the battery gets the rest. Without the
+	 * measurements the limit is unchanged.
+	 *
+	 * @param allowedChargePower the limit so far in W (negative or 0)
+	 * @param pvProduction       the measured PV in W
+	 * @param consumption        the house consumption in W, or null
+	 * @return the limit in W (negative or 0)
+	 */
+	static int chargeLimitWhileCurtailed(int allowedChargePower, int pvProduction, Integer consumption) {
+		if (consumption == null) {
+			return allowedChargePower;
+		}
+		int leftForBattery = Math.max(0, pvProduction - consumption);
+		return Math.max(allowedChargePower, -leftForBattery);
+	}
+
 	/**
 	 * Applies an inverter-side current limit (mA, may be null) to a limit in A.
 	 * Values of 0 (not set) and above 150 A (placeholder such as 999.0 A, the

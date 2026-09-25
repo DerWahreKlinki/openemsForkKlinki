@@ -240,10 +240,16 @@ public class ApplyPowerHandler {
 
 		// Learn losses and bias from steady-state measurements (the model itself
 		// waits for the set-point and the powers to be steady). Cycles in which
-		// the inverter does not follow the set-point are excluded: a clamped
-		// set-point, an AC output far off the target, or an active inverter-side
-		// limitation (export cap / reg 43052).
-		boolean following = !limited && Math.abs(measured - target) <= FOLLOWING_BAND_W
+		// the inverter does not follow the set-point are excluded: an AC output
+		// far off what was commanded, or an active inverter-side limitation
+		// (export cap / reg 43052), where the command is not what the battery
+		// does. Our own clamp is not such a case - the inverter follows the
+		// clamped command just as faithfully - so the comparison is against the
+		// commanded value, not the (possibly clamped) target. Comparing against
+		// the target instead stopped the learning completely while the charge
+		// clamp was binding, which is exactly where the bias matters most.
+		int commandedTarget = setPoint - feedForward - (int) Math.round(trim);
+		boolean following = Math.abs(measured - commandedTarget) <= FOLLOWING_BAND_W
 				&& !this.ess.isInverterLimited();
 		this.lossModel.update(pvPower, essActivePower, batteryPower, batteryControl ? setPoint : null,
 				settled && plausible && following);

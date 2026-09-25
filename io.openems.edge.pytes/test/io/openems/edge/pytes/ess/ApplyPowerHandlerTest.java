@@ -89,6 +89,32 @@ public class ApplyPowerHandlerTest {
 	}
 
 	@Test
+	public void lossModelKeepsLearningWhileOurOwnClampBinds() throws Exception {
+		// Live 2026-09-25: with the charge clamp binding all day (PV surplus above
+		// the battery limit) the model stopped learning completely and the bias
+		// stayed at its start value - exactly where it decides how far the charge
+		// current overshoots. The inverter follows the clamped command, so those
+		// cycles are valid samples.
+		var model = new InverterLossModel();
+		var handler = new ApplyPowerHandler(this.ess, this.charger, model);
+		// PV 5 kW, 2 kW wanted at the AC side -> 3 kW charge wanted, clamped to
+		// the charge limit. The plant follows the clamped command and charges
+		// 250 W more than commanded, so that is the bias to be learned.
+		this.charger.withActualPower(5000);
+		this.ess.withActivePower(2630).withBatteryDcDischargePower(-2160);
+		for (int i = 0; i < 300; i++) {
+			handler.apply(2000, 0, MAX_APPARENT_POWER, RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL);
+			int register = (Integer) this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER)
+					.orElseThrow();
+			int setPoint = -register * 10;
+			this.ess.withBatteryDcDischargePower(setPoint - 250) //
+					.withActivePower(5000 + setPoint - 460);
+		}
+		assertTrue(model.getSamples() > 0);
+		assertEquals(250, model.bias(false), 15);
+	}
+
+	@Test
 	public void batteryControlAppliesFeedForward() throws Exception {
 		// 500 W AC with 200 W PV -> 300 W from the battery, plus bias 190 and
 		// losses 30 + 3 % * (300 + 200) = 45 -> 535 W -> register -54

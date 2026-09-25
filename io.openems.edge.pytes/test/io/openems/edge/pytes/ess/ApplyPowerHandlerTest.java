@@ -1,5 +1,6 @@
 package io.openems.edge.pytes.ess;
 
+import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_BIAS_W;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -106,10 +107,15 @@ public class ApplyPowerHandlerTest {
 	@Test
 	public void batteryControlClampsToBmsLimits() throws Exception {
 		this.charger.withActualPower(200);
-		// far above the discharge limit -> 2100 W -> -210
+		// far above the discharge limit -> 2100 W -> -210. The inverter delivers
+		// the bias less than commanded, so the battery stays below the limit.
 		assertEquals(-210, this.applyBatteryControl(5000));
-		// far below the charge limit -> -2100 W -> +210
-		assertEquals(210, this.applyBatteryControl(-5000));
+		// far below the charge limit: the inverter charges the bias more than
+		// commanded, so the command stays that much above the limit and the
+		// battery itself ends up at the limit: -2100 + 190 = -1910 -> +191
+		int register = this.applyBatteryControl(-5000);
+		assertEquals(191, register);
+		assertEquals(-2100, -register * 10 - DEFAULT_BIAS_W);
 	}
 
 	@Test

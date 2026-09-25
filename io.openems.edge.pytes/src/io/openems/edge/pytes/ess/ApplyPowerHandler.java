@@ -147,7 +147,7 @@ public class ApplyPowerHandler {
 		// - Battery control (44105 = 2): the AC-side battery contribution
 		//   ActivePower - PV. The inverter gets a battery set-point, so its bias
 		//   and the conversion losses are compensated up-front. Clamp: raw BMS
-		//   limits.
+		//   limits, shifted by the bias so the battery itself stays within them.
 		// - AC output control (44105 = 4): the inverter's AC output ActivePower. The
 		//   inverter splits PV/battery itself and covers its own losses, so no
 		//   feed-forward. Clamp: the AC-side range reported to the solver.
@@ -161,7 +161,13 @@ public class ApplyPowerHandler {
 			target = activePowerTarget - pvPower;
 			measured = essActivePower - pvPower;
 			upperLimit = Math.max(0, this.ess.getBatteryDischargeLimit());
-			lowerLimit = Math.min(0, this.ess.getBatteryChargeLimit());
+			// The limits apply to the battery, the clamp acts on the command. The
+			// inverter charges its bias more than commanded (measured 2026-09-25:
+			// 1830 W commanded -> 2051 W into the battery, 38 A against the 34 A of
+			// reg 43117), so the charge command has to stay that much above the
+			// limit. The discharge side is left as is: there the bias works towards
+			// less battery power, the limit is undershot, not exceeded.
+			lowerLimit = Math.min(0, this.ess.getBatteryChargeLimit() + this.lossModel.bias(false));
 			sign = -1; // reg 44106: negative = battery discharge
 			surplusFloor = 0;
 		} else {

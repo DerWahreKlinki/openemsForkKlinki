@@ -176,6 +176,14 @@ The inverter exceeds its own limit by ~10 % for a while when the AC set-point as
 for more than the battery can deliver, so keep the EMS config at or above the
 inverter setting - a stricter EMS value cannot be enforced in autonomous mode.
 
+The limits apply to the battery, the set-point clamp acts on the command, and the
+two differ by the inverter's bias. On the charge side the inverter takes the bias
+*more* than commanded (measured 2026-09-25: 1830 W commanded, 2051 W in the
+battery, 38 A against the 34 A of reg 43117), so the charge clamp is shifted up by
+the learned `LossModelBiasCharge`; the surplus then goes to the AC side instead.
+The discharge clamp is left unshifted - there the bias works towards less battery
+power, so the limit is undershot rather than exceeded.
+
 == Grid feed-in limitation (e.g. 70 % rule)
 
 The limit is configured centrally in `Core.Meta` (`gridFeedInLimitationType =

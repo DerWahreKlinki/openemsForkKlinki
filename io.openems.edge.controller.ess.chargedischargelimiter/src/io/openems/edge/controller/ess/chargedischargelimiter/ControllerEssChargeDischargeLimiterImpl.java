@@ -678,6 +678,20 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * @param calculatedPower as constraint
 	 */
 	void applyActivePowerConstraint(Integer calculatedPower) {
+		// Make the limitation visible in the UI/history: which direction is
+		// limited and which battery power is still allowed.
+		boolean dischargeLimited = calculatedPower != null && switch (this.state) {
+		case MIN_SOC_REACHED, BELOW_MIN_SOC, APPROACHING_MIN_SOC, BALANCING_ACTIVE, FORCE_CHARGE_ACTIVE -> true;
+		default -> false;
+		};
+		boolean chargeLimited = calculatedPower != null && switch (this.state) {
+		case MAX_SOC_REACHED, ABOVE_MAX_SOC, APPROACHING_MAX_SOC -> true;
+		default -> false;
+		};
+		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.DISCHARGE_LIMITED).setNextValue(dischargeLimited);
+		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_LIMITED).setNextValue(chargeLimited);
+		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.LIMITED_BATTERY_POWER)
+				.setNextValue(dischargeLimited || chargeLimited ? calculatedPower : null);
 
 
 		if (this.ess == null) {

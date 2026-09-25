@@ -6,6 +6,9 @@ import static  io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId.SET_ACTIVE_
 import static  io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_GREATER_OR_EQUALS;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.STATE_MACHINE;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.AWAITING_HYSTERESIS;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_LIMITED;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.DISCHARGE_LIMITED;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.LIMITED_BATTERY_POWER;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGED_ENERGY;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.BALANCING_DEFERRAL_REASON;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_POWER;
@@ -454,6 +457,9 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 2000) //
 						.input("ess0", DC_DISCHARGE_POWER, -1000) //
 						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output(CHARGE_LIMITED, true) //
+						.output(DISCHARGE_LIMITED, false) //
+						.output(LIMITED_BATTERY_POWER, 0) //
 						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 3000)) //
 				.deactivate();
 	}

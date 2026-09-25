@@ -27,6 +27,19 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 		AWAITING_HYSTERESIS(Doc.of(Level.INFO) //
 				.text("Would change State, but hysteresis is active")),
 
+		/** The controller currently limits the discharge power (SoC near the minimum). */
+		DISCHARGE_LIMITED(Doc.of(Level.INFO) //
+				.text("Discharge power is limited because the SoC is near the configured minimum")),
+		/** The controller currently limits the charge power (SoC near the maximum). */
+		CHARGE_LIMITED(Doc.of(Level.INFO) //
+				.text("Charge power is limited because the SoC is near the configured maximum")),
+		/**
+		 * The battery power the controller currently allows, negative = charge. Only
+		 * set while a limit is applied, null otherwise.
+		 */
+		LIMITED_BATTERY_POWER(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT).persistencePriority(HIGH)),
+
 		BALANCING_DEFERRAL_REASON(Doc.of(BalancingDeferralReason.values()) //
 				.text("Reason why a wanted balancing is currently deferred").persistencePriority(HIGH)), //
 		/**

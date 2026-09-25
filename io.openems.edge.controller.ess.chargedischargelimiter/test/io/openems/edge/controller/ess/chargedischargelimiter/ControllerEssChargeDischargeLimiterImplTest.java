@@ -548,8 +548,48 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 3040) //
 						.input("ess0", DC_DISCHARGE_POWER, 40) //
 						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
-				.next(new TestCase("Clearly discharging: back to NORMAL") //
+				// A single discharging cycle is not enough any more: the taper drives the
+				// battery to 0 W, so the sign flips on noise. Only a sustained
+				// discharge over DIRECTION_CYCLES leaves the state.
+				.next(new TestCase("Discharging once: stays in the taper state") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.next(new TestCase("Sustained discharge 1") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 2") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 3") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 4") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 5") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 6") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 7") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge 8") //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300)) //
+				.next(new TestCase("Sustained discharge reached: back to NORMAL") //
 						.input("ess0", SOC, 88) //
 						.input("ess0", ACTIVE_POWER, 3300) //
 						.input("ess0", DC_DISCHARGE_POWER, 300) //

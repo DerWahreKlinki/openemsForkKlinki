@@ -95,6 +95,14 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	// battery clearly runs the other way, otherwise BMS noise around 0 W bounces
 	// the state to NORMAL (no constraint for the hysteresis time) and back.
 	static final int DIRECTION_NOISE_W = 100;
+	// A taper state is only left on the battery direction when that direction
+	// holds for this many cycles. The taper itself drives the battery towards
+	// 0 W, so single samples flip the sign (losses, PV noise) and the state fell
+	// back to NORMAL, where no constraint applies at all: measured 2026-09-25 at
+	// 16 % SoC the set-point jumped between 1000 W (taper) and 2400 W
+	// (unconstrained) every few seconds.
+	static final int DIRECTION_CYCLES = 10;
+	private int oppositeDirectionCycles = 0;
 	static final int BALANCING_SOC = 100;
 
 	private int fullChargePower = 0;
@@ -390,7 +398,14 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower = 0;
 				break;
 			}			
-			if (currentBatteryPower < -DIRECTION_NOISE_W) { // clearly charging
+			// Only leave on a sustained charge; a single cycle is noise (see
+			// DIRECTION_CYCLES). Leaving the zone by SoC is handled above.
+			if (currentBatteryPower < -DIRECTION_NOISE_W) {
+				this.oppositeDirectionCycles++;
+			} else {
+				this.oppositeDirectionCycles = 0;
+			}
+			if (this.oppositeDirectionCycles >= DIRECTION_CYCLES) {
 				this.changeState(State.NORMAL);
 				break;
 			}
@@ -432,8 +447,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower =0;
 				break;
 			}			
-			// wenn klar entladen wird, kein Grund für diesen State
+			// wenn dauerhaft entladen wird, kein Grund für diesen State
 			if (currentBatteryPower > DIRECTION_NOISE_W) {
+				this.oppositeDirectionCycles++;
+			} else {
+				this.oppositeDirectionCycles = 0;
+			}
+			if (this.oppositeDirectionCycles >= DIRECTION_CYCLES) {
 				this.changeState(State.NORMAL);
 				break;
 			}
@@ -868,6 +888,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * @return whether the state was changed
 	 */
 	private boolean changeState(State nextState, boolean skipHysteresis) {
+		if (nextState != this.state) {
+			this.oppositeDirectionCycles = 0;
+		}
 		this.logDebug(this.log, "Change state " + this.state + "->" + nextState
 				+ (skipHysteresis ? " without hysteresis" : ""));
 		if (this.state == nextState) {

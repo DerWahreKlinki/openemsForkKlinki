@@ -145,6 +145,28 @@ public class ApplyPowerHandlerTest {
 	}
 
 	@Test
+	public void trimUnwindsWhileTheSetPointSitsOnALimit() throws Exception {
+		// Live 2026-09-28: 1220 W wanted, the trim had grown to 253 W, the
+		// resulting set-point hit the 1645 W discharge limit - and the anti-windup
+		// froze the trim there, so the inverter kept delivering 210 W too much
+		// into the grid for hours. A correction that moves the set-point back into
+		// range has to be integrated.
+		this.ess.withBatteryLimits(-2100, 1300).withActivePower(1430).withBatteryDcDischargePower(1430);
+		int first = 0;
+		int last = 0;
+		for (int i = 0; i < 120; i++) {
+			int register = this.applyBatteryControl(1220);
+			if (i == 40) {
+				first = register;
+			}
+			last = register;
+		}
+		// clamped at the start (1300 W -> -130), then walking back out of the limit
+		assertEquals(-130, first);
+		assertTrue("set-point should leave the limit, was " + last, last > -130);
+	}
+
+	@Test
 	public void batteryControlHasNoFeedForwardWhenIdle() throws Exception {
 		// below MIN_TARGET_W the inverter is treated as idle: no bias, no losses
 		assertEquals(-2, this.applyBatteryControl(20));

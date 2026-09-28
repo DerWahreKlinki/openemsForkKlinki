@@ -213,20 +213,24 @@ public class ApplyPowerHandler {
 		}
 		this.lastInverterTarget = inverterTarget;
 
-		// Integral trim on the controlled quantity. Only integrate when the
-		// set-point is not sitting on a limit (anti-windup: with the current trim
-		// applied), not idle, not right after a step (the inverter needs its dead
-		// time first) and the measurements are plausible (BMS values are garbage
-		// right after start).
+		// Integral trim on the controlled quantity. Integrate when not idle, not
+		// right after a step (the inverter needs its dead time first) and the
+		// measurements are plausible (BMS values are garbage right after start).
+		// Anti-windup: while the set-point sits on a limit, only a correction that
+		// moves it back into range is integrated. Blocking both directions kept
+		// the trim frozen at a value that was itself the reason for the clamp
+		// (measured 2026-09-28: 1220 W wanted, 1650 W commanded against the
+		// 1645 W discharge limit, 210 W fed to the grid for hours).
 		int plausibleLimit = Math.max(maxAllowedDischargePower, -maxAllowedChargePower) + 500;
 		boolean plausible = Math.abs(batteryPower) <= plausibleLimit && Math.abs(measured) <= plausibleLimit;
 		boolean discharging = target > 0;
 		double currentTrim = discharging ? this.trimDischarge : this.trimCharge;
 		int untrimmedSetPoint = target + feedForward + (int) Math.round(currentTrim);
-		boolean limited = untrimmedSetPoint > upperLimit || untrimmedSetPoint < lowerLimit;
 		boolean settled = this.elapsedMs > TRIM_WARMUP_MS && this.elapsedMs >= this.freezeUntilMs;
-		if (!idle && !limited && settled && plausible) {
-			double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (target - measured);
+		double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (target - measured);
+		boolean pushingIntoLimit = untrimmedSetPoint > upperLimit && delta > 0
+				|| untrimmedSetPoint < lowerLimit && delta < 0;
+		if (!idle && !pushingIntoLimit && settled && plausible) {
 			if (discharging) {
 				this.trimDischarge = Math.max(-TRIM_LIMIT, Math.min(TRIM_LIMIT, this.trimDischarge + delta));
 			} else {

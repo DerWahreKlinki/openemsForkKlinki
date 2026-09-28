@@ -495,14 +495,25 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 0) //
 						.input("ess0", DC_DISCHARGE_POWER, 0) //
 						.output(STATE_MACHINE, State.NORMAL)) //
+				// The zone is entered by SoC alone, no matter which way the battery
+				// runs: the constraint only limits discharge, so it does not get in
+				// the way while charging - and a direction-dependent entry made the
+				// state bounce on noise (see hybridTaperStateSurvivesBatteryNoise).
 				.next(new TestCase("Just above minSoc, PV 3000 W exported, battery charging 500 W") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 17) //
 						.input("ess0", ACTIVE_POWER, 2500) //
 						.input("ess0", DC_DISCHARGE_POWER, -500) //
-						.output(STATE_MACHINE, State.NORMAL) //
-						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null)) //
-				.next(new TestCase("Just below maxSoc, same flows: charging is recognised") //
+						.output(STATE_MACHINE, State.APPROACHING_MIN_SOC)) //
+				// SoC jumps to the other end: first out of the min zone, then into the
+				// max zone one cycle later (each transition costs the hysteresis)
+				.next(new TestCase("SoC jumps to 88 %: leaves the min zone") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 2500) //
+						.input("ess0", DC_DISCHARGE_POWER, -500) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Just below maxSoc: enters the max zone") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 88) //
 						.input("ess0", ACTIVE_POWER, 2500) //
@@ -554,49 +565,26 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 3040) //
 						.input("ess0", DC_DISCHARGE_POWER, 40) //
 						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
-				// A single discharging cycle is not enough any more: the taper drives the
-				// battery to 0 W, so the sign flips on noise. Only a sustained
-				// discharge over DIRECTION_CYCLES leaves the state.
+				// The state is not left on the battery direction at all: a sustained
+				// discharge inside the zone keeps it, because the constraint limits
+				// charging only. Live 2026-09-26/28: with a direction-based exit the
+				// state dropped to NORMAL on every load peak and came back on the
+				// next charging cycle, several times per hour.
 				.next(new TestCase("Discharging once: stays in the taper state") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 88) //
 						.input("ess0", ACTIVE_POWER, 3300) //
 						.input("ess0", DC_DISCHARGE_POWER, 300) //
 						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
-				.next(new TestCase("Sustained discharge 1") //
+				.next(new TestCase("Sustained discharge: still in the taper state") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 88) //
 						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 2") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 3") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 4") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 5") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 6") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 7") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge 8") //
-						.input("ess0", SOC, 88) //
-						.input("ess0", ACTIVE_POWER, 3300) //
-						.input("ess0", DC_DISCHARGE_POWER, 300)) //
-				.next(new TestCase("Sustained discharge reached: back to NORMAL") //
-						.input("ess0", SOC, 88) //
+						.input("ess0", DC_DISCHARGE_POWER, 300) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.next(new TestCase("SoC leaves the zone: back to NORMAL") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 86) //
 						.input("ess0", ACTIVE_POWER, 3300) //
 						.input("ess0", DC_DISCHARGE_POWER, 300) //
 						.output(STATE_MACHINE, State.NORMAL)) //

@@ -79,8 +79,11 @@ Effects::
   below the cap.
 * Accuracy at the grid point ±50–100 W (bias/loss model plus trim), set-point reached after
   ~10 s. At a set-point of 0 the inverter idles at ~30 W charging (its bias); the trim is
-  intentionally off below 50 W so it does not chase that. Backup-port loads need no special
-  handling: the total AC is what is controlled.
+  intentionally off below 50 W so it does not chase that, and the feed-forward is faded out
+  linearly towards 0 instead of being cut off there - cutting it off put a step of the whole
+  bias into the most common operating point (PV close to consumption), costing 200-270 W at
+  the AC side. Backup-port loads need no special handling: the total AC is what is
+  controlled.
 
 Use it when the intent is battery-related: self-consumption with a limiter, "do not charge
 above x %", PV pass-through, robust operation on days with broken clouds. This is the

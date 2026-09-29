@@ -167,9 +167,13 @@ public class ApplyPowerHandlerTest {
 	}
 
 	@Test
-	public void batteryControlHasNoFeedForwardWhenIdle() throws Exception {
-		// below MIN_TARGET_W the inverter is treated as idle: no bias, no losses
-		assertEquals(-2, this.applyBatteryControl(20));
+	public void feedForwardFadesOutTowardsZero() throws Exception {
+		// 20 W of 50 W: 40 % of bias 190 + losses (30 + 3 % * 20) -> 88 W on top
+		assertEquals(-11, this.applyBatteryControl(20));
+		// at a commanded 0 nothing is added: there the inverter has no bias
+		assertEquals(0, this.applyBatteryControl(0));
+		// above MIN_TARGET_W the full feed-forward applies again: 100 + 190 + 33
+		assertEquals(-32, this.applyBatteryControl(100));
 	}
 
 	@Test
@@ -285,6 +289,6 @@ public class ApplyPowerHandlerTest {
 	public void keepsWritingInWarningState() throws Exception {
 		// a warning (derating, fan, ...) is informational - the inverter runs on
 		this.ess.withWorkState(WorkState.WARNING);
-		assertEquals(-2, this.applyBatteryControl(20));
+		assertEquals(-11, this.applyBatteryControl(20));
 	}
 }

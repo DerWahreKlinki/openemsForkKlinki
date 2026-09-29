@@ -199,9 +199,18 @@ public class ApplyPowerHandler {
 		// export). In battery control the total is what matters, nothing to do.
 		int backupLoad = batteryControl ? 0 : Math.max(0, this.ess.getBackupLoadPower().orElse(0));
 
-		// Feed-forward: bias and losses always act in discharge direction.
-		final int feedForward = batteryControl && !idle
-				? this.lossModel.bias(target > 0) + this.lossModel.losses(target, pvPower)
+		// Feed-forward: bias and losses always act in discharge direction. Towards
+		// a commanded 0 it is faded out instead of cut off: at exactly 0 the
+		// inverter only idles at ~30 W, so the full bias would overshoot there,
+		// but a few tens of watts already carry it completely. Cutting it off
+		// below MIN_TARGET_W put a step of the whole bias into the most common
+		// operating point (measured 2026-09-28, three times between 14:49 and
+		// 16:03: 40 W commanded, 200-380 W into the battery, 200-270 W missing at
+		// the AC side for minutes).
+		double idleFade = Math.min(1.0, Math.abs(target) / (double) MIN_TARGET_W);
+		final int feedForward = batteryControl //
+				? (int) Math.round(idleFade
+						* (this.lossModel.bias(target > 0) + this.lossModel.losses(target, pvPower)))
 				: 0;
 
 		// Step detection on what the inverter sees (a backup load step is a step

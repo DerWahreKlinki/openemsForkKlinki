@@ -91,6 +91,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private Integer slowDischargePower = null;
 
 	static final int TAPER_PERCENT = 3; // decrease charge power during the last X percent before hitting the max. Soc
+	// Battery power asked for while the SoC is above the maximum, see ABOVE_MAX_SOC.
+	static final int RECOVER_DISCHARGE_W = 50;
 	static final int BALANCING_SOC = 100;
 
 	private int fullChargePower = 0;
@@ -483,7 +485,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 
-			calculatedPower = 0; // do not charge any further
+			// Above the limit the battery has to come back down, not merely stop.
+			// "Battery >= 0" is translated into an AC constraint via the PV measured
+			// one cycle earlier, so the derived battery set-point jitters around
+			// zero, and the inverter's charge bias turns that jitter into a slow
+			// charge (measured 2026-09-29: 30-50 W, the SoC drifted from 85 to
+			// 87 % within 2.5 h). A small discharge cancels both effects. At maxSoc
+			// itself MAX_SOC_REACHED takes over and only blocks charging again, so
+			// the SoC settles at the limit instead of walking away from it. At the
+			// lower limit the bias works towards the safe side, nothing to do there.
+			calculatedPower = RECOVER_DISCHARGE_W;
 
 			if (this.currentSoc == this.maxSoc) {
 				this.changeState(State.MAX_SOC_REACHED);

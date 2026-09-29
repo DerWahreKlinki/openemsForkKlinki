@@ -461,6 +461,24 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.output(DISCHARGE_LIMITED, false) //
 						.output(LIMITED_BATTERY_POWER, 0) //
 						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 3000)) //
+				// Staying above the limit asks for a small discharge on top of PV, so
+				// the SoC comes back down instead of drifting further up on the
+				// inverter's charge bias (see RECOVER_DISCHARGE_W)
+				.next(new TestCase("Still above maxSoc: PV + recovery discharge") //
+						.input("ess0", SOC, 91) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output(LIMITED_BATTERY_POWER, ControllerEssChargeDischargeLimiterImpl.RECOVER_DISCHARGE_W) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS,
+								3000 + ControllerEssChargeDischargeLimiterImpl.RECOVER_DISCHARGE_W)) //
+				.next(new TestCase("Back at maxSoc: charging blocked again, no discharge asked for") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 90) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.MAX_SOC_REACHED) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 3000)) //
 				.deactivate();
 	}
 

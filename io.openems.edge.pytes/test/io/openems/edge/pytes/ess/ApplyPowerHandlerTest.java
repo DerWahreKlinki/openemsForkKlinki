@@ -168,12 +168,30 @@ public class ApplyPowerHandlerTest {
 
 	@Test
 	public void feedForwardFadesOutTowardsZero() throws Exception {
-		// 20 W of 50 W: 40 % of bias 190 + losses (30 + 3 % * 20) -> 88 W on top
-		assertEquals(-11, this.applyBatteryControl(20));
-		// at a commanded 0 nothing is added: there the inverter has no bias
-		assertEquals(0, this.applyBatteryControl(0));
-		// above MIN_TARGET_W the full feed-forward applies again: 100 + 190 + 33
-		assertEquals(-32, this.applyBatteryControl(100));
+		// With PV the small target is chased. 520 W AC against 500 W PV is a battery
+		// target of 20 W, i.e. 40 % of 50 W: 40 % of (bias 190 + losses 30 + 3 % of
+		// 520) = 94 W on top -> 114 W -> register -11
+		this.charger.withActualPower(500);
+		assertEquals(-11, this.applyBatteryControl(520));
+		// at a battery target of 0 nothing is added: there the inverter has no bias
+		assertEquals(0, this.applyBatteryControl(500));
+		// above MIN_TARGET_W the full feed-forward applies again: 100 + 190 + 48
+		assertEquals(-34, this.applyBatteryControl(600));
+	}
+
+	@Test
+	public void deadBandKeepsTheInverterStillAtNight() throws Exception {
+		// No PV and a battery target of a few tens of watts: commanding it would
+		// drive the inverter against its bias and the battery would cycle around
+		// zero all night (measured 29./30.09.2026: 519 Wh out, 484 Wh in at 22 W
+		// of house load). The set-point is 0 instead.
+		assertEquals(0, this.applyBatteryControl(22));
+		assertEquals(0, this.applyBatteryControl(-30));
+		// a real request is still followed, however small the house load is
+		assertEquals(-84, this.applyBatteryControl(600));
+		// and with PV the band is off again, see feedForwardFadesOutTowardsZero
+		this.charger.withActualPower(500);
+		assertTrue(this.applyBatteryControl(520) != 0);
 	}
 
 	@Test
@@ -289,6 +307,7 @@ public class ApplyPowerHandlerTest {
 	public void keepsWritingInWarningState() throws Exception {
 		// a warning (derating, fan, ...) is informational - the inverter runs on
 		this.ess.withWorkState(WorkState.WARNING);
-		assertEquals(-11, this.applyBatteryControl(20));
+		this.charger.withActualPower(500);
+		assertEquals(-11, this.applyBatteryControl(520));
 	}
 }

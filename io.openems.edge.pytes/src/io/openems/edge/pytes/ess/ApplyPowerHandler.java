@@ -27,6 +27,8 @@ public class ApplyPowerHandler {
 	// bias does not apply at 0 W.
 	private final InverterLossModel lossModel;
 	private static final int MIN_TARGET_W = 50; // below this the inverter is treated as idle
+	// Below this PV there is nothing to distribute, see the dead band below.
+	private static final int PV_DEAD_BAND_W = 100;
 
 	// === Setpoint trim ===
 	// A slow integral correction on the AC-side battery contribution
@@ -248,8 +250,21 @@ public class ApplyPowerHandler {
 		}
 		double trim = idle ? 0 : discharging ? this.trimDischarge : this.trimCharge;
 
+		// Dead band: with little PV a battery target of a few tens of watts is not
+		// worth chasing. Commanding it drives the inverter against its bias, and
+		// the battery then cycles around zero - measured over the night of
+		// 29./30.09.2026 at 22 W of house load: 519 Wh out and 484 Wh in, about
+		// 1 kWh of throughput for nothing, while the SoC fell by 15 %. The
+		// set-point is therefore 0 there and the house takes its few watts from
+		// the grid. With PV the compensation stays in place (see idleFade): the
+		// same small target then means real surplus that has to be exported
+		// instead of charged, and cutting it off cost 200-270 W at the AC side
+		// (measured 2026-09-28).
+		boolean deadBand = batteryControl && idle && pvPower < PV_DEAD_BAND_W;
+
 		// Set-point = target + feed-forward + trim, clamped to the limits
-		int setPoint = Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
+		int setPoint = deadBand ? 0
+				: Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
 
 		// Learn losses and bias from steady-state measurements (the model itself
 		// waits for the set-point and the powers to be steady). Cycles in which

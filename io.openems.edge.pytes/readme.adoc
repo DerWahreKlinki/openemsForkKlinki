@@ -84,6 +84,11 @@ Effects::
   bias into the most common operating point (PV close to consumption), costing 200-270 W at
   the AC side. Backup-port loads need no special handling: the total AC is what is
   controlled.
+* Below 100 W of PV a battery target under 50 W is not chased at all (dead band, set-point
+  0): at night the house load is a few tens of watts, and commanding that drives the
+  inverter against its bias until the battery cycles around zero - measured over one night
+  at 22 W of house load: 519 Wh out, 484 Wh in, 15 % of SoC gone. The house takes those
+  watts from the grid instead.
 
 Use it when the intent is battery-related: self-consumption with a limiter, "do not charge
 above x %", PV pass-through, robust operation on days with broken clouds. This is the

@@ -9,21 +9,21 @@ import io.openems.edge.batteryinverter.api.SymmetricBatteryInverter;
 import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.generic.common.AbstractAllowedChargeDischargeHandler;
-import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
 
 public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischargeHandler<PytesJs3Impl> {
 
-	private final PytesBattery battery;
 	private final PytesDcCharger dcCharger;
+	private final InverterLossModel lossModel;
 	private final RemoteDispatchRealtimeControlSwitch essSetpoint;
 	private final Logger log;
 
-	public AllowedChargeDischargeHandler(PytesJs3Impl parent, PytesBattery battery, PytesDcCharger dcCharger, RemoteDispatchRealtimeControlSwitch essSetpoint) {
+	public AllowedChargeDischargeHandler(PytesJs3Impl parent, PytesDcCharger dcCharger,
+			InverterLossModel lossModel, RemoteDispatchRealtimeControlSwitch essSetpoint) {
 		super(parent);
-		this.battery = battery;
 		this.dcCharger = dcCharger;
+		this.lossModel = lossModel;
 		this.essSetpoint = essSetpoint;
 		this.log = this.parent.getLogger();
 	}
@@ -57,17 +57,10 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 	 */
 	public void accept(ClockProvider clockProvider) {
 
-		if (this.battery == null) {
-		    this._setAllowedChargePower(0);
-		    parent._setAllowedDischargePower(0);
-		    return;
+		Integer batteryMaxChargeCurrent = this.parent.getBmsChargeCurrentLimit().get(); // mA
+		Integer batteryMaxDischargeCurrent = this.parent.getBmsDischargeCurrentLimit().get(); // mA
 
-		}
-
-		Integer batteryMaxChargeCurrent = this.battery.getBmsChargeCurrentLimit().get(); // mA
-		Integer batteryMaxDischargeCurrent = this.battery.getBmsDischargeCurrentLimit().get(); // mA
-
-		Integer batteryVoltage = this.battery.getBatteryVoltage().get(); // mV. NOT the battery nature
+		Integer batteryVoltage = this.parent.getBatteryVoltage().get(); // mV, inverter battery port
 		
 		Integer maxApparentPower = parent.getMaxApparentPower().get();
 
@@ -85,11 +78,11 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 
 
 
-		Integer configuredMaxChargeCurrent = this.battery.getConfiguredMaxChargeCurrent(); // A
-		Integer configuredMaxDischargeCurrent = this.battery.getConfiguredMaxDischargeCurrent();
+		Integer configuredMaxChargeCurrent = this.parent.getConfiguredMaxChargeCurrent(); // A
+		Integer configuredMaxDischargeCurrent = this.parent.getConfiguredMaxDischargeCurrent();
 
 		// The smallest of all known limits wins (measured 2026-09-17):
-		// - EMS config (battery0 maxCharge/DischargeCurrent) - enforced by us
+		// - EMS config (maxChargeCurrent / maxDischargeCurrent) - enforced by us
 		// - BMS request (regs 33143/33144) - the BMS only protects hard, the
 		//   inverter is supposed to honour it (it exceeded it by ~10 % once)
 		// - inverter storage-control setting (regs 43117/43118) - what the
@@ -124,6 +117,19 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 		int pvProduction = this.dcCharger != null ? Math.max(0, this.dcCharger.getActualPower().orElse(0)) : 0;
 
 		this.parent.setBatteryDischargeLimit(allowedDischargePower); // raw BMS limits (DC side)
+		// While the AC output is capped (dynamic feed-in limitation), the inverter
+		// curtails the PV within seconds. The battery set-point is computed from
+		// the PV of the previous cycle, so it asks for more charge than the
+		// curtailed PV can give and the house ends up on the grid (measured
+		// 2026-09-24: PV 4.08 -> 2.63 kW, battery kept at 2.0 kW, AC 0.78 kW
+		// against a 1.26 kW house -> 0.5 kW import). The charge is therefore
+		// limited to what is left after the house: PV - consumption.
+		if (this.parent.isPvLimitActive()) {
+			Integer gridPower = this.parent.getGridPower();
+			Integer essActivePower = this.parent.getActivePower().get();
+			allowedChargePower = chargeLimitWhileCurtailed(allowedChargePower, pvProduction,
+					gridPower != null && essActivePower != null ? essActivePower + gridPower : null);
+		}
 		this.parent.setBatteryChargeLimit(allowedChargePower);
 
 		final int reportedCharge;
@@ -136,17 +142,17 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 			// the DC current stays below the limit.
 			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
 			reportedDischarge = Math.max(0, allowedDischargePower
-					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
+					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		} else {
 			// Battery control: report what actually arrives on the AC side. The
-			// inverter delivers BIAS_W less battery power than commanded and the
+			// inverter does not follow the command exactly (see InverterLossModel) and the
 			// conversion losses sit in between (see ApplyPowerHandler). Charging
 			// needs no correction (the bias works in favour there; the set-point is
 			// clamped on the DC side anyway), but is AC-side as well: the AC
 			// output cannot go below PV minus what the battery takes.
 			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
-			reportedDischarge = Math.max(0, allowedDischargePower - ApplyPowerHandler.BIAS_W
-					- ApplyPowerHandler.expectedLosses(allowedDischargePower, pvProduction)) + pvProduction;
+			reportedDischarge = Math.max(0, allowedDischargePower - this.lossModel.responseCorrection(allowedDischargePower)
+					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		}
 		// both directions are additionally capped by the inverter's apparent power
 		this._setAllowedChargePower(Math.max(-maxApparentPower, reportedCharge)); // 0 or negative
@@ -154,6 +160,24 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 	}
 
 	
+	/**
+	 * The charge power that is left while the AC output is capped: the curtailed
+	 * PV serves the house first, the battery gets the rest. Without the
+	 * measurements the limit is unchanged.
+	 *
+	 * @param allowedChargePower the limit so far in W (negative or 0)
+	 * @param pvProduction       the measured PV in W
+	 * @param consumption        the house consumption in W, or null
+	 * @return the limit in W (negative or 0)
+	 */
+	static int chargeLimitWhileCurtailed(int allowedChargePower, int pvProduction, Integer consumption) {
+		if (consumption == null) {
+			return allowedChargePower;
+		}
+		int leftForBattery = Math.max(0, pvProduction - consumption);
+		return Math.max(allowedChargePower, -leftForBattery);
+	}
+
 	/**
 	 * Applies an inverter-side current limit (mA, may be null) to a limit in A.
 	 * Values of 0 (not set) and above 150 A (placeholder such as 999.0 A, the

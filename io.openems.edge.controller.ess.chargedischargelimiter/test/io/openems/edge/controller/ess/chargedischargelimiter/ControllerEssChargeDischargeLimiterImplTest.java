@@ -6,6 +6,9 @@ import static  io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId.SET_ACTIVE_
 import static  io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_GREATER_OR_EQUALS;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.STATE_MACHINE;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.AWAITING_HYSTERESIS;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_LIMITED;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.DISCHARGE_LIMITED;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.LIMITED_BATTERY_POWER;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGED_ENERGY;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.BALANCING_DEFERRAL_REASON;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_POWER;
@@ -454,6 +457,27 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 2000) //
 						.input("ess0", DC_DISCHARGE_POWER, -1000) //
 						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output(CHARGE_LIMITED, true) //
+						.output(DISCHARGE_LIMITED, false) //
+						.output(LIMITED_BATTERY_POWER, 0) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 3000)) //
+				// Staying above the limit asks for a small discharge on top of PV, so
+				// the SoC comes back down instead of drifting further up on the
+				// inverter's charge bias (see RECOVER_DISCHARGE_W)
+				.next(new TestCase("Still above maxSoc: PV + recovery discharge") //
+						.input("ess0", SOC, 91) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output(LIMITED_BATTERY_POWER, ControllerEssChargeDischargeLimiterImpl.RECOVER_DISCHARGE_W) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS,
+								3000 + ControllerEssChargeDischargeLimiterImpl.RECOVER_DISCHARGE_W)) //
+				.next(new TestCase("Back at maxSoc: charging blocked again, no discharge asked for") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 90) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.MAX_SOC_REACHED) //
 						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 3000)) //
 				.deactivate();
 	}
@@ -489,14 +513,25 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 0) //
 						.input("ess0", DC_DISCHARGE_POWER, 0) //
 						.output(STATE_MACHINE, State.NORMAL)) //
+				// The zone is entered by SoC alone, no matter which way the battery
+				// runs: the constraint only limits discharge, so it does not get in
+				// the way while charging - and a direction-dependent entry made the
+				// state bounce on noise (see hybridTaperStateSurvivesBatteryNoise).
 				.next(new TestCase("Just above minSoc, PV 3000 W exported, battery charging 500 W") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 17) //
 						.input("ess0", ACTIVE_POWER, 2500) //
 						.input("ess0", DC_DISCHARGE_POWER, -500) //
-						.output(STATE_MACHINE, State.NORMAL) //
-						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null)) //
-				.next(new TestCase("Just below maxSoc, same flows: charging is recognised") //
+						.output(STATE_MACHINE, State.APPROACHING_MIN_SOC)) //
+				// SoC jumps to the other end: first out of the min zone, then into the
+				// max zone one cycle later (each transition costs the hysteresis)
+				.next(new TestCase("SoC jumps to 88 %: leaves the min zone") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 2500) //
+						.input("ess0", DC_DISCHARGE_POWER, -500) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Just below maxSoc: enters the max zone") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 88) //
 						.input("ess0", ACTIVE_POWER, 2500) //
@@ -548,9 +583,26 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 3040) //
 						.input("ess0", DC_DISCHARGE_POWER, 40) //
 						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
-				.next(new TestCase("Clearly discharging: back to NORMAL") //
+				// The state is not left on the battery direction at all: a sustained
+				// discharge inside the zone keeps it, because the constraint limits
+				// charging only. Live 2026-09-26/28: with a direction-based exit the
+				// state dropped to NORMAL on every load peak and came back on the
+				// next charging cycle, several times per hour.
+				.next(new TestCase("Discharging once: stays in the taper state") //
 						.timeleap(clock, 11, ChronoUnit.SECONDS) //
 						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.next(new TestCase("Sustained discharge: still in the taper state") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 88) //
+						.input("ess0", ACTIVE_POWER, 3300) //
+						.input("ess0", DC_DISCHARGE_POWER, 300) //
+						.output(STATE_MACHINE, State.APPROACHING_MAX_SOC)) //
+				.next(new TestCase("SoC leaves the zone: back to NORMAL") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 86) //
 						.input("ess0", ACTIVE_POWER, 3300) //
 						.input("ess0", DC_DISCHARGE_POWER, 300) //
 						.output(STATE_MACHINE, State.NORMAL)) //

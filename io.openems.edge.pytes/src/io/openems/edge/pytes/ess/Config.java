@@ -24,11 +24,20 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "WorkMode", description = "Work Mode. ExternalMode -> device is controlled by OpenEMS")
 	WorkMode workMode() default WorkMode.EXTERNAL;
 
-	@AttributeDefinition(name = "ESS SetPoint", description = "How the OpenEMS AC set-point is applied (see readme). BATTERY_CONTROL (reg 44105 = 2): the EMS commands the battery power (set-point - PV, with bias/loss compensation and trim); the PV passes through, 'battery 0 W' exports everything the PV has, no PV curtailment, no battery transients at clouds, grid-point accuracy +-50-100 W - for self-consumption, limiters and PV pass-through. AC_OUTPUT_CONTROL (44105 = 4): the inverter holds its AC output at the set-point and curtails PV above 'set-point + battery charging' without reporting it; with a full battery the measured PV then only reflects the set-point (surplus search workaround), clouds are bridged from the battery until the set-point follows, OpenEMS battery limits are not known to the inverter; grid-point accuracy +-20 W - for peak shaving / exact grid targets.")
+	@AttributeDefinition(name = "ESS SetPoint", description = "How the OpenEMS AC set-point is applied (see readme). BATTERY_CONTROL (reg 44105 = 2, default and recommended): the EMS commands the battery power (set-point - PV, with bias/loss compensation and trim); the PV passes through, 'battery 0 W' exports everything the PV has, no PV curtailment, no battery transients at clouds, grid-point accuracy +-50-100 W - for self-consumption, limiters and PV pass-through. AC_OUTPUT_CONTROL (44105 = 4): the inverter holds its AC output at the set-point and curtails PV above 'set-point + battery charging' without reporting it; with a full battery the measured PV then only reflects the set-point (surplus search workaround), clouds are bridged from the battery until the set-point follows, OpenEMS battery limits are not known to the inverter; grid-point accuracy +-20 W - only for peak shaving / exact grid targets.")
 	RemoteDispatchRealtimeControlSwitch essSetpoint() default RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL;
 
 	@AttributeDefinition(name = "Max. Apparent Power", description = "Inverter´s apparent power limit")
 	int maxApparentPower() default 10000;
+
+	@AttributeDefinition(name = "Max. battery charge current [A]", description = "Additional EMS-side upper limit for the battery charge current. The smallest of this value, the BMS limit and the inverter's own setting (reg 43117, app 'max. charge current') is used. Only enforceable while the inverter follows the EMS set-point - with an active grid feed-in limit the inverter charges autonomously up to its own setting, so do not configure a value below the inverter setting.")
+	int maxChargeCurrent() default 40;
+
+	@AttributeDefinition(name = "Max. battery discharge current [A]", description = "Additional EMS-side upper limit for the battery discharge current. The smallest of this value, the BMS limit and the inverter's own setting (reg 43118, app 'max. discharge current') is used. Only enforceable while the inverter follows the EMS set-point.")
+	int maxDischargeCurrent() default 40;
+
+	@AttributeDefinition(name = "Battery capacity [Wh]", description = "Nominal battery capacity, e.g. 100 Ah x 51.2 V = 5120 Wh. The BMS does not report it via the inverter (BMS extension block 34345-34364 is empty, reg 43387 is a fixed 3.0 kWh placeholder). 0 = unknown.")
+	int capacity() default 0;
 
 	@AttributeDefinition(name = "Min SoC [5-100%]", description = "NOT applied: the SoC limits configured in the inverter are authoritative. Kept for a possible opt-in (see PytesJs3Impl.setDefaultValues()).")
 	int minSoc() default 10;
@@ -39,8 +48,11 @@ import io.openems.edge.pytes.enums.WorkMode;
 	@AttributeDefinition(name = "Failsafe timeout [min]", description = "Minutes without an EMS write after which the inverter falls back to its own self-use mode (reg 44101, 1-1440). Keep it short if loads on the backup port depend on the EMS.")
 	int failsafeMinutes() default 5;
 
-	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic limitation (Grid-Meter-ID) aims 500 W below the limit, so the backstop only acts during its reaction time.")
+	@AttributeDefinition(name = "Feed-in limitation", description = "Write the grid feed-in hard limit from Core.Meta (gridFeedInLimitationType / maximumGridFeedInLimit) into the inverter (reg 44102/44104) as hardware backstop. The inverter then limits the export at its grid meter and curtails PV if the battery cannot absorb the surplus. The dynamic limitation (Grid-Meter-ID) aims below the limit (500 W, at most half of the limit), so the backstop usually acts first and the inverter respects the battery set-point in BATTERY_CONTROL while it curtails.")
 	EnableDisable feedPowerEnable() default EnableDisable.DISABLE;
+
+	@AttributeDefinition(name = "Feed-in backstop reserve [W]", description = "Written on top of the Meta limit into the inverter's own export cap (reg 44104), so that the EMS-side dynamic limitation (Grid-Meter-ID) acts first. With 0 the inverter caps at exactly the limit - it then holds the grid point itself, but charges the battery with the surplus regardless of the EMS set-point and the EMS limitation never sees an export above the limit (measured 2026-09-23). 500 W is a good starting point.")
+	int feedInBackstopReserve() default 500;
 
 	@AttributeDefinition(name = "Grid-Meter-ID", description = "Grid meter for the dynamic feed-in limitation (Core.Meta gridFeedInLimitationType = DYNAMIC_LIMITATION): when the export exceeds the limit, the inverter AC output is capped via reg 43052 so that PV is curtailed. Leave empty to disable.")
 	String meter_id() default "meter0";

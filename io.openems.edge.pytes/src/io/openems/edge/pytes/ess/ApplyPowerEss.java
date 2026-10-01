@@ -68,6 +68,14 @@ interface ApplyPowerEss extends PytesJs3, ManagedSymmetricEss, HybridEss {
 	boolean isPvLimitActive();
 
 	/**
+	 * Whether the inverter currently limits itself (its own export cap or the
+	 * AC output cap of reg 43052) and therefore does not follow the set-point.
+	 *
+	 * @return true while an inverter-side limitation is active
+	 */
+	boolean isInverterLimited();
+
+	/**
 	 * Logs a debug message.
 	 *
 	 * @param message the message

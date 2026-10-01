@@ -38,11 +38,26 @@ class PvLimitHandler {
 	 */
 	static final int SETTLE_MS = 10_000;
 	static final int NO_LIMIT_PERCENT = 100;
+	/**
+	 * Time between two probe steps: while the cap binds, the curtailed PV equals
+	 * the cap, so "how much would flow without the cap" is unknown. The cap is
+	 * therefore raised by {@link #PROBE_STEP_W} from time to time; if the export
+	 * stays below the limit the next step follows, otherwise the cap goes back
+	 * (live 2026-09-23: without this the cap stayed at limit - tolerance for the
+	 * rest of the day and gave away ~500 W of export).
+	 */
+	static final int PROBE_INTERVAL_MS = 60_000;
+	static final int PROBE_STEP_W = 300;
+	/** Band below the limit in which the probe stops raising the cap. */
+	static final int PROBE_MARGIN_W = 100;
 
 	private final Deque<Integer> gridValues = new ArrayDeque<>();
 	private final Deque<Integer> essValues = new ArrayDeque<>();
 	private boolean limiting = false;
 	private int lastWrittenPercent = -1;
+	/** Extra watts added to the computed cap by the probe. */
+	private int probeOffsetW = 0;
+	private long lastProbeMs = Long.MIN_VALUE / 2;
 	/** The cap the inverter currently applies (last written), null = 100 %. */
 	private Integer writtenAcLimitW = null;
 	private long lastWriteMs = Long.MIN_VALUE;
@@ -100,6 +115,24 @@ class PvLimitHandler {
 		int consumption = essAvg + gridAvg;
 		int tolerance = tolerance(feedInLimitW);
 		int acLimitW = Math.max(Math.max(0, consumption), consumption + feedInLimitW - tolerance);
+
+		// Probe: the cap is raised step by step as long as the export stays below
+		// the limit, so that the cap does not stay at limit - tolerance for the
+		// rest of the day. The offset never exceeds the tolerance (the cap stays
+		// at or below consumption + limit), and an export at the limit takes it
+		// back immediately.
+		if (-gridAvg > feedInLimitW) {
+			// the limit is actually exceeded: take the offset back
+			this.probeOffsetW = 0;
+			this.lastProbeMs = this.elapsedMs;
+		} else if (-gridAvg > feedInLimitW - PROBE_MARGIN_W) {
+			// close enough to the limit: keep the offset, do not raise further
+			this.lastProbeMs = this.elapsedMs;
+		} else if (this.elapsedMs - this.lastProbeMs >= PROBE_INTERVAL_MS) {
+			this.probeOffsetW = Math.min(tolerance, this.probeOffsetW + PROBE_STEP_W);
+			this.lastProbeMs = this.elapsedMs;
+		}
+		acLimitW += this.probeOffsetW;
 		int percent = (int) Math.ceil(acLimitW * 100.0 / ratedPowerW);
 		// Release the cap when it is not binding anymore: the inverter outputs
 		// clearly less than the cap it currently applies (PV dropped), or the
@@ -111,6 +144,7 @@ class PvLimitHandler {
 				&& essAvg < this.writtenAcLimitW - tolerance;
 		if (percent >= NO_LIMIT_PERCENT || capNotBinding) {
 			this.limiting = false;
+			this.probeOffsetW = 0;
 			return this.result(false, null, NO_LIMIT_PERCENT);
 		}
 		return this.result(true, acLimitW, Math.max(0, percent));

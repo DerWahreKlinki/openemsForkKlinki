@@ -14,14 +14,13 @@ bridge and unit id; the inverter accepts only **one** TCP connection at a time.
 |`ManagedSymmetricEss`, `HybridEss`
 |The inverter itself. Receives the OpenEMS AC set-point, owns the work state machine
 and the remote dispatch registers 44100–44108, does the dynamic feed-in limitation.
-Battery and DC charger register themselves at the ESS (`addBattery()` / `addCharger()`).
-
-|`Pytes.Battery`
-|`Battery`
-|Battery values from the inverter's battery port and the BMS (regs 33133–33150):
-voltage, current, SoC, BMS current limits, fault words. `DcDischargePower` is
-calculated from BMS current × voltage × direction. Also reads the backup port load
-(reg 33148), because it sits in the same register block.
+Also carries the battery values, because OpenEMS has no communication with the battery
+of its own - everything comes through the inverter's battery port and BMS registers
+33133–33150: SoC, SoH, voltage, current, BMS current limits, fault words
+(`Battery…`/`Bms…` channels), the backup port load (reg 33148) and the battery power
+`BatteryDcDischargePower` calculated from BMS current × voltage × direction. The battery
+capacity is not reported by the inverter and is configured (`capacity`). The DC charger
+registers itself at the ESS (`addCharger()`).
 
 |`Pytes.Hybrid.DcCharger`
 |`EssDcCharger`
@@ -45,13 +44,24 @@ PV). The ESS config `essSetpoint` selects what that number means for the inverte
 (regs 44105/44106). The choice decides how the inverter behaves whenever the PV cannot be
 absorbed by the battery - which is most of a sunny day.
 
-=== `BATTERY_CONTROL` (44105 = 2) - "charge/discharge the battery with N watts"
+=== `BATTERY_CONTROL` (44105 = 2, default, recommended) - "charge/discharge the battery with N watts"
 
 What is written::
 The EMS computes the battery power `set-point − PV`, adds a feed-forward for the inverter's
 constant bias (~190–220 W towards charging) and the conversion losses (~30 W + 3 % of
 battery + PV throughput), plus a slow integral trim (separate for charge and discharge),
 clamps it to the raw BMS/config limits and writes it to 44106 (negative = discharge).
+
+Bias and losses are start values measured on one 15 kVA unit; a self-calibrating model
+(`InverterLossModel`) learns both at runtime from steady-state measurements (losses = PV +
+BMS battery power − AC, bias = commanded − BMS battery power; only when set-point, AC and PV
+have been steady for 15 cycles and the inverter actually follows the set-point - cycles with a
+clamped set-point, an AC output far off the target or an active inverter-side limitation are
+excluded; regularised least squares with the start values as prior, so the
+line only leaves the defaults once the operating points spread enough; clamped, the base may be
+slightly negative because measurement offsets end up in it). Channels `LossModelBase` (W),
+`LossModelFactor` (‰), `LossModelBiasDischarge` / `LossModelBiasCharge` (W), `LossModelSamples`. Other models of the
+inverter family therefore need no configuration.
 
 What the inverter does::
 It regulates the **battery** to that value and lets the PV pass through: AC output = PV +
@@ -67,13 +77,34 @@ Effects::
 * Grid feed-in limitation: the inverter's own export cap (backstop) and the dynamic AC
   output cap (reg 43052) work as described below; the battery set-point stays in force
   below the cap.
-* Accuracy at the grid point ±50–100 W (bias/loss model plus trim), set-point reached after
+* Accuracy at the grid point ±50–100 W (response/loss model plus trim), set-point reached after
   ~10 s. At a set-point of 0 the inverter idles at ~30 W charging (its bias); the trim is
-  intentionally off below 50 W so it does not chase that. Backup-port loads need no special
-  handling: the total AC is what is controlled.
+  intentionally off below 50 W so it does not chase that, and the feed-forward is faded out
+  linearly towards 0 instead of being cut off there - cutting it off put a step of the whole
+  bias into the most common operating point (PV close to consumption), costing 200-270 W at
+  the AC side. Backup-port loads need no special handling: the total AC is what is
+  controlled.
+* The inverter does not follow the battery command exactly; its response is modelled as
+  `battery = offset + gain * command` and inverted for the feed-forward (channels
+  `LossModelResponseOffset` in W and `LossModelResponseGain` in percent). A constant bias
+  per direction was used before, which is the average of something that is not constant:
+  measured over 1316 steady cycles, `command - battery` ran from +273 W at a command of
+  331 W to -199 W at 1612 W, so the average was wrong at both ends and the trim had to
+  chew through 150-400 W for minutes. The regression gives `battery = -78 W + 1.09 *
+  command`; below ~500 W of command the inverter follows with a gain of only about 0.4,
+  which a single line cannot capture - the remainder is left to the trim.
+* Below 100 W of PV a battery target under 50 W is not chased at all (dead band, set-point
+  0): at night the house load is a few tens of watts, and commanding that drives the
+  inverter against its bias until the battery cycles around zero - measured over one night
+  at 22 W of house load: 519 Wh out, 484 Wh in, 15 % of SoC gone. The house takes those
+  watts from the grid instead.
 
 Use it when the intent is battery-related: self-consumption with a limiter, "do not charge
-above x %", PV pass-through, robust operation on days with broken clouds.
+above x %", PV pass-through, robust operation on days with broken clouds. This is the
+default and the recommended mode: measured on 2026-09-19 over a full cycle (charging at
+the limit, taper at 82-85 %, stop at 85 %, PV exported and - with the inverter's export cap
+- curtailed) it did exactly what the controllers asked for, without any of the workarounds
+the AC mode needs.
 
 === `AC_OUTPUT_CONTROL` (44105 = 4) - "deliver N watts at the AC output"
 
@@ -113,9 +144,9 @@ Effects::
 * With the backstop export cap active the inverter ignores the set-point completely (see
   feed-in limitation).
 
-Use it when the grid point has to be exact: peak shaving, zero export as a hard target,
-tariff-driven grid charging. Not the best choice for plain self-consumption with a full
-battery on a sunny day.
+Use it only when the grid point has to be exact: peak shaving, zero export as a hard
+target, tariff-driven grid charging. Not for plain self-consumption: with a full battery on
+a sunny day it locks the PV at house consumption (see above).
 
 === `GRID_POINT_CONTROL` (44105 = 3)
 
@@ -133,9 +164,9 @@ cap - that is the only "give everything you have" the inverter knows.
 
 == Values the inverter reports
 
-* `ess0/DcDischargePower` is derived as `ActivePower − PV` (the AC-side battery
+* `ess0/DcDischargePower` is derived as `ActivePower − PV + expected losses` (the AC-side battery
   contribution, what Sum, UI and all OpenEMS controllers use). The measured DC value is
-  `battery0/DcDischargePower`; the DC energy counters use the measured value.
+  `ess0/BatteryDcDischargePower`; the DC energy counters use the measured value.
 * `ActivePower` follows a set-point change after ~5 s, the BMS values after ~11 s.
 * The inverter's own battery power reading (reg 33149) and the BMS calculation agree within a
   few watts.
@@ -147,7 +178,7 @@ cap - that is the only "give everything you have" the inverter knows.
 Four sources exist; the smallest value wins in `AllowedChargeDischargeHandler`
 (measured 2026-09-17):
 
-* EMS config (`Pytes.Battery` maxChargeCurrent / maxDischargeCurrent) - enforced by
+* EMS config (`maxChargeCurrent` / `maxDischargeCurrent`) - enforced by
   the EMS via the set-point clamps; only effective while the inverter follows the
   EMS set-point.
 * BMS request (regs 33143/33144, "From BMS") - a request to the inverter; the BMS
@@ -162,6 +193,14 @@ The inverter exceeds its own limit by ~10 % for a while when the AC set-point as
 for more than the battery can deliver, so keep the EMS config at or above the
 inverter setting - a stricter EMS value cannot be enforced in autonomous mode.
 
+The limits apply to the battery, the set-point clamp acts on the command, and the
+two differ by the inverter's bias. On the charge side the inverter takes the bias
+*more* than commanded (measured 2026-09-25: 1830 W commanded, 2051 W in the
+battery, 38 A against the 34 A of reg 43117), so the charge clamp is shifted up by
+the learned `LossModelBiasCharge`; the surplus then goes to the AC side instead.
+The discharge clamp is left unshifted - there the bias works towards less battery
+power, so the limit is undershot rather than exceeded.
+
 == Grid feed-in limitation (e.g. 70 % rule)
 
 The limit is configured centrally in `Core.Meta` (`gridFeedInLimitationType =
@@ -175,9 +214,16 @@ output (reg 43052, "limited power" in % of the rated power) at
 `consumption + limit - tolerance` (tolerance 500 W, at most half of the limit; the cap is never below the consumption), where consumption = ESS AC power + grid power (house incl.
 backup port). The inverter then curtails PV; the EMS set-point (battery charge/discharge)
 stays in force below the cap. Grid and ESS power are averaged over 5 cycles, the register is
-written only on change and at most every 10 s. The cap is released (100 %) when it would
+written only on change and at most every 10 s. While the cap binds, the curtailed PV equals the cap,
+so the available production is unknown; the cap is therefore probed upwards by 300 W every
+60 s as long as the export stays below the limit (without it the export sticks at
+limit - tolerance once the cap engaged). The cap is released (100 %) when it would
 exceed the rated power or when the inverter outputs clearly less than the cap it applies
-(PV dropped), evaluated 10 s after the last write. Channels: `PvLimitActive` (INFO),
+(PV dropped), evaluated 10 s after the last write. While the cap is active the battery charge is additionally limited to
+`PV - consumption`: the inverter curtails the PV within seconds, while the battery set-point
+still stems from the PV of the previous cycle, so the battery would eat the share of the
+house and the house would be served from the grid (measured 2026-09-24).
+Channels: `PvLimitActive` (INFO),
 `AcOutputLimit` (W), read-back `LimitedPowerSetting` / `LimitedPowerActualValue`.
 The inverter reports the active cap in reg 33121 (`OperatingStatLimitedExternal`, INFO).
 
@@ -196,9 +242,13 @@ would ignore the set-point), never exceeds the measured PV outside a step, and i
 night and while reg 43052 limits. Channel: `SurplusFloor` (W, 0 = off). Not needed in
 `BATTERY_CONTROL`, where PV passes through by itself.
 
-Hardware backstop (`feedPowerEnable = ENABLE`)::
+Hardware backstop (`feedPowerEnable = ENABLE`, `feedInBackstopReserve`)::
 Additionally writes the hard limit from Meta (and a ripple control receiver, if present)
-into the inverter (reg 44102 export limit switch, reg 44104 limit in 100 W steps). The
+plus the configured reserve into the inverter (reg 44102 export limit switch, reg 44104
+limit in 100 W steps). The reserve matters: with both mechanisms at the same value the
+inverter caps the export first, the EMS-side limitation never sees an export above the limit
+and cannot act, and the inverter charges the battery with the surplus regardless of the EMS
+set-point (measured 2026-09-23). The
 inverter then limits the export at its grid meter itself. Channels: `GridFeedInLimit`
 (applied value), `GridFeedInLimitMismatch` (warning when the read-back differs for more than
 30 s). The dynamic limitation aims below the limit, so the backstop only acts during its ~5 s

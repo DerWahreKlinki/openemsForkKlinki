@@ -44,6 +44,7 @@ import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC4ReadInputRegistersTask;
+import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.component.ComponentManager;
@@ -63,7 +64,6 @@ import io.openems.edge.meter.api.ElectricityMeter;
 import io.openems.edge.timedata.api.Timedata;
 import io.openems.edge.timedata.api.TimedataProvider;
 import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
-import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.InverterOperatingStatus;
@@ -110,15 +110,20 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Reference
 	private Meta meta;
 
-	// Grid meter for the dynamic feed-in limitation (optional). The target is
-	// bound to the config directly (like Controller.Ess.Balancing); a "Meter_target"
-	// config property would clash with the DS property "meter.target" (service
-	// properties are case-insensitive).
-	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL, //
-			target = "(&(id=${config.meter_id})(enabled=true))")
+	// Grid meter for the dynamic feed-in limitation (optional). The filter is
+	// written into the configuration as "meter.target" by updateReferenceFilter()
+	// in activate(); a target attribute with a ${config...} placeholder is not
+	// resolved at runtime and the reference would never bind (found 2026-09-23:
+	// the limitation silently stayed inactive). The policy has to be DYNAMIC as
+	// well, because the Pytes grid meter takes unit id and Modbus bridge from
+	// this ESS and is therefore always activated after it.
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, //
+			cardinality = ReferenceCardinality.OPTIONAL)
 	private volatile ElectricityMeter meter;
 
 	private final PvLimitHandler pvLimitHandler = new PvLimitHandler();
+	private int feedInDiagnosticCounter = 0;
+	private final InverterLossModel lossModel = new InverterLossModel();
 
 	// Optional ripple control receiver (like GoodWe): its dynamic feed-in limit
 	// is applied in addition to the Core.Meta limit
@@ -155,9 +160,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	private final Logger log = LoggerFactory.getLogger(PytesJs3Impl.class);
 	private Config config = null;
 
-	// Reference to attached sub-components - populated via addBattery/addCharger
+	// Reference to the attached DC charger - populated via addCharger()
 	private PytesDcCharger charger;
-	private PytesBattery battery;
 	private WorkMode workMode;
 
 	public PytesJs3Impl() {
@@ -178,10 +182,17 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				"Modbus", config.modbus_id())) {
 			return;
 		}
+		if (config.meter_id() != null && !config.meter_id().isBlank() //
+				&& OpenemsComponent.updateReferenceFilter(this.cm, this.servicePid(), "meter", config.meter_id())) {
+			return;
+		}
 		this.workMode = this.config.workMode();
 		this.lastDefinedWorkStateTime = LocalDateTime.now(this.componentManager.getClock());
 		this._setWorkState(WorkState.UNDEFINED);
+		// Not available from the inverter/BMS, see Config#capacity()
+		this._setCapacity(config.capacity() > 0 ? config.capacity() : null);
 		this.installListeners();
+		this.setPowerHandlers();
 	}
 
 	@Override
@@ -191,25 +202,28 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE:
-			// Forward battery SoC and power to ESS channels so controllers see them
-			// Guard against null - battery registers itself asynchronously after activation
-			if (this.battery != null) {
-				this._setSoc(this.battery.getSoc().get()); // Integer value
-				this._setCapacity(this.battery.getCapacity().get());
-			}
-			// DcDischargePower is derived as ActivePower - PV instead of taking the
-			// BMS measurement: the BMS value lags ~6 s behind ActivePower, which made
-			// the controller's PV estimate (ActivePower - DcDischargePower) wrong on
-			// every transient and caused the setpoint to oscillate (see live log
-			// 2026-09-16). Derived this way, ActivePower - DcDischargePower == PV by
-			// construction. The measured value is still available on the battery.
-			// NextValue is used so AC, PV and DC end up in the same process image.
+			this.calculateBatteryPower();
+			// DcDischargePower is derived from ActivePower - PV (plus the expected
+			// conversion losses) instead of taking the BMS measurement: the BMS value
+			// lags ~6 s behind ActivePower, which made the controller's PV estimate
+			// (ActivePower - DcDischargePower) wrong on every transient and caused the
+			// setpoint to oscillate (see live log 2026-09-16). The measured value
+			// stays in BatteryDcDischargePower. NextValue is used so AC, PV and DC end
+			// up in the same process image.
 			Integer acPower = this.getActivePowerChannel().getNextValue().get();
 			int pvPower = this.charger != null ? this.charger.getActualPowerChannel().getNextValue().orElse(0) : 0;
-			Integer dcDischargePower = acPower == null ? null : acPower - pvPower;
+			Integer dcDischargePower = this.lossModel.deriveDcDischargePower(acPower, pvPower);
 			this._setDcDischargePower(dcDischargePower);
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_BASE).setNextValue(this.lossModel.getLossBaseW());
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_FACTOR)
+					.setNextValue((int) Math.round(this.lossModel.getLossFactor() * 1000));
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_RESPONSE_OFFSET)
+					.setNextValue(this.lossModel.getResponseOffsetW());
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_RESPONSE_GAIN)
+					.setNextValue((int) Math.round(this.lossModel.getResponseGain() * 100));
+			this.channel(PytesJs3.ChannelId.LOSS_MODEL_SAMPLES).setNextValue(this.lossModel.getSamples());
 			this.logDebug(this.log, "DcDischargePower: " + dcDischargePower + "W (AC " + acPower + " - PV " + pvPower
-					+ ", BMS " + (this.battery != null ? this.battery.getDcDischargePower().get() : null) + ")");
+					+ ", BMS " + this.getBatteryDcDischargePowerChannel().getNextValue().get() + ")");
 			if (this.allowedChargeDischargeHandler != null) {
 				this.allowedChargeDischargeHandler.accept(this.componentManager);
 			}
@@ -246,7 +260,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		// DC energy from the measured battery power, not from the derived
 		// DcDischargePower channel (ActivePower - PV, includes the conversion
 		// losses); otherwise AC and DC energy would be identical.
-		var dcDischargePower = this.battery != null ? this.battery.getDcDischargePower().get() : null;
+		var dcDischargePower = this.getBatteryDcDischargePower().get();
 		if (dcDischargePower == null) {
 			this.calculateDcChargeEnergy.update(null);
 			this.calculateDcDischargeEnergy.update(null);
@@ -259,9 +273,100 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 	}
 
+	/**
+	 * Battery power, current and voltage from the BMS values (regs 33141/33142)
+	 * and the direction flag of the inverter port (reg 33135). Set as NextValue
+	 * so that they land in the same process image as the registers.
+	 */
+	private void calculateBatteryPower() {
+		IntegerReadChannel directionChannel = this.channel(PytesJs3.ChannelId.BATTERY_CURRENT_DIRECTION);
+		IntegerReadChannel currentChannel = this.channel(PytesJs3.ChannelId.BMS_BATTERY_CURRENT);
+		IntegerReadChannel voltageChannel = this.channel(PytesJs3.ChannelId.BMS_BATTERY_VOLTAGE);
+		Integer direction = directionChannel.getNextValue().get();
+		Integer currentMilliAmpere = currentChannel.getNextValue().get();
+		Integer voltageMilliVolt = voltageChannel.getNextValue().get();
+		if (direction == null || currentMilliAmpere == null || voltageMilliVolt == null) {
+			this.channel(PytesJs3.ChannelId.BATTERY_DC_DISCHARGE_POWER).setNextValue(null);
+			this.channel(PytesJs3.ChannelId.BATTERY_CURRENT).setNextValue(null);
+			return;
+		}
+		int sign = direction == 0 ? -1 : 1; // 0 = charging
+		// mA * mV overflows int above ~40 A (40_500 * 53_000 > 2^31)
+		long powerMicroWatt = (long) currentMilliAmpere * voltageMilliVolt * sign;
+		this.channel(PytesJs3.ChannelId.BATTERY_DC_DISCHARGE_POWER)
+				.setNextValue((int) Math.round(powerMicroWatt / 1_000_000.0));
+		this.channel(PytesJs3.ChannelId.BATTERY_CURRENT)
+				.setNextValue((int) Math.round(currentMilliAmpere * sign / 1000.0));
+	}
+
+	@Override
+	public int getConfiguredMaxChargeCurrent() {
+		return this.config.maxChargeCurrent();
+	}
+
+	@Override
+	public int getConfiguredMaxDischargeCurrent() {
+		return this.config.maxDischargeCurrent();
+	}
+
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 		return new ModbusProtocol(this, //
+
+				// ---------------------------------------------------------------
+				// Battery port and BMS values (reg 33133-33150), one frame per cycle
+				// ---------------------------------------------------------------
+				new FC4ReadInputRegistersTask(33133, Priority.HIGH,
+						// reg 33133 - battery voltage at the inverter port [0.1 V -> mV]
+						m(PytesJs3.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(33133),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						// reg 33134 - battery current magnitude [0.1 A -> mA], direction in 33135
+						m(PytesJs3.ChannelId.BATTERY_CURRENT_WITHOUT_DIRECTION, new SignedWordElement(33134),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						// reg 33135 - battery current direction: 0 = charging, 1 = discharging
+						m(PytesJs3.ChannelId.BATTERY_CURRENT_DIRECTION, new UnsignedWordElement(33135)),
+						// reg 33136 - LLC bus voltage [0.1 V -> mV]
+						m(PytesJs3.ChannelId.LLC_BUS_VOLTAGE, new UnsignedWordElement(33136),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						// reg 33137-33138 - backup port voltage/current, read by Meter.Pytes.Backup
+						new DummyRegisterElement(33137, 33138),
+						// reg 33139 - state of charge [%]
+						m(SymmetricEss.ChannelId.SOC, new UnsignedWordElement(33139)),
+						// reg 33140 - state of health [%]
+						m(PytesJs3.ChannelId.BATTERY_SOH, new UnsignedWordElement(33140)),
+						// reg 33141 - BMS battery voltage [0.01 V -> mV]
+						m(PytesJs3.ChannelId.BMS_BATTERY_VOLTAGE, new UnsignedWordElement(33141),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+						// reg 33142 - BMS battery current [0.1 A -> mA], magnitude only
+						m(PytesJs3.ChannelId.BMS_BATTERY_CURRENT, new SignedWordElement(33142),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						// reg 33143/33144 - BMS charge/discharge current limits [0.1 A -> mA]
+						m(PytesJs3.ChannelId.BMS_CHARGE_CURRENT_LIMIT, new UnsignedWordElement(33143),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						m(PytesJs3.ChannelId.BMS_DISCHARGE_CURRENT_LIMIT, new UnsignedWordElement(33144),
+								ElementToChannelConverter.SCALE_FACTOR_2),
+						// reg 33145/33146 - battery fault status words (Appendix 9)
+						m(new BitsWordElement(33145, this) //
+								.bit(1, PytesJs3.ChannelId.BMS_FAULT01_OVERVOLTAGE_PRO) //
+								.bit(2, PytesJs3.ChannelId.BMS_FAULT01_UNDERVOLTAGE_PRO) //
+								.bit(3, PytesJs3.ChannelId.BMS_FAULT01_OVER_TEMPERATURE_PRO) //
+								.bit(4, PytesJs3.ChannelId.BMS_FAULT01_UNDER_TEMPERATURE_PRO) //
+								.bit(5, PytesJs3.ChannelId.BMS_FAULT01_OVER_TEMPERATURE_CHARGE_PRO) //
+								.bit(6, PytesJs3.ChannelId.BMS_FAULT01_UNDER_TEMPERATURE_CHARGE_PRO) //
+								.bit(7, PytesJs3.ChannelId.BMS_FAULT01_DISCHARGE_OVERCURRENT_PRO)),
+						m(new BitsWordElement(33146, this) //
+								.bit(0, PytesJs3.ChannelId.BMS_FAULT02_CHARGE_OVERCURRENT_PRO) //
+								.bit(1, PytesJs3.ChannelId.BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_1) //
+								.bit(2, PytesJs3.ChannelId.BMS_FAULT02_SYSTEM_LOW_TEMPERATURE_2) //
+								.bit(3, PytesJs3.ChannelId.BMS_FAULT02_BMS_INTERNAL_PRO) //
+								.bit(4, PytesJs3.ChannelId.BMS_FAULT02_UNBALANCED_MODULES) //
+								.bit(6, PytesJs3.ChannelId.BMS_FAULT02_FULL_CHARGE_REQUEST) //
+								.bit(7, PytesJs3.ChannelId.BMS_FAULT02_FORCE_CHARGE_REQUEST)),
+						new DummyRegisterElement(33147, 33147), // reserved
+						// reg 33148 - backup port load power [W]
+						m(PytesJs3.ChannelId.BACKUP_LOAD_POWER, new UnsignedWordElement(33148)),
+						// reg 33149-33150 - battery power computed by the inverter [W], positive = charging
+						m(PytesJs3.ChannelId.BATTERY_POWER_INVERTER, new SignedDoublewordElement(33149))),
 				
 				
 	
@@ -282,6 +387,20 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				new FC3ReadRegistersTask(43052, Priority.LOW,
 						m(PytesJs3.ChannelId.LIMITED_POWER_SETTING, new UnsignedWordElement(43052),
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
+
+				// reg 43130/43131 - battery charge/discharge power limits [10 W],
+				// 0 = disabled, not stored in the inverter's flash
+				new FC6WriteRegisterTask(43130,
+						m(PytesJs3.ChannelId.SET_BATTERY_CHARGE_LIMIT_POWER, new UnsignedWordElement(43130),
+								ElementToChannelConverter.SCALE_FACTOR_1)),
+				new FC6WriteRegisterTask(43131,
+						m(PytesJs3.ChannelId.SET_BATTERY_DISCHARGE_LIMIT_POWER, new UnsignedWordElement(43131),
+								ElementToChannelConverter.SCALE_FACTOR_1)),
+				new FC3ReadRegistersTask(43130, Priority.LOW,
+						m(PytesJs3.ChannelId.BATTERY_CHARGE_LIMIT_POWER, new UnsignedWordElement(43130),
+								ElementToChannelConverter.SCALE_FACTOR_1),
+						m(PytesJs3.ChannelId.BATTERY_DISCHARGE_LIMIT_POWER, new UnsignedWordElement(43131),
+								ElementToChannelConverter.SCALE_FACTOR_1)),
 
 				new FC16WriteRegistersTask(43111,
 						m(PytesJs3.ChannelId.SET_BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111))),
@@ -952,9 +1071,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	 * → INITIALIZING → NORMAL | WARNING | ERROR | STANDBY.
 	 */
 	private void defineWorkState() {
-		if ((this.battery == null || this.charger == null) && this.getWorkState() != WorkState.UNDEFINED) {
+		if (this.charger == null && this.getWorkState() != WorkState.UNDEFINED) {
 			this.changeState(WorkState.WARNING);
-			this.logWarn(this.log, "ESS not ready yet. Either battery or Charger missing or not fully initialized");
+			this.logWarn(this.log, "ESS not ready yet. Charger missing or not fully initialized");
 			return;
 		}
 
@@ -976,10 +1095,10 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 			this.changeState(WorkState.NORMAL);
 			break;
 		case WorkState.UNDEFINED:
-			if (this.battery == null || this.charger == null) { //
+			if (this.charger == null) { //
 				break;
 			} else {
-				this.changeState(WorkState.INITIALIZING); // Battery and chargers available. Start initialization
+				this.changeState(WorkState.INITIALIZING); // Charger available. Start initialization
 			}
 			break;
 		case WorkState.INITIALIZING:
@@ -1285,22 +1404,8 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	}
 
 	// -----------------------------------------------------------------------
-	// Component wiring — battery, charger
+	// Component wiring — charger
 	// -----------------------------------------------------------------------
-
-	@Override
-	public void addBattery(PytesBattery battery) {
-		this.battery = battery;
-		this.setPowerHandlers();
-	}
-
-	@Override
-	public void removeBattery(PytesBattery battery) {
-		if (this.battery == battery) {
-			this.battery = null;
-		}
-		this.setPowerHandlers();
-	}
 
 	@Override
 	public void addCharger(PytesDcCharger charger) {
@@ -1317,15 +1422,14 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	}
 
 	/**
-	 * Creates or destroys the power handlers when battery/charger availability
-	 * changes. Both battery AND charger must be present before handlers are
-	 * created.
+	 * Creates or destroys the power handlers when the charger availability
+	 * changes (the charger is needed for the PV share of the AC power).
 	 */
 	private void setPowerHandlers() {
-		if (this.battery != null && this.charger != null) {
-			this.applyPowerHandler = new ApplyPowerHandler(this, this.battery, this.charger);
-			this.allowedChargeDischargeHandler = new AllowedChargeDischargeHandler(this, this.battery, this.charger,
-					this.config.essSetpoint());
+		if (this.charger != null) {
+			this.applyPowerHandler = new ApplyPowerHandler(this, this.charger, this.lossModel);
+			this.allowedChargeDischargeHandler = new AllowedChargeDischargeHandler(this, this.charger,
+					this.lossModel, this.config.essSetpoint());
 		} else {
 			this.applyPowerHandler = null;
 			this.allowedChargeDischargeHandler = null;
@@ -1380,12 +1484,6 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Override
 	public void applyPower(int targetActivePower, int reactivePower) throws OpenemsNamedException {
 
-		if (this.battery == null) {
-			this.applyPowerHandler = null;
-			this.debugLog("No battery connected or not fully initialized (yet). Skipping ApplyPower");
-			return;
-		}
-		
 		if (this.config.workMode() != WorkMode.EXTERNAL) {
 			this.debugLog("WorkMode " + this.config.workMode().toString() + " configured. Skipping ApplyPower");
 			return;
@@ -1534,6 +1632,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		}
 		var result = this.pvLimitHandler.compute(meter != null ? meter.getActivePower().get() : null,
 				this.getActivePower().get(), limit, ratedPower, this.getCycleTime());
+		// Diagnostic: the inputs of the dynamic limitation, once per minute
+		if (this.feedInDiagnosticCounter++ % 60 == 0) {
+			this.logInfo(this.log, "Dynamic feed-in inputs: meter=" + (meter == null ? "null" : meter.id()) //
+					+ " grid=" + (meter != null ? meter.getActivePower().get() : null) //
+					+ " limit=" + limit + " rated=" + ratedPower + " ac=" + this.getActivePower().get() //
+					+ " -> limiting=" + result.limiting() + " percent=" + result.percent());
+		}
 
 		this.channel(PytesJs3.ChannelId.PV_LIMIT_ACTIVE).setNextValue(result.limiting());
 		this.channel(PytesJs3.ChannelId.AC_OUTPUT_LIMIT).setNextValue(result.acLimitW());
@@ -1562,9 +1667,13 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		int maxApparentPower = this.getMaxApparentPower().orElse(this.config.maxApparentPower());
 		Integer limit = null;
 
-		// Limit from the general feed-in limitation (Core.Meta), if enabled
+		// Limit from the general feed-in limitation (Core.Meta), if enabled. The
+		// configured reserve is added: the inverter's own cap is meant as a
+		// backstop for the ~5 s reaction time of the EMS-side limitation, and
+		// with both at the same value the EMS side never sees an export above
+		// the limit and cannot act at all (measured 2026-09-23).
 		if (this.config.feedPowerEnable() == EnableDisable.ENABLE && this.meta != null) {
-			int hardLimit = this.meta.getGridSellHardLimit();
+			int hardLimit = this.meta.getGridSellHardLimit() + Math.max(0, this.config.feedInBackstopReserve());
 			if (hardLimit < maxApparentPower) {
 				limit = Math.max(0, hardLimit);
 			}
@@ -1628,6 +1737,21 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 	@Override
 	public boolean isPvLimitActive() {
 		return this.pvLimitHandler.isLimiting();
+	}
+
+	@Override
+	public boolean isInverterLimited() {
+		if (this.pvLimitHandler.isLimiting()) {
+			return true;
+		}
+		// The inverter reports its own limited operation in reg 33121; the AC
+		// output cap of reg 43052 shows up as a read-back below 100 %.
+		BooleanReadChannel limitedExternal = this.channel(PytesJs3.ChannelId.OPERATING_STAT_LIMITED_EXTERNAL);
+		if (limitedExternal.value().orElse(false)) {
+			return true;
+		}
+		Integer limitedPower = this.getLimitedPowerActualValue().get();
+		return limitedPower != null && limitedPower < 100;
 	}
 
 	@Override

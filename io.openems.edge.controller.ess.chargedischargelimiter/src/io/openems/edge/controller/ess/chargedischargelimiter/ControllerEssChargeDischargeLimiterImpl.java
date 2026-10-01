@@ -91,10 +91,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private Integer slowDischargePower = null;
 
 	static final int TAPER_PERCENT = 3; // decrease charge power during the last X percent before hitting the max. Soc
-	// Battery power below this is "idle": the taper states are only left when the
-	// battery clearly runs the other way, otherwise BMS noise around 0 W bounces
-	// the state to NORMAL (no constraint for the hysteresis time) and back.
-	static final int DIRECTION_NOISE_W = 100;
+	// Battery power asked for while the SoC is above the maximum, see ABOVE_MAX_SOC.
+	static final int RECOVER_DISCHARGE_W = 50;
 	static final int BALANCING_SOC = 100;
 
 	private int fullChargePower = 0;
@@ -357,13 +355,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 			// Tapering logic: Gradual power reduction as we approach maxSoc
-			if (currentBatteryPower < 0 && this.currentSoc >= (this.maxSoc - TAPER_PERCENT)) {
+			if (this.currentSoc >= (this.maxSoc - TAPER_PERCENT)) {
 				this.logDebug(this.log, "Approaching max. SoC limit : " + this.currentSoc + "%/" + this.maxSoc + "%");
 				this.changeState(State.APPROACHING_MAX_SOC);
 				break;
 			}
 
-			if (currentBatteryPower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
+			if (this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
 				this.logDebug(this.log, "Approaching min. SoC limit : " + this.currentSoc + "%/" + this.minSoc + "%");
 				this.changeState(State.APPROACHING_MIN_SOC);
 				break;
@@ -390,11 +388,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower = 0;
 				break;
 			}			
-			if (currentBatteryPower < -DIRECTION_NOISE_W) { // clearly charging
-				this.changeState(State.NORMAL);
-				break;
-			}
-
+			// The zone is left by SoC only (handled above). The battery direction
+			// must not decide it: the taper drives the battery towards 0 W, so the
+			// sign flips on noise, and every flip dropped the state to NORMAL,
+			// where no constraint applies at all. The constraint is harmless in
+			// the other direction anyway - it only limits discharge here.
 			lin = (float) (this.currentSoc - this.minSoc) / (float) TAPER_PERCENT; // 0..1
 			taperFactor = lin * lin;
 			calculatedPower = Math.round(this.fullDischargePower * taperFactor); // positiv
@@ -432,12 +430,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower =0;
 				break;
 			}			
-			// wenn klar entladen wird, kein Grund für diesen State
-			if (currentBatteryPower > DIRECTION_NOISE_W) {
-				this.changeState(State.NORMAL);
-				break;
-			}
-
+			// Left by SoC only, see APPROACHING_MIN_SOC; the constraint limits
+			// charging only, so discharging inside the zone needs no state change.
 			lin = (float) (this.maxSoc - this.currentSoc) / (float) TAPER_PERCENT; // 1..0
 			taperFactor = lin * lin; // quadratisch
 			calculatedPower = Math.round(this.fullChargePower * taperFactor); // fullChargePower negativ
@@ -491,7 +485,16 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 
-			calculatedPower = 0; // do not charge any further
+			// Above the limit the battery has to come back down, not merely stop.
+			// "Battery >= 0" is translated into an AC constraint via the PV measured
+			// one cycle earlier, so the derived battery set-point jitters around
+			// zero, and the inverter's charge bias turns that jitter into a slow
+			// charge (measured 2026-09-29: 30-50 W, the SoC drifted from 85 to
+			// 87 % within 2.5 h). A small discharge cancels both effects. At maxSoc
+			// itself MAX_SOC_REACHED takes over and only blocks charging again, so
+			// the SoC settles at the limit instead of walking away from it. At the
+			// lower limit the bias works towards the safe side, nothing to do there.
+			calculatedPower = RECOVER_DISCHARGE_W;
 
 			if (this.currentSoc == this.maxSoc) {
 				this.changeState(State.MAX_SOC_REACHED);
@@ -658,6 +661,20 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 * @param calculatedPower as constraint
 	 */
 	void applyActivePowerConstraint(Integer calculatedPower) {
+		// Make the limitation visible in the UI/history: which direction is
+		// limited and which battery power is still allowed.
+		boolean dischargeLimited = calculatedPower != null && switch (this.state) {
+		case MIN_SOC_REACHED, BELOW_MIN_SOC, APPROACHING_MIN_SOC, BALANCING_ACTIVE, FORCE_CHARGE_ACTIVE -> true;
+		default -> false;
+		};
+		boolean chargeLimited = calculatedPower != null && switch (this.state) {
+		case MAX_SOC_REACHED, ABOVE_MAX_SOC, APPROACHING_MAX_SOC -> true;
+		default -> false;
+		};
+		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.DISCHARGE_LIMITED).setNextValue(dischargeLimited);
+		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_LIMITED).setNextValue(chargeLimited);
+		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.LIMITED_BATTERY_POWER)
+				.setNextValue(dischargeLimited || chargeLimited ? calculatedPower : null);
 
 
 		if (this.ess == null) {

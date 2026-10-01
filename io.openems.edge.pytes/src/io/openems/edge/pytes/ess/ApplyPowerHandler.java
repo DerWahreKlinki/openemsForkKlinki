@@ -3,7 +3,6 @@ package io.openems.edge.pytes.ess;
 import org.slf4j.Logger;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
-import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.EnableDisable;
 import io.openems.edge.pytes.enums.RemoteDispatchRealtimeControlSwitch;
@@ -14,25 +13,22 @@ public class ApplyPowerHandler {
 
 	// === Dependencies ===
 	private final ApplyPowerEss ess;
-	private final PytesBattery battery;
 	private final PytesDcCharger dcCharger;
 	private final Logger log;
 
 	// === Feed-forward ===
-	// Measured 2026-09-16 on the live system: the inverter applies a constant
-	// bias of ~190-220 W towards charging to the commanded battery power (500 W
-	// discharge commanded -> 300 W delivered; 200 W charge commanded -> 418 W
-	// delivered), and conversion losses between battery and AC side that grow
-	// with the total inverter throughput (battery + PV): ~50 W @ 0.8 kW,
-	// ~160 W @ 4.2 kW, ~210 W @ 6.5 kW. Both are compensated up-front so a new
-	// set-point is right within the inverter's own dead time (~10 s). The bias
-	// does not apply at 0 W. The model is kept slightly conservative; the trim
-	// covers the rest. Shared with AllowedChargeDischargeHandler so the limits
-	// reported to the solver are what actually arrives on the AC side.
-	static final int BIAS_W = 190;
-	static final int LOSS_BASE_W = 30;
-	static final double LOSS_FACTOR = 0.03; // of |battery| + PV
+	// The inverter applies a constant bias towards charging to the commanded
+	// battery power and conversion losses between battery and AC side that grow
+	// with the total throughput (battery + PV). Both are compensated up-front so
+	// a new set-point is right within the inverter's own dead time (~10 s); the
+	// trim covers the rest. The parameters come from the self-calibrating
+	// InverterLossModel (shared with AllowedChargeDischargeHandler so the limits
+	// reported to the solver are what actually arrives on the AC side). The
+	// bias does not apply at 0 W.
+	private final InverterLossModel lossModel;
 	private static final int MIN_TARGET_W = 50; // below this the inverter is treated as idle
+	// Below this PV there is nothing to distribute, see the dead band below.
+	private static final int PV_DEAD_BAND_W = 100;
 
 	// === Setpoint trim ===
 	// A slow integral correction on the AC-side battery contribution
@@ -46,29 +42,23 @@ public class ApplyPowerHandler {
 	private static final int TRIM_WARMUP_MS = 30_000; // BMS values are unreliable right after start
 	private static final int TRIM_FREEZE_MS = 12_000; // no integration while the inverter follows a step
 	private static final int TRIM_FREEZE_STEP_W = 100; // step size that triggers the freeze
+	// The inverter is only following our set-point while the AC output is near
+	// the target; with its own export cap active it runs autonomously (measured
+	// 2026-09-22: commanded -235 W battery, delivered -1513 W) and those cycles
+	// must not reach the loss model.
+	private static final int FOLLOWING_BAND_W = 300;
 	private double trimDischarge = 0;
 	private double trimCharge = 0;
 	private long elapsedMs = 0;
 	private long freezeUntilMs = 0;
 	private Integer lastInverterTarget = null;
 
-	/**
-	 * Expected conversion losses between battery and AC side.
-	 *
-	 * @param batteryPower battery power in W (sign irrelevant)
-	 * @param pvPower      PV power in W
-	 * @return losses in W
-	 */
-	static int expectedLosses(int batteryPower, int pvPower) {
-		return LOSS_BASE_W + (int) Math.round(LOSS_FACTOR * (Math.abs(batteryPower) + Math.max(0, pvPower)));
-	}
-
 	private final PvSurplusProbe surplusProbe = new PvSurplusProbe();
 
-	public ApplyPowerHandler(ApplyPowerEss ess, PytesBattery battery, PytesDcCharger dcCharger) {
+	public ApplyPowerHandler(ApplyPowerEss ess, PytesDcCharger dcCharger, InverterLossModel lossModel) {
 		this.ess = ess;
-		this.battery = battery;
 		this.dcCharger = dcCharger;
+		this.lossModel = lossModel;
 		this.log = ess.getLogger();
 	}
 
@@ -118,7 +108,7 @@ public class ApplyPowerHandler {
 			return;
 		}
 
-		Integer batteryPower = this.battery.getDcDischargePower().get();
+		Integer batteryPower = this.ess.getBatteryDcDischargePower().get();
 
 		if (batteryPower == null) {
 			this.log.debug("[ApplyPower] batteryPower is null. Skipping ApplyPower");
@@ -159,7 +149,7 @@ public class ApplyPowerHandler {
 		// - Battery control (44105 = 2): the AC-side battery contribution
 		//   ActivePower - PV. The inverter gets a battery set-point, so its bias
 		//   and the conversion losses are compensated up-front. Clamp: raw BMS
-		//   limits.
+		//   limits, shifted by the bias so the battery itself stays within them.
 		// - AC output control (44105 = 4): the inverter's AC output ActivePower. The
 		//   inverter splits PV/battery itself and covers its own losses, so no
 		//   feed-forward. Clamp: the AC-side range reported to the solver.
@@ -173,7 +163,13 @@ public class ApplyPowerHandler {
 			target = activePowerTarget - pvPower;
 			measured = essActivePower - pvPower;
 			upperLimit = Math.max(0, this.ess.getBatteryDischargeLimit());
-			lowerLimit = Math.min(0, this.ess.getBatteryChargeLimit());
+			// The limits apply to the battery, the clamp acts on the command, and the
+			// inverter does not follow the command exactly (measured 2026-09-25:
+			// 1830 W commanded -> 2051 W into the battery, 38 A against the 34 A of
+			// reg 43117). The clamp is therefore the command that produces the
+			// limit. The discharge side is left unclamped: there the response stays
+			// below the command, so the limit is undershot, not exceeded.
+			lowerLimit = Math.min(0, this.lossModel.commandFor(this.ess.getBatteryChargeLimit()));
 			sign = -1; // reg 44106: negative = battery discharge
 			surplusFloor = 0;
 		} else {
@@ -203,10 +199,21 @@ public class ApplyPowerHandler {
 		// backup load therefore has to be taken out of the register value (seen
 		// live on 2026-09-17: a 1.2 kW EV on the backup port led to 850 W grid
 		// export). In battery control the total is what matters, nothing to do.
-		int backupLoad = batteryControl ? 0 : Math.max(0, this.battery.getBackupLoadPower().orElse(0));
+		int backupLoad = batteryControl ? 0 : Math.max(0, this.ess.getBackupLoadPower().orElse(0));
 
-		// Feed-forward: bias and losses always act in discharge direction.
-		final int feedForward = batteryControl && !idle ? BIAS_W + expectedLosses(target, pvPower) : 0;
+		// Feed-forward: bias and losses always act in discharge direction. Towards
+		// a commanded 0 it is faded out instead of cut off: at exactly 0 the
+		// inverter only idles at ~30 W, so the full bias would overshoot there,
+		// but a few tens of watts already carry it completely. Cutting it off
+		// below MIN_TARGET_W put a step of the whole bias into the most common
+		// operating point (measured 2026-09-28, three times between 14:49 and
+		// 16:03: 40 W commanded, 200-380 W into the battery, 200-270 W missing at
+		// the AC side for minutes).
+		double idleFade = Math.min(1.0, Math.abs(target) / (double) MIN_TARGET_W);
+		final int feedForward = batteryControl //
+				? (int) Math.round(idleFade
+						* (this.lossModel.responseCorrection(target) + this.lossModel.losses(target, pvPower)))
+				: 0;
 
 		// Step detection on what the inverter sees (a backup load step is a step
 		// for the inverter as well)
@@ -217,20 +224,24 @@ public class ApplyPowerHandler {
 		}
 		this.lastInverterTarget = inverterTarget;
 
-		// Integral trim on the controlled quantity. Only integrate when the
-		// set-point is not sitting on a limit (anti-windup: with the current trim
-		// applied), not idle, not right after a step (the inverter needs its dead
-		// time first) and the measurements are plausible (BMS values are garbage
-		// right after start).
+		// Integral trim on the controlled quantity. Integrate when not idle, not
+		// right after a step (the inverter needs its dead time first) and the
+		// measurements are plausible (BMS values are garbage right after start).
+		// Anti-windup: while the set-point sits on a limit, only a correction that
+		// moves it back into range is integrated. Blocking both directions kept
+		// the trim frozen at a value that was itself the reason for the clamp
+		// (measured 2026-09-28: 1220 W wanted, 1650 W commanded against the
+		// 1645 W discharge limit, 210 W fed to the grid for hours).
 		int plausibleLimit = Math.max(maxAllowedDischargePower, -maxAllowedChargePower) + 500;
 		boolean plausible = Math.abs(batteryPower) <= plausibleLimit && Math.abs(measured) <= plausibleLimit;
 		boolean discharging = target > 0;
 		double currentTrim = discharging ? this.trimDischarge : this.trimCharge;
 		int untrimmedSetPoint = target + feedForward + (int) Math.round(currentTrim);
-		boolean limited = untrimmedSetPoint > upperLimit || untrimmedSetPoint < lowerLimit;
 		boolean settled = this.elapsedMs > TRIM_WARMUP_MS && this.elapsedMs >= this.freezeUntilMs;
-		if (!idle && !limited && settled && plausible) {
-			double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (target - measured);
+		double delta = TRIM_GAIN_PER_S * (cycleTimeMs / 1000.0) * (target - measured);
+		boolean pushingIntoLimit = untrimmedSetPoint > upperLimit && delta > 0
+				|| untrimmedSetPoint < lowerLimit && delta < 0;
+		if (!idle && !pushingIntoLimit && settled && plausible) {
 			if (discharging) {
 				this.trimDischarge = Math.max(-TRIM_LIMIT, Math.min(TRIM_LIMIT, this.trimDischarge + delta));
 			} else {
@@ -239,8 +250,37 @@ public class ApplyPowerHandler {
 		}
 		double trim = idle ? 0 : discharging ? this.trimDischarge : this.trimCharge;
 
+		// Dead band: with little PV a battery target of a few tens of watts is not
+		// worth chasing. Commanding it drives the inverter against its bias, and
+		// the battery then cycles around zero - measured over the night of
+		// 29./30.09.2026 at 22 W of house load: 519 Wh out and 484 Wh in, about
+		// 1 kWh of throughput for nothing, while the SoC fell by 15 %. The
+		// set-point is therefore 0 there and the house takes its few watts from
+		// the grid. With PV the compensation stays in place (see idleFade): the
+		// same small target then means real surplus that has to be exported
+		// instead of charged, and cutting it off cost 200-270 W at the AC side
+		// (measured 2026-09-28).
+		boolean deadBand = batteryControl && idle && pvPower < PV_DEAD_BAND_W;
+
 		// Set-point = target + feed-forward + trim, clamped to the limits
-		int setPoint = Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
+		int setPoint = deadBand ? 0
+				: Math.max(lowerLimit, Math.min(upperLimit, target + feedForward + (int) Math.round(trim)));
+
+		// Learn losses and bias from steady-state measurements (the model itself
+		// waits for the set-point and the powers to be steady). Cycles in which
+		// the inverter does not follow the set-point are excluded: an AC output
+		// far off what was commanded, or an active inverter-side limitation
+		// (export cap / reg 43052), where the command is not what the battery
+		// does. Our own clamp is not such a case - the inverter follows the
+		// clamped command just as faithfully - so the comparison is against the
+		// commanded value, not the (possibly clamped) target. Comparing against
+		// the target instead stopped the learning completely while the charge
+		// clamp was binding, which is exactly where the bias matters most.
+		int commandedTarget = setPoint - feedForward - (int) Math.round(trim);
+		boolean following = Math.abs(measured - commandedTarget) <= FOLLOWING_BAND_W
+				&& !this.ess.isInverterLimited();
+		this.lossModel.update(pvPower, essActivePower, batteryPower, batteryControl ? setPoint : null,
+				settled && plausible && following);
 
 		this.writeExternalControlFlags();
 		// Reg 44106 (1 = 10 W): with 44105 = 2 (battery control) a negative value is

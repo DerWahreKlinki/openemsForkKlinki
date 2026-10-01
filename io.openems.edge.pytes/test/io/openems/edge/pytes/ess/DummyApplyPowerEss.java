@@ -11,7 +11,6 @@ import io.openems.edge.ess.api.HybridEss;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
 import io.openems.edge.ess.power.api.Power;
-import io.openems.edge.pytes.battery.PytesBattery;
 import io.openems.edge.pytes.dccharger.PytesDcCharger;
 import io.openems.edge.pytes.enums.WorkState;
 
@@ -30,6 +29,7 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 	private int failsafeMinutes = 5;
 	private Integer gridPower = null;
 	private boolean pvLimitActive = false;
+	private boolean inverterLimited = false;
 
 	public DummyApplyPowerEss(String id) {
 		super(id, //
@@ -56,6 +56,16 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 
 	DummyApplyPowerEss withDcDischargePower(int value) {
 		TestUtils.withValue(this, HybridEss.ChannelId.DC_DISCHARGE_POWER, value);
+		return this;
+	}
+
+	DummyApplyPowerEss withBatteryDcDischargePower(int value) {
+		TestUtils.withValue(this, PytesJs3.ChannelId.BATTERY_DC_DISCHARGE_POWER, value);
+		return this;
+	}
+
+	DummyApplyPowerEss withBackupLoadPower(int value) {
+		TestUtils.withValue(this, PytesJs3.ChannelId.BACKUP_LOAD_POWER, value);
 		return this;
 	}
 
@@ -137,6 +147,11 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 		return this;
 	}
 
+	DummyApplyPowerEss withInverterLimited(boolean value) {
+		this.inverterLimited = value;
+		return this;
+	}
+
 	@Override
 	public Integer getGridPower() {
 		return this.gridPower;
@@ -148,6 +163,11 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 	}
 
 	@Override
+	public boolean isInverterLimited() {
+		return this.inverterLimited || this.pvLimitActive;
+	}
+
+	@Override
 	public int getFailsafeMinutes() {
 		return this.failsafeMinutes;
 	}
@@ -155,6 +175,16 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 	@Override
 	public void debugLog(String message) {
 		// silent
+	}
+
+	@Override
+	public int getConfiguredMaxChargeCurrent() {
+		return 40;
+	}
+
+	@Override
+	public int getConfiguredMaxDischargeCurrent() {
+		return 40;
 	}
 
 	// ---- nature methods not used by the handler ----
@@ -181,16 +211,6 @@ public class DummyApplyPowerEss extends AbstractDummyOpenemsComponent<DummyApply
 
 	@Override
 	public void handleEvent(Event event) {
-		// not used
-	}
-
-	@Override
-	public void addBattery(PytesBattery battery) {
-		// not used
-	}
-
-	@Override
-	public void removeBattery(PytesBattery battery) {
 		// not used
 	}
 

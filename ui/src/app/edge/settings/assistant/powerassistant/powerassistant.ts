@@ -333,6 +333,7 @@ export class PowerAssistantComponent extends AbstractFlatWidget {
                 break;
 
             case "Controller.Evcs":
+            case "Controller.Evcs.Price":
                 return null;
 
             default:

@@ -78,7 +78,10 @@ export class FlatComponent extends AbstractFlatWidget {
             new ChannelAddress(this.component.id, "SetChargePowerLimit"),
         ];
 
-        const controllers = this.config.getComponentsByFactory("Controller.Evcs");
+        const controllers = [
+            ...this.config.getComponentsByFactory("Controller.Evcs"),
+            ...this.config.getComponentsByFactory("Controller.Evcs.Price"),
+        ];
         for (const controller of controllers) {
             const properties = controller.properties;
             if ("evcs.id" in properties && properties["evcs.id"] === this.componentId) {

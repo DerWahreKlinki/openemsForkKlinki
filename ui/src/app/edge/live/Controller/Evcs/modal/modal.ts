@@ -114,9 +114,10 @@ export class ModalComponent extends AbstractModal {
         }
         this.chargePoint = EvcsComponent.from(this.component, this.edge.getCurrentConfig(), this.edge);
         this.controller =
-            this.config
-                .getComponentsByFactory("Controller.Evcs")
-                .find(
+            [
+                ...this.config.getComponentsByFactory("Controller.Evcs"),
+                ...this.config.getComponentsByFactory("Controller.Evcs.Price"),
+            ].find(
                     (element) => "evcs.id" in element.properties && element.properties["evcs.id"] == this.component?.id,
                 ) || null;
 

@@ -118,6 +118,7 @@ export class EdgeConfig {
                 factories: [
                     EdgeConfig.getFactoriesByIds(factories, [
                         "Controller.Evcs",
+                        "Controller.Evcs.Price",
                         "Evse.Controller.Single",
                         "Evse.Controller.Cluster",
                     ]),

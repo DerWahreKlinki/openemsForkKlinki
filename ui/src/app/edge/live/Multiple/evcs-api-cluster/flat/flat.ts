@@ -75,7 +75,10 @@ export class FlatComponent extends AbstractFlatWidget {
             this.evcsMap[evcs.id] = null;
         });
 
-        const controllers = this.config.getComponentsByFactory("Controller.Evcs");
+        const controllers = [
+            ...this.config.getComponentsByFactory("Controller.Evcs"),
+            ...this.config.getComponentsByFactory("Controller.Evcs.Price"),
+        ];
 
         // Adds the controllers to the each charging stations
         controllers.forEach((controller) => {

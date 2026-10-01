@@ -1,0 +1,5 @@
+= EVCS Price
+
+Copy of the EVCS Controller ("Force-Charge" and "Surplus Energy Charging") that additionally charges from grid in "Surplus Energy Charging" mode, depending on the grid buy price: no grid charging above an upper price limit, full power at or below a lower price limit and a linear ramp in between. The higher of surplus power and price dependent power is applied.
+
+https://github.com/DerWahreKlinki/openemsForkKlinki/tree/develop/io.openems.edge.controller.evcs.price[Source Code icon:github[]]

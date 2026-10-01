@@ -118,8 +118,11 @@ export class ModalComponent extends AbstractModal {
                 ...this.config.getComponentsByFactory("Controller.Evcs"),
                 ...this.config.getComponentsByFactory("Controller.Evcs.Price"),
             ].find(
-                    (element) => "evcs.id" in element.properties && element.properties["evcs.id"] == this.component?.id,
-                ) || null;
+                (element) =>
+                    element.isEnabled &&
+                    "evcs.id" in element.properties &&
+                    element.properties["evcs.id"] == this.component?.id,
+            ) || null;
 
         this.evcsComponent = this.config.getComponent(this.component.id);
 

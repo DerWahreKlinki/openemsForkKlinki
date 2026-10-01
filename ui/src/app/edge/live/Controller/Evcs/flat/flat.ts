@@ -81,7 +81,7 @@ export class FlatComponent extends AbstractFlatWidget {
         const controllers = [
             ...this.config.getComponentsByFactory("Controller.Evcs"),
             ...this.config.getComponentsByFactory("Controller.Evcs.Price"),
-        ];
+        ].filter((controller) => controller.isEnabled);
         for (const controller of controllers) {
             const properties = controller.properties;
             if ("evcs.id" in properties && properties["evcs.id"] === this.componentId) {

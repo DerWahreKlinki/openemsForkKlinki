@@ -145,13 +145,13 @@ public class AllowedChargeDischargeHandler extends AbstractAllowedChargeDischarg
 					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		} else {
 			// Battery control: report what actually arrives on the AC side. The
-			// inverter delivers the bias less battery power than commanded and the
+			// inverter does not follow the command exactly (see InverterLossModel) and the
 			// conversion losses sit in between (see ApplyPowerHandler). Charging
 			// needs no correction (the bias works in favour there; the set-point is
 			// clamped on the DC side anyway), but is AC-side as well: the AC
 			// output cannot go below PV minus what the battery takes.
 			reportedCharge = Math.min(0, allowedChargePower + pvProduction);
-			reportedDischarge = Math.max(0, allowedDischargePower - this.lossModel.bias(true)
+			reportedDischarge = Math.max(0, allowedDischargePower - this.lossModel.responseCorrection(allowedDischargePower)
 					- this.lossModel.losses(allowedDischargePower, pvProduction)) + pvProduction;
 		}
 		// both directions are additionally capped by the inverter's apparent power

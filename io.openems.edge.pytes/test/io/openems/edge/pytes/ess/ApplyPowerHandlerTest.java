@@ -1,6 +1,6 @@
 package io.openems.edge.pytes.ess;
 
-import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_BIAS_W;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -17,7 +17,8 @@ import io.openems.edge.pytes.enums.WorkState;
 
 /**
  * Cycle-by-cycle tests of {@link ApplyPowerHandler} against fakes. The expected
- * register values follow the constants in the handler: bias 190 W, losses
+ * register values follow the constants in the handler: response offset -78 W at
+ * a gain of 1.09, losses
  * 30 W + 3 % of (|battery| + PV), register 44106 in 10 W steps, negative =
  * discharge in battery control, positive = export in AC output control.
  */
@@ -27,6 +28,7 @@ public class ApplyPowerHandlerTest {
 
 	private DummyApplyPowerEss ess;
 	private DummyPytesDcCharger charger;
+	private InverterLossModel model;
 	private ApplyPowerHandler handler;
 
 	@Before
@@ -42,7 +44,8 @@ public class ApplyPowerHandlerTest {
 				.withBackupLoadPower(0);
 		this.charger = new DummyPytesDcCharger("dccharger0") //
 				.withActualPower(0);
-		this.handler = new ApplyPowerHandler(this.ess, this.charger, new InverterLossModel());
+		this.model = new InverterLossModel();
+		this.handler = new ApplyPowerHandler(this.ess, this.charger, this.model);
 	}
 
 	private Optional<?> written(PytesJs3.ChannelId channelId) {
@@ -76,7 +79,7 @@ public class ApplyPowerHandlerTest {
 			this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_POWER);
 		}
 		assertEquals(0, model.getSamples());
-		assertEquals(InverterLossModel.DEFAULT_BIAS_W, model.bias(true));
+		assertEquals(InverterLossModel.DEFAULT_RESPONSE_OFFSET_W, model.getResponseOffsetW());
 
 		// same cycles without the limitation: the model learns
 		this.ess.withInverterLimited(false).withActivePower(1170).withBatteryDcDischargePower(1100);
@@ -99,7 +102,7 @@ public class ApplyPowerHandlerTest {
 		var handler = new ApplyPowerHandler(this.ess, this.charger, model);
 		// PV 5 kW, 2 kW wanted at the AC side -> 3 kW charge wanted, clamped to
 		// the charge limit. The plant follows the clamped command and charges
-		// 250 W more than commanded, so that is the bias to be learned.
+		// 250 W more than commanded, so that is the offset to be learned.
 		this.charger.withActualPower(5000);
 		this.ess.withActivePower(2630).withBatteryDcDischargePower(-2160);
 		for (int i = 0; i < 300; i++) {
@@ -111,18 +114,19 @@ public class ApplyPowerHandlerTest {
 					.withActivePower(5000 + setPoint - 460);
 		}
 		assertTrue(model.getSamples() > 0);
-		assertEquals(250, model.bias(false), 15);
+		assertTrue("response should have been learned", model.getResponseSamples() > 0);
 	}
 
 	@Test
 	public void batteryControlAppliesFeedForward() throws Exception {
-		// 500 W AC with 200 W PV -> 300 W from the battery, plus bias 190 and
-		// losses 30 + 3 % * (300 + 200) = 45 -> 535 W -> register -54
+		// 500 W AC with 200 W PV -> 300 W from the battery. The response needs
+		// (300 + 78) / 1.09 = 347 W of command, i.e. 47 W on top, plus losses
+		// 30 + 3 % * (300 + 200) = 45 -> 392 W -> register -39
 		this.charger.withActualPower(200);
 		this.ess.withActivePower(500);
 		this.ess.withBatteryDcDischargePower(300);
 
-		assertEquals(-54, this.applyBatteryControl(500));
+		assertEquals(-39, this.applyBatteryControl(500));
 		assertEquals(RemoteDispatchRealtimeControlSwitch.BATTERY_CONTROL.getValue(),
 				this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_REALTIME_CONTROL_SWITCH).orElseThrow());
 		assertEquals(5, this.written(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_FAILSAFE_SETTING).orElseThrow());
@@ -134,14 +138,16 @@ public class ApplyPowerHandlerTest {
 	public void batteryControlClampsToBmsLimits() throws Exception {
 		this.charger.withActualPower(200);
 		// far above the discharge limit -> 2100 W -> -210. The inverter delivers
-		// the bias less than commanded, so the battery stays below the limit.
+		// less than commanded, so the battery stays below the limit.
 		assertEquals(-210, this.applyBatteryControl(5000));
-		// far below the charge limit: the inverter charges the bias more than
-		// commanded, so the command stays that much above the limit and the
-		// battery itself ends up at the limit: -2100 + 190 = -1910 -> +191
+		// far below the charge limit: the command is the one that produces the
+		// limit, i.e. commandFor(-2100) = (-2100 + 78) / 1.09 = -1855 -> +185,
+		// and the battery then really lands on -2100
 		int register = this.applyBatteryControl(-5000);
-		assertEquals(191, register);
-		assertEquals(-2100, -register * 10 - DEFAULT_BIAS_W);
+		assertEquals(185, register);
+		double battery = InverterLossModel.DEFAULT_RESPONSE_OFFSET_W
+				+ InverterLossModel.DEFAULT_RESPONSE_GAIN * (-register * 10);
+		assertEquals(-2100, battery, 15);
 	}
 
 	@Test
@@ -151,7 +157,7 @@ public class ApplyPowerHandlerTest {
 		// froze the trim there, so the inverter kept delivering 210 W too much
 		// into the grid for hours. A correction that moves the set-point back into
 		// range has to be integrated.
-		this.ess.withBatteryLimits(-2100, 1300).withActivePower(1430).withBatteryDcDischargePower(1430);
+		this.ess.withBatteryLimits(-2100, 1100).withActivePower(1430).withBatteryDcDischargePower(1430);
 		int first = 0;
 		int last = 0;
 		for (int i = 0; i < 120; i++) {
@@ -161,22 +167,23 @@ public class ApplyPowerHandlerTest {
 			}
 			last = register;
 		}
-		// clamped at the start (1300 W -> -130), then walking back out of the limit
-		assertEquals(-130, first);
-		assertTrue("set-point should leave the limit, was " + last, last > -130);
+		// clamped at the start (1100 W -> -110), then walking back out of the limit
+		assertEquals(-110, first);
+		assertTrue("set-point should leave the limit, was " + last, last > -110);
 	}
 
 	@Test
 	public void feedForwardFadesOutTowardsZero() throws Exception {
 		// With PV the small target is chased. 520 W AC against 500 W PV is a battery
-		// target of 20 W, i.e. 40 % of 50 W: 40 % of (bias 190 + losses 30 + 3 % of
-		// 520) = 94 W on top -> 114 W -> register -11
+		// target of 20 W, i.e. 40 % of 50 W: 40 % of (response correction 70 +
+		// losses 30 + 3 % of 520) = 46 W on top -> 66 W -> register -7
 		this.charger.withActualPower(500);
-		assertEquals(-11, this.applyBatteryControl(520));
+		assertEquals(-7, this.applyBatteryControl(520));
 		// at a battery target of 0 nothing is added: there the inverter has no bias
 		assertEquals(0, this.applyBatteryControl(500));
-		// above MIN_TARGET_W the full feed-forward applies again: 100 + 190 + 48
-		assertEquals(-34, this.applyBatteryControl(600));
+		// above MIN_TARGET_W the full feed-forward applies again: 100 + correction
+		// 63 + losses (30 + 3 % of 600) = 211 W -> register -21
+		assertEquals(-21, this.applyBatteryControl(600));
 	}
 
 	@Test
@@ -188,7 +195,7 @@ public class ApplyPowerHandlerTest {
 		assertEquals(0, this.applyBatteryControl(22));
 		assertEquals(0, this.applyBatteryControl(-30));
 		// a real request is still followed, however small the house load is
-		assertEquals(-84, this.applyBatteryControl(600));
+		assertEquals(-67, this.applyBatteryControl(600));
 		// and with PV the band is off again, see feedForwardFadesOutTowardsZero
 		this.charger.withActualPower(500);
 		assertTrue(this.applyBatteryControl(520) != 0);
@@ -249,7 +256,8 @@ public class ApplyPowerHandlerTest {
 		this.ess.withActivePower(300);
 		this.ess.withBatteryDcDischargePower(300);
 
-		int expectedWithoutTrim = -74; // 500 + 190 + (30 + 3 % * 500) = 735 W
+		// 500 + response correction 30 + losses (30 + 3 % * 500) = 575 W
+		int expectedWithoutTrim = -58;
 		for (int cycle = 1; cycle <= 30; cycle++) {
 			assertEquals("cycle " + cycle, expectedWithoutTrim, this.applyBatteryControl(500));
 		}
@@ -257,9 +265,9 @@ public class ApplyPowerHandlerTest {
 		for (int cycle = 31; cycle <= 45; cycle++) {
 			this.applyBatteryControl(500);
 		}
-		// 735 + 128 = 863 W; the loss model meanwhile learns from the (synthetic)
-		// steady state and moves the feed-forward by a few watts
-		assertEquals(-86, this.applyBatteryControl(500), 1);
+		// 575 + 128 = 703 W; the model meanwhile learns from the (synthetic) steady
+		// state and moves the feed-forward by a few watts
+		assertEquals(-69, this.applyBatteryControl(500), 2);
 	}
 
 	@Test
@@ -270,11 +278,14 @@ public class ApplyPowerHandlerTest {
 			this.applyBatteryControl(500);
 		}
 		int before = this.applyBatteryControl(500);
-		// a step of 1000 W freezes the trim for 12 s, so the register only
-		// changes by the step itself: +1000 W target, +30 W losses -> +103
+		// a step of 1000 W freezes the trim for 12 s, so the register only changes
+		// by what the step itself asks for: target, response correction and losses,
+		// all of which the model knows
 		this.ess.withActivePower(300); // inverter has not followed yet
 		int afterStep = this.applyBatteryControl(1500);
-		assertEquals(before - 103, afterStep);
+		int stepW = 1500 + this.model.responseCorrection(1500) + this.model.losses(1500, 0)
+				- (500 + this.model.responseCorrection(500) + this.model.losses(500, 0));
+		assertEquals(before - Math.round(stepW / 10.0f), afterStep, 1);
 		for (int cycle = 1; cycle <= 10; cycle++) {
 			assertEquals("frozen cycle " + cycle, afterStep, this.applyBatteryControl(1500));
 		}
@@ -308,6 +319,6 @@ public class ApplyPowerHandlerTest {
 		// a warning (derating, fan, ...) is informational - the inverter runs on
 		this.ess.withWorkState(WorkState.WARNING);
 		this.charger.withActualPower(500);
-		assertEquals(-11, this.applyBatteryControl(520));
+		assertEquals(-7, this.applyBatteryControl(520));
 	}
 }

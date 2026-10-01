@@ -1,7 +1,7 @@
 package io.openems.edge.pytes.ess;
 
-import static io.openems.edge.pytes.ess.InverterLossModel.BIAS_MIN_W;
-import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_BIAS_W;
+import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_RESPONSE_GAIN;
+import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_RESPONSE_OFFSET_W;
 import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_LOSS_BASE_W;
 import static io.openems.edge.pytes.ess.InverterLossModel.DEFAULT_LOSS_FACTOR;
 import static io.openems.edge.pytes.ess.InverterLossModel.MIN_SAMPLES;
@@ -40,8 +40,10 @@ public class InverterLossModelTest {
 	public void startsWithTheMeasuredDefaults() {
 		assertEquals(DEFAULT_LOSS_BASE_W, this.sut.getLossBaseW());
 		assertEquals(DEFAULT_LOSS_FACTOR, this.sut.getLossFactor(), 1e-9);
-		assertEquals(DEFAULT_BIAS_W, this.sut.bias(true));
-		assertEquals(DEFAULT_BIAS_W, this.sut.bias(false));
+		assertEquals(DEFAULT_RESPONSE_OFFSET_W, this.sut.getResponseOffsetW());
+		assertEquals(DEFAULT_RESPONSE_GAIN, this.sut.getResponseGain(), 1e-9);
+		// to hold the battery at 0 the inverter needs a small discharge command
+		assertEquals(72, this.sut.commandFor(0));
 		assertEquals(30 + 90, this.sut.losses(0, 3000));
 	}
 
@@ -85,22 +87,25 @@ public class InverterLossModelTest {
 	}
 
 	@Test
-	public void learnsTheBiasInBatteryControlOnly() {
-		this.steady(0, 800, 0, STEADY_CYCLES + MIN_SAMPLES); // 800 W discharge commanded
-		assertEquals(PLANT_BIAS, this.sut.bias(true));
-		assertEquals(DEFAULT_BIAS_W, this.sut.bias(false)); // charging not learned yet
-		assertTrue(this.sut.getBiasSamples() >= MIN_SAMPLES);
-		// charging is learned separately (the plant shifts by the same bias here)
-		this.steady(3000, -1000, 0, STEADY_CYCLES + MIN_SAMPLES);
-		assertEquals(PLANT_BIAS, this.sut.bias(false));
-		assertEquals(PLANT_BIAS, this.sut.bias(true));
+	public void learnsTheResponseFromTwoCommandLevels() {
+		// The synthetic plant answers command - PLANT_BIAS, which is an offset of
+		// -PLANT_BIAS at a gain of 1. Two levels are needed to separate both.
+		this.steady(0, 800, 0, STEADY_CYCLES + 300);
+		this.steady(0, 1600, 0, STEADY_CYCLES + 300);
+		// the prior on the start values keeps some pull, so the parameters land
+		// near but not exactly on the plant - what matters is the inverse map
+		assertEquals(-PLANT_BIAS, this.sut.getResponseOffsetW(), 70);
+		assertEquals(1.0, this.sut.getResponseGain(), 0.1);
+		// to get 550 W out of this plant, ask for 550 + bias
+		assertEquals(550 + PLANT_BIAS, this.sut.commandFor(550), 80);
+		assertEquals(PLANT_BIAS, this.sut.responseCorrection(550), 80);
+		assertTrue(this.sut.getResponseSamples() >= MIN_SAMPLES);
 
-		// AC output control (no command) and idle commands add no bias samples
+		// AC output control gives no command, so nothing is learned there
 		var other = new InverterLossModel();
 		steadyOn(other, 2000, null, 0, STEADY_CYCLES + MIN_SAMPLES);
-		steadyOn(other, 2000, 100, 0, STEADY_CYCLES + MIN_SAMPLES);
-		assertEquals(DEFAULT_BIAS_W, other.bias(true));
-		assertEquals(0, other.getBiasSamples());
+		assertEquals(DEFAULT_RESPONSE_OFFSET_W, other.getResponseOffsetW());
+		assertEquals(0, other.getResponseSamples());
 	}
 
 	@Test
@@ -134,10 +139,12 @@ public class InverterLossModelTest {
 		}
 		assertTrue(this.sut.getLossBaseW() <= InverterLossModel.LOSS_BASE_MAX_W);
 		assertTrue(this.sut.getLossFactor() <= InverterLossModel.LOSS_FACTOR_MAX);
-		// inverter delivering far more than commanded: bias clamped at -200 W
-		for (int i = 0; i < STEADY_CYCLES + MIN_SAMPLES; i++) {
-			this.sut.update(0, 900, 1500, 800, true);
+		// inverter delivering far more than commanded: the gain is capped
+		var wild = new InverterLossModel();
+		for (int i = 0; i < STEADY_CYCLES + 200; i++) {
+			wild.update(0, 900, 8000, 800, true);
 		}
-		assertEquals(BIAS_MIN_W, this.sut.bias(true));
+		assertTrue(wild.getResponseGain() <= InverterLossModel.RESPONSE_GAIN_MAX);
+		assertTrue(wild.getResponseOffsetW() >= InverterLossModel.RESPONSE_OFFSET_MIN_W);
 	}
 }

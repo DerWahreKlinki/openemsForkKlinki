@@ -163,13 +163,13 @@ public class ApplyPowerHandler {
 			target = activePowerTarget - pvPower;
 			measured = essActivePower - pvPower;
 			upperLimit = Math.max(0, this.ess.getBatteryDischargeLimit());
-			// The limits apply to the battery, the clamp acts on the command. The
-			// inverter charges its bias more than commanded (measured 2026-09-25:
+			// The limits apply to the battery, the clamp acts on the command, and the
+			// inverter does not follow the command exactly (measured 2026-09-25:
 			// 1830 W commanded -> 2051 W into the battery, 38 A against the 34 A of
-			// reg 43117), so the charge command has to stay that much above the
-			// limit. The discharge side is left as is: there the bias works towards
-			// less battery power, the limit is undershot, not exceeded.
-			lowerLimit = Math.min(0, this.ess.getBatteryChargeLimit() + this.lossModel.bias(false));
+			// reg 43117). The clamp is therefore the command that produces the
+			// limit. The discharge side is left unclamped: there the response stays
+			// below the command, so the limit is undershot, not exceeded.
+			lowerLimit = Math.min(0, this.lossModel.commandFor(this.ess.getBatteryChargeLimit()));
 			sign = -1; // reg 44106: negative = battery discharge
 			surplusFloor = 0;
 		} else {
@@ -212,7 +212,7 @@ public class ApplyPowerHandler {
 		double idleFade = Math.min(1.0, Math.abs(target) / (double) MIN_TARGET_W);
 		final int feedForward = batteryControl //
 				? (int) Math.round(idleFade
-						* (this.lossModel.bias(target > 0) + this.lossModel.losses(target, pvPower)))
+						* (this.lossModel.responseCorrection(target) + this.lossModel.losses(target, pvPower)))
 				: 0;
 
 		// Step detection on what the inverter sees (a backup load step is a step

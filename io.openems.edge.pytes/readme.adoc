@@ -77,13 +77,22 @@ Effects::
 * Grid feed-in limitation: the inverter's own export cap (backstop) and the dynamic AC
   output cap (reg 43052) work as described below; the battery set-point stays in force
   below the cap.
-* Accuracy at the grid point ±50–100 W (bias/loss model plus trim), set-point reached after
+* Accuracy at the grid point ±50–100 W (response/loss model plus trim), set-point reached after
   ~10 s. At a set-point of 0 the inverter idles at ~30 W charging (its bias); the trim is
   intentionally off below 50 W so it does not chase that, and the feed-forward is faded out
   linearly towards 0 instead of being cut off there - cutting it off put a step of the whole
   bias into the most common operating point (PV close to consumption), costing 200-270 W at
   the AC side. Backup-port loads need no special handling: the total AC is what is
   controlled.
+* The inverter does not follow the battery command exactly; its response is modelled as
+  `battery = offset + gain * command` and inverted for the feed-forward (channels
+  `LossModelResponseOffset` in W and `LossModelResponseGain` in percent). A constant bias
+  per direction was used before, which is the average of something that is not constant:
+  measured over 1316 steady cycles, `command - battery` ran from +273 W at a command of
+  331 W to -199 W at 1612 W, so the average was wrong at both ends and the trim had to
+  chew through 150-400 W for minutes. The regression gives `battery = -78 W + 1.09 *
+  command`; below ~500 W of command the inverter follows with a gain of only about 0.4,
+  which a single line cannot capture - the remainder is left to the trim.
 * Below 100 W of PV a battery target under 50 W is not chased at all (dead band, set-point
   0): at night the house load is a few tens of watts, and commanding that drives the
   inverter against its bias until the battery cycles around zero - measured over one night

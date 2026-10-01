@@ -10,20 +10,30 @@ import java.util.Deque;
  * <p>
  * The losses between battery and AC side grow with the total throughput
  * (battery + PV) and are modelled as a line {@code losses = base + factor *
- * throughput}. In battery control the inverter additionally shifts the
- * battery power towards charging by a {@code bias} against the command; the
- * shift differs between charging and discharging (measured 2026-09-22: ~90 W
- * discharging, ~220 W charging), so it is kept per direction. Both are needed
- * for the feed-forward of the battery set-point, for the AC-side allowed
- * discharge power and for the derived {@code DcDischargePower}. The start
- * values were measured on one Pytes JS3 (15 kVA) on 2026-09-16; other models
- * of the family have other loss curves, so the parameters are learned at
- * runtime from steady-state measurements:
+ * throughput}. In battery control the inverter does not follow the commanded
+ * battery power exactly either; its response is a line as well,
+ * {@code battery = offset + gain * command}. Both are needed for the
+ * feed-forward of the battery set-point, for the AC-side allowed discharge
+ * power and for the derived {@code DcDischargePower}. The start values were
+ * measured on one Pytes JS3 (15 kVA); other models of the family behave
+ * differently, so the parameters are learned at runtime from steady-state
+ * measurements:
  *
  * <pre>
- * losses = PV + batteryPower(BMS) - ActivePower     (any mode)
- * bias   = commandedBatteryPower - batteryPower(BMS) (battery control, not idle)
+ * losses  = PV + batteryPower(BMS) - ActivePower            (any mode)
+ * battery = offset + gain * commandedBatteryPower           (battery control)
  * </pre>
+ *
+ * <p>
+ * The response was a constant {@code bias = command - battery} per direction
+ * before, which is the average of something that is not constant: measured
+ * over 1316 steady cycles on 2026-09-30/10-01, {@code command - battery} ran
+ * from +273 W at a command of 331 W to -199 W at 1612 W. An average therefore
+ * sits between the ends and is wrong at both: the feed-forward asked for
+ * 200 W of discharge to reach 149 W of charging, and the trim needed minutes
+ * to chew through the error. The regression over the same data gives
+ * {@code battery = -78 W + 1.09 * command}, with a knee below ~500 W where
+ * the inverter only follows with a gain of about 0.4.
  *
  * <p>
  * A cycle counts as steady when the set-point, AC and PV power stayed within
@@ -44,29 +54,31 @@ class InverterLossModel {
 	/** Start values, measured 2026-09-16 (see ApplyPowerHandler). */
 	static final int DEFAULT_LOSS_BASE_W = 30;
 	static final double DEFAULT_LOSS_FACTOR = 0.03;
-	static final int DEFAULT_BIAS_W = 190;
+	/** Start values of the response, measured 2026-09-30/10-01 over 1316 cycles. */
+	static final int DEFAULT_RESPONSE_OFFSET_W = -78;
+	static final double DEFAULT_RESPONSE_GAIN = 1.09;
 
 	static final int STEADY_CYCLES = 15;
 	static final int STEADY_BAND_W = 150;
-	/** Samples the bias needs before it is used. */
+	/** Samples a fit needs before it is used instead of the start values. */
 	static final int MIN_SAMPLES = 20;
-	/** Weight of a new sample in the bias means (~50 steady cycles). */
-	static final double ALPHA = 0.02;
-	/** Forgetting factor of the loss regression per sample (~500 samples memory). */
+	/** Forgetting factor of the regressions per sample (~500 samples memory). */
 	static final double FORGET = 0.998;
 	/** Weight of the prior on the start values, in equivalent samples. */
 	static final double PRIOR_WEIGHT = 20;
 	/** Throughput at which the prior on the factor is as strong as on the base. */
 	static final double PRIOR_THROUGHPUT_W = 1500;
-	/** Commands below this are idle, no bias sample. */
-	static final int MIN_BIAS_COMMAND_W = 300;
+	/** Command at which the prior on the gain is as strong as on the offset. */
+	static final double PRIOR_COMMAND_W = 800;
 
 	static final int LOSS_BASE_MIN_W = -100;
 	static final int LOSS_BASE_MAX_W = 200;
 	static final double LOSS_FACTOR_MIN = 0.0;
 	static final double LOSS_FACTOR_MAX = 0.10;
-	static final int BIAS_MIN_W = -200;
-	static final int BIAS_MAX_W = 400;
+	static final int RESPONSE_OFFSET_MIN_W = -400;
+	static final int RESPONSE_OFFSET_MAX_W = 200;
+	static final double RESPONSE_GAIN_MIN = 0.3;
+	static final double RESPONSE_GAIN_MAX = 2.0;
 
 	// weighted sums of the loss regression: n, sum T, sum L, sum T*T, sum T*L
 	private double n = 0;
@@ -75,9 +87,13 @@ class InverterLossModel {
 	private double sTT = 0;
 	private double sTL = 0;
 	private int samples = 0;
-	/** Running bias means per direction: [0] discharging, [1] charging. */
-	private final double[] biasMean = new double[2];
-	private final int[] biasSamples = new int[2];
+	// weighted sums of the response regression: n, sum C, sum B, sum C*C, sum C*B
+	private double rn = 0;
+	private double sC = 0;
+	private double sB = 0;
+	private double sCC = 0;
+	private double sCB = 0;
+	private int responseSamples = 0;
 
 	private final Deque<Integer> acValues = new ArrayDeque<>();
 	private final Deque<Integer> pvValues = new ArrayDeque<>();
@@ -85,7 +101,8 @@ class InverterLossModel {
 
 	private int lossBaseW = DEFAULT_LOSS_BASE_W;
 	private double lossFactor = DEFAULT_LOSS_FACTOR;
-	private final int[] biasW = { DEFAULT_BIAS_W, DEFAULT_BIAS_W };
+	private int responseOffsetW = DEFAULT_RESPONSE_OFFSET_W;
+	private double responseGain = DEFAULT_RESPONSE_GAIN;
 
 	/**
 	 * Feeds one cycle of measurements.
@@ -116,18 +133,16 @@ class InverterLossModel {
 		this.samples++;
 		this.fitLosses();
 
-		if (commandW != null && Math.abs(commandW) >= MIN_BIAS_COMMAND_W) {
-			int d = commandW > 0 ? 0 : 1;
-			int bias = commandW - batteryPower;
-			if (this.biasSamples[d] == 0) {
-				this.biasMean[d] = bias;
-			} else {
-				this.biasMean[d] += ALPHA * (bias - this.biasMean[d]);
-			}
-			this.biasSamples[d]++;
-			if (this.biasSamples[d] >= MIN_SAMPLES) {
-				this.biasW[d] = clamp((int) Math.round(this.biasMean[d]), BIAS_MIN_W, BIAS_MAX_W);
-			}
+		// Response of the inverter to the command. Samples at a command of 0 are
+		// kept: they pin the offset, which is where most of the error sat.
+		if (commandW != null) {
+			this.rn = this.rn * FORGET + 1;
+			this.sC = this.sC * FORGET + commandW;
+			this.sB = this.sB * FORGET + batteryPower;
+			this.sCC = this.sCC * FORGET + (double) commandW * commandW;
+			this.sCB = this.sCB * FORGET + (double) commandW * batteryPower;
+			this.responseSamples++;
+			this.fitResponse();
 		}
 	}
 
@@ -164,6 +179,29 @@ class InverterLossModel {
 	}
 
 	/**
+	 * Minimises sum(B - o - g*C)^2 + po*(o - o0)^2 + pg*(g - g0)^2 over the
+	 * (forgotten) samples with the start values as prior, so that the fit stays
+	 * near the measured defaults while the commands do not spread enough.
+	 */
+	private void fitResponse() {
+		double po = PRIOR_WEIGHT;
+		double pg = PRIOR_WEIGHT * PRIOR_COMMAND_W * PRIOR_COMMAND_W;
+		double a11 = this.rn + po;
+		double a12 = this.sC;
+		double a22 = this.sCC + pg;
+		double r1 = this.sB + po * DEFAULT_RESPONSE_OFFSET_W;
+		double r2 = this.sCB + pg * DEFAULT_RESPONSE_GAIN;
+		double det = a11 * a22 - a12 * a12;
+		if (det <= 0 || this.responseSamples < MIN_SAMPLES) {
+			return;
+		}
+		double offset = (r1 * a22 - a12 * r2) / det;
+		double gain = (a11 * r2 - a12 * r1) / det;
+		this.responseGain = clamp(gain, RESPONSE_GAIN_MIN, RESPONSE_GAIN_MAX);
+		this.responseOffsetW = clamp((int) Math.round(offset), RESPONSE_OFFSET_MIN_W, RESPONSE_OFFSET_MAX_W);
+	}
+
+	/**
 	 * Expected conversion losses between battery and AC side.
 	 *
 	 * @param batteryPower battery power in W (sign irrelevant)
@@ -175,14 +213,26 @@ class InverterLossModel {
 	}
 
 	/**
-	 * The shift towards charging the inverter applies to the commanded battery
-	 * power (battery control), for the given direction.
+	 * The command that makes the inverter deliver the wanted battery power
+	 * (battery control), i.e. the inverse of {@code battery = offset + gain *
+	 * command}.
 	 *
-	 * @param discharging true for a discharge command, false for charging
-	 * @return the bias in W
+	 * @param batteryPower the wanted battery power in W (positive = discharge)
+	 * @return the command in W (positive = discharge)
 	 */
-	int bias(boolean discharging) {
-		return this.biasW[discharging ? 0 : 1];
+	int commandFor(int batteryPower) {
+		return (int) Math.round((batteryPower - this.responseOffsetW) / this.responseGain);
+	}
+
+	/**
+	 * What {@link #commandFor} adds on top of the wanted battery power, i.e. the
+	 * feed-forward without the losses.
+	 *
+	 * @param batteryPower the wanted battery power in W (positive = discharge)
+	 * @return the correction in W
+	 */
+	int responseCorrection(int batteryPower) {
+		return this.commandFor(batteryPower) - batteryPower;
 	}
 
 	/**
@@ -215,8 +265,16 @@ class InverterLossModel {
 		return this.samples;
 	}
 
-	int getBiasSamples() {
-		return this.biasSamples[0] + this.biasSamples[1];
+	int getResponseOffsetW() {
+		return this.responseOffsetW;
+	}
+
+	double getResponseGain() {
+		return this.responseGain;
+	}
+
+	int getResponseSamples() {
+		return this.responseSamples;
 	}
 
 	private static void push(Deque<Integer> values, int value) {

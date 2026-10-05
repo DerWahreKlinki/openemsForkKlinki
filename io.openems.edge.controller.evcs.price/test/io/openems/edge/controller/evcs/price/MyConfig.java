@@ -22,6 +22,9 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private double priceLimit = 0;
 		private double priceLimitFullPower = 0;
 		private int priceChargePower = 11040;
+		private boolean useStorageSurplus = false;
+		private int storageTargetSocNet = 80;
+		private double storageLossSurcharge = 1;
 
 		private Builder() {
 		}
@@ -98,6 +101,21 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setPriceChargePower(int priceChargePower) {
 			this.priceChargePower = priceChargePower;
+			return this;
+		}
+
+		public Builder setUseStorageSurplus(boolean useStorageSurplus) {
+			this.useStorageSurplus = useStorageSurplus;
+			return this;
+		}
+
+		public Builder setStorageTargetSocNet(int storageTargetSocNet) {
+			this.storageTargetSocNet = storageTargetSocNet;
+			return this;
+		}
+
+		public Builder setStorageLossSurcharge(double storageLossSurcharge) {
+			this.storageLossSurcharge = storageLossSurcharge;
 			return this;
 		}
 
@@ -188,7 +206,27 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
+	public double pvPrice() {
+		return 7;
+	}
+
+	@Override
 	public int priceChargePower() {
 		return this.builder.priceChargePower;
+	}
+
+	@Override
+	public boolean useStorageSurplus() {
+		return this.builder.useStorageSurplus;
+	}
+
+	@Override
+	public int storageTargetSocNet() {
+		return this.builder.storageTargetSocNet;
+	}
+
+	@Override
+	public double storageLossSurcharge() {
+		return this.builder.storageLossSurcharge;
 	}
 }

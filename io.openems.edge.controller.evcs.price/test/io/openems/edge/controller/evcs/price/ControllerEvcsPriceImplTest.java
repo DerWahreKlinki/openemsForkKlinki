@@ -1,11 +1,18 @@
 package io.openems.edge.controller.evcs.price;
 
 import static io.openems.common.test.TestUtils.createDummyClock;
+import static io.openems.edge.common.sum.Sum.ChannelId.ESS_CAPACITY;
 import static io.openems.edge.common.sum.Sum.ChannelId.ESS_DISCHARGE_POWER;
+import static io.openems.edge.common.sum.Sum.ChannelId.ESS_MAX_DISCHARGE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.ESS_SOC;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.EXPECTED_SURPLUS_ENERGY;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_PRICE;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_ENERGY_TO_TARGET;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_TARGET_REACHABLE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PRICE_CHARGING;
 import static io.openems.edge.controller.evcs.price.Priority.CAR;
 import static io.openems.edge.evcs.api.ChargeMode.EXCESS_POWER;
@@ -21,10 +28,21 @@ import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_RE
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_POWER;
 import static java.time.temporal.ChronoUnit.MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.Instant;
+import java.util.List;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 import org.junit.jupiter.api.Test;
 
 import io.openems.common.test.DummyConfigurationAdmin;
+import io.openems.common.test.TimeLeapClock;
+import io.openems.common.types.ChannelAddress;
+import io.openems.edge.common.test.DummyComponentManager;
 import io.openems.edge.common.sum.DummySum;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.controller.test.ControllerTest;
@@ -32,6 +50,9 @@ import io.openems.edge.evcs.api.ChargeMode;
 import io.openems.edge.evcs.api.ChargeState;
 import io.openems.edge.evcs.api.Evcs;
 import io.openems.edge.evcs.api.Status;
+import io.openems.edge.predictor.api.prediction.Prediction;
+import io.openems.edge.predictor.api.test.DummyPredictor;
+import io.openems.edge.predictor.api.test.DummyPredictorManager;
 import io.openems.edge.evcs.test.DummyManagedEvcs;
 
 public class ControllerEvcsPriceImplTest {
@@ -43,6 +64,7 @@ public class ControllerEvcsPriceImplTest {
 	public void excessChargeTest1() throws Exception {
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -68,6 +90,7 @@ public class ControllerEvcsPriceImplTest {
 	public void excessChargeTest2() throws Exception {
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -95,6 +118,7 @@ public class ControllerEvcsPriceImplTest {
 	public void forceChargeTest() throws Exception {
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -120,6 +144,7 @@ public class ControllerEvcsPriceImplTest {
 	public void chargingDisabledTest() throws Exception {
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -167,6 +192,7 @@ public class ControllerEvcsPriceImplTest {
 		final var clock = createDummyClock();
 		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -215,6 +241,7 @@ public class ControllerEvcsPriceImplTest {
 	public void clusterTestDisabledCharging() throws Exception {
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -264,6 +291,7 @@ public class ControllerEvcsPriceImplTest {
 		final var clock = createDummyClock();
 		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -340,6 +368,7 @@ public class ControllerEvcsPriceImplTest {
 		final var clock = createDummyClock();
 		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -382,6 +411,7 @@ public class ControllerEvcsPriceImplTest {
 	private static ControllerTest preparePriceTest(ChargeMode chargeMode, double priceLimit) throws Exception {
 		return new ControllerTest(new ControllerEvcsPriceImpl(createDummyClock())) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum()) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
 				.activate(MyConfig.create() //
@@ -544,5 +574,269 @@ public class ControllerEvcsPriceImplTest {
 		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(null, 30, 20, 4140, 11040));
 		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(100., 0, 20, 4140, 11040));
 		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(100., 30, 20, 4140, 3000));
+	}
+
+	@Test
+	public void blendedPriceBelowLimitTest() throws Exception {
+		preparePriceTest(EXCESS_POWER, 30) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 426.) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, -3364) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) // 13.67 Cent/kWh
+						.output(PRICE_CHARGING, true)) //
+				.deactivate();
+	}
+
+	@Test
+	public void blendedPriceAboveLimitTest() throws Exception {
+		preparePriceTest(EXCESS_POWER, 30) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 426.) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, -1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) // 34.0 Cent/kWh
+						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void calculateBlendedPriceTest() {
+		assertEquals(13.67, ControllerEvcsPriceImpl.calculateBlendedPrice(426., 3364, 4140, 7), 0.01);
+		assertEquals(7., ControllerEvcsPriceImpl.calculateBlendedPrice(426., 5000, 4140, 7), 0.01);
+		assertEquals(42.6, ControllerEvcsPriceImpl.calculateBlendedPrice(426., -200, 4140, 7), 0.01);
+		assertEquals(null, ControllerEvcsPriceImpl.calculateBlendedPrice(null, 3364, 4140, 7));
+		assertEquals(null, ControllerEvcsPriceImpl.calculateBlendedPrice(426., 3364, 0, 7));
+
+		assertEquals(true, ControllerEvcsPriceImpl.isBlendedPriceBelowLimit(426., 3364, 4140, 7, 30));
+		assertEquals(false, ControllerEvcsPriceImpl.isBlendedPriceBelowLimit(426., 1000, 4140, 7, 30));
+		// no excess power, deactivated, unknown price
+		assertEquals(false, ControllerEvcsPriceImpl.isBlendedPriceBelowLimit(250., 0, 4140, 7, 30));
+		assertEquals(false, ControllerEvcsPriceImpl.isBlendedPriceBelowLimit(426., 3364, 4140, 7, 0));
+		assertEquals(false, ControllerEvcsPriceImpl.isBlendedPriceBelowLimit(null, 3364, 4140, 7, 30));
+	}
+
+	private static final ChannelAddress SUM_PRODUCTION = new ChannelAddress("_sum", "ProductionActivePower");
+	private static final ChannelAddress SUM_CONSUMPTION = new ChannelAddress("_sum", "ConsumptionActivePower");
+
+	// Controller with predictions: production and consumption are constant for
+	// the given number of quarter-hours from the clock time on.
+	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
+			int productionW, int consumptionW, int quarters) throws Exception {
+		final var now = Instant.now(clock);
+		final var cm = new DummyComponentManager(clock);
+		final var sum = new DummySum();
+		final var production = new Integer[quarters];
+		final var consumption = new Integer[quarters];
+		for (var i = 0; i < quarters; i++) {
+			production[i] = productionW;
+			consumption[i] = consumptionW;
+		}
+		final var predictorManager = new DummyPredictorManager(
+				new DummyPredictor("predictor0", cm, Prediction.from(sum, SUM_PRODUCTION, now, production),
+						SUM_PRODUCTION),
+				new DummyPredictor("predictor1", cm, Prediction.from(sum, SUM_CONSUMPTION, now, consumption),
+						SUM_CONSUMPTION));
+		return new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", cm) //
+				.addReference("sum", sum) //
+				.addReference("predictorManager", predictorManager) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setPriceLimit(30) //
+						.setPriceLimitFullPower(20) //
+						.setPriceChargePower(11040) //
+						.setExcessChargeHystersis(0) //
+						.setExcessChargePauseHysteresis(0) //
+						.setUseStorageSurplus(useStorageSurplus) //
+						.setStorageTargetSocNet(80) //
+						.setStorageLossSurcharge(1) //
+						.build());
+	}
+
+	@Test
+	public void storageTargetReachableTest() throws Exception {
+		// Dummy clock starts at midnight: 96 quarters, production 12 kW, consumption
+		// 2 kW, car (plugged: at least 4140 W) -> 5860 W * 24 h = 140.6 kWh for the storage.
+		// Storage 20 kWh at 50 %, target 80 % -> 6 kWh missing -> reachable
+		// -> storage like PV (8 ct): 2130 W PV at 7 ct + 2010 W storage at 8 ct
+		prepareStoragePriceTest(createDummyClock(), true, 12000, 2000, 96) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
+						.input(ESS_DISCHARGE_POWER, 1903) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(EXPECTED_SURPLUS_ENERGY, 140640) //
+						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_PRICE, 80.) //
+						.output(BLENDED_PRICE, 74.85507246376811) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(PRICE_CHARGING, true)) //
+				.deactivate();
+	}
+
+	@Test
+	public void storageTargetNotReachableTest() throws Exception {
+		// Production 6 kW, consumption 2 kW, car 4033 W -> nothing left for the
+		// storage although there is 4 kW surplus before the car. Target not
+		// reachable -> storage like grid (43.1 ct): 24.5 ct blended -> still below
+		// the 30 ct limit -> charging
+		final var clock = createDummyClock();
+		prepareStoragePriceTest(clock, true, 6000, 2000, 96) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
+						.input(ESS_DISCHARGE_POWER, 1903) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(EXPECTED_SURPLUS_ENERGY, 0) //
+						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
+						.output(STORAGE_PRICE, 431.) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(PRICE_CHARGING, true)) //
+				.next(new TestCase() //
+						// less PV: 1000 W PV, 3140 W storage at 43.1 ct -> 34.4 ct -> no charging
+						.timeleap(clock, 5, MINUTES) //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_DISCHARGE_POWER, 3033) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void storageSurplusDisabledTest() throws Exception {
+		// Disabled: channels are written, but the decision uses the grid price for
+		// the missing power: 1000 W PV at 7 ct + 3140 W at 43.1 ct = 34.4 ct -> no
+		// charging, although the target would be reachable
+		prepareStoragePriceTest(createDummyClock(), false, 12000, 2000, 96) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
+						.input(ESS_DISCHARGE_POWER, 3033) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_PRICE, 80.) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void calculateExpectedSurplusEnergyTest() {
+		final var zone = ZoneId.of("Europe/Berlin");
+		final var now = ZonedDateTime.of(2026, 10, 3, 10, 7, 0, 0, zone);
+		final var start = now.withMinute(0).toInstant();
+		// 8 quarters from 10:00; car 1000 W: surplus 3000, 3000, 0, 0, 2000 x 4
+		final var production = Prediction.from(start, 6000, 6000, 1000, 1000, 5000, 5000, 5000, 5000);
+		final var consumption = Prediction.from(start, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000);
+		// (3000 + 3000 + 2000 * 4) / 4 = 3500 Wh
+		assertEquals(3500,
+				ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(production, consumption, 1000, now));
+		// without car: (4000 + 4000 + 3000 * 4) / 4 = 5000 Wh
+		assertEquals(5000,
+				ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(production, consumption, 0, now));
+
+		// quarters without production (evening) and of the next day are ignored
+		final var evening = ZonedDateTime.of(2026, 10, 3, 23, 20, 0, 0, zone);
+		final var eveningStart = evening.withMinute(15).toInstant();
+		final var production2 = Prediction.from(eveningStart, 6000, 0, 6000, 6000, 6000, 6000);
+		final var consumption2 = Prediction.from(eveningStart, 2000, 2000, 2000, 2000, 2000, 2000);
+		// 23:15 -> 1000 Wh; 23:30 no production; 23:45 -> 1000 Wh
+		assertEquals(2000,
+				ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(production2, consumption2, 0, evening));
+
+		assertNull(ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(Prediction.EMPTY_PREDICTION, consumption,
+				0, now));
+		assertNull(ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(null, consumption, 0, now));
+	}
+
+	@Test
+	public void calculateAssumedCarPowerTest() {
+		assertEquals(4033, ControllerEvcsPriceImpl.calculateAssumedCarPower(4033, Status.CHARGING, 4140 - 1000));
+		// plugged in but not drawing: at least the minimum power
+		assertEquals(4140, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.READY_FOR_CHARGING, 4140));
+		assertEquals(4140, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.ENERGY_LIMIT_REACHED, 4140));
+		// not plugged in
+		assertEquals(0, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.NOT_READY_FOR_CHARGING, 4140));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.UNDEFINED, 4140));
+	}
+
+	@Test
+	public void calculateStoragePriceTest() {
+		assertTrue(ControllerEvcsPriceImpl.isStorageTargetReachable(13000, 12000));
+		assertTrue(ControllerEvcsPriceImpl.isStorageTargetReachable(0, 0));
+		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(11999, 12000));
+		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(null, 12000));
+		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(13000, null));
+
+		assertEquals(8., ControllerEvcsPriceImpl.calculateStoragePrice(431., 7, 1, true), 0.01);
+		assertEquals(43.1, ControllerEvcsPriceImpl.calculateStoragePrice(431., 7, 1, false), 0.01);
+		assertNull(ControllerEvcsPriceImpl.calculateStoragePrice(null, 7, 1, true));
+
+		// PV 2130 W at 7 ct, storage 2010 W at 8 ct
+		assertEquals(7.49, ControllerEvcsPriceImpl.calculateBlendedPrice(431., 2130, 5000, 4140, 7, 8.), 0.01);
+		// storage limited to 1000 W, rest 1010 W from grid at 43.1 ct
+		assertEquals(16.05, ControllerEvcsPriceImpl.calculateBlendedPrice(431., 2130, 1000, 4140, 7, 8.), 0.01);
+		// no storage price -> storage like grid, same as the two-part blended price
+		assertEquals(ControllerEvcsPriceImpl.calculateBlendedPrice(431., 2130, 4140, 7),
+				ControllerEvcsPriceImpl.calculateBlendedPrice(431., 2130, 5000, 4140, 7, null), 0.001);
+	}
+
+	@Test
+	public void calculateEnergyToTargetTest() {
+		// Live example: ess0 8755 Wh at 27 %, ess1 24192 Wh at 24 %, both 20-90 %
+		final var windows = List.of(//
+				new ControllerEvcsPriceImpl.StorageWindow(8755, 27, 20, 90),
+				new ControllerEvcsPriceImpl.StorageWindow(24192, 24, 20, 90));
+		// usable 23063 Wh, stored 8755 * 0.07 + 24192 * 0.04 = 613 + 968 = 1581 Wh
+		// -> net SoC 7 %; target 80 % = 18450 Wh -> 16870 Wh missing
+		assertEquals(7, ControllerEvcsPriceImpl.calculateNetSoc(windows));
+		assertEquals(16870, ControllerEvcsPriceImpl.calculateEnergyToTarget(windows, 80));
+		// above the target: nothing missing; SoC above the window counts as full
+		assertEquals(0, ControllerEvcsPriceImpl.calculateEnergyToTarget(
+				List.of(new ControllerEvcsPriceImpl.StorageWindow(10000, 95, 20, 90)), 80));
+		assertEquals(100, ControllerEvcsPriceImpl.calculateNetSoc(
+				List.of(new ControllerEvcsPriceImpl.StorageWindow(10000, 95, 20, 90))));
+		// below the window counts as empty: full target missing
+		assertEquals(5600, ControllerEvcsPriceImpl.calculateEnergyToTarget(
+				List.of(new ControllerEvcsPriceImpl.StorageWindow(10000, 5, 20, 90)), 80));
+		assertNull(ControllerEvcsPriceImpl.calculateEnergyToTarget(List.of(), 80));
 	}
 }

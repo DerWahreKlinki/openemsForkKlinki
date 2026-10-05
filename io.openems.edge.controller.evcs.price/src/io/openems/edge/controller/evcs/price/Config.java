@@ -58,6 +58,18 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Full charge power by price [W]", description = "Charge power in Watt that is applied while the grid buy price is at or below the 'Price limit for full power'.")
 	int priceChargePower() default 11040;
 
+	@AttributeDefinition(name = "Value of PV power [Cent/kWh]", description = "Opportunity cost of surplus PV power, e.g. the feed-in tariff. In excess power mode: if the excess power is below the minimum hardware power, the missing power is taken from grid as long as the blended price of PV and grid power is below the 'Price limit'.")
+	double pvPrice() default 7;
+
+	@AttributeDefinition(name = "Use storage surplus", description = "In excess power mode: if the storage is expected to reach its evening target by PV surplus anyway - although the car keeps charging - the car may already charge from the storage now; its power is then priced like PV power (plus loss surcharge) in the blended price. Otherwise storage power is priced like grid power. The storage price is always calculated and available as channel.")
+	boolean useStorageSurplus() default false;
+
+	@AttributeDefinition(name = "Storage target in the evening [% net]", description = "State of charge the storage should have at the end of PV production, in percent of the usable capacity (within the SoC windows of the ChargeDischargeLimiters, if present). Power from the storage is priced like PV power only if the expected PV surplus of the rest of the day - minus the power the car is drawing - is enough to reach this target.")
+	int storageTargetSocNet() default 80;
+
+	@AttributeDefinition(name = "Storage loss surcharge [Cent/kWh]", description = "Added to the 'Value of PV power' for power from the storage that will be refilled by PV surplus; covers the conversion losses.")
+	double storageLossSurcharge() default 1;
+
 	String webconsole_configurationFactory_nameHint() default "Controller Electric Vehicle Charging Station with Price Limit [{id}]";
 
 }

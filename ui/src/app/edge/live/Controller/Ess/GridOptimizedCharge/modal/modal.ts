@@ -7,6 +7,8 @@ import { ChannelAddress, CurrentData } from "src/app/shared/shared";
 import { Language } from "src/app/shared/type/language";
 import { Role } from "src/app/shared/type/role";
 
+import { GridOptimizedChargePlan } from "../shared/energy-scheduler-plan";
+
 @Component({
     selector: "oe-controller-ess-grid-optimized-charge-modal",
     templateUrl: "./modal.html",
@@ -15,6 +17,7 @@ import { Role } from "src/app/shared/type/role";
 })
 export class ModalComponent extends AbstractModal {
 
+    private static readonly PLAN_REFRESH_INTERVAL = 60 * 1000;
     public channelCapacity: number;
     public isAtLeastAdmin: boolean = false;
     public hasMaximumGridFeedInLimitInMeta: boolean = false;
@@ -32,6 +35,27 @@ export class ModalComponent extends AbstractModal {
     public chargeStartEpochSeconds: number | null = null;
 
     protected chargingEndTime: string | null = null;
+    /** Energy Scheduler V2: the controller's logic is part of the Time-of-Use-Tariff schedule */
+    protected isEnergySchedulerV2: boolean = false;
+    protected planText: string = "-";
+    protected planNextText: string | null = null;
+    private planTimer: ReturnType<typeof setInterval> | null = null;
+
+    public override ngOnDestroy(): void {
+        if (this.planTimer != null) {
+            clearInterval(this.planTimer);
+            this.planTimer = null;
+        }
+        super.ngOnDestroy();
+    }
+
+    protected override onIsInitialized(): void {
+        this.isEnergySchedulerV2 = GridOptimizedChargePlan.isEnergySchedulerV2(this.config);
+        if (this.isEnergySchedulerV2) {
+            this.loadPlan();
+            this.planTimer = setInterval(() => this.loadPlan(), ModalComponent.PLAN_REFRESH_INTERVAL);
+        }
+    }
 
     protected override getChannelAddresses(): ChannelAddress[] {
         this.refreshChart = false;
@@ -143,6 +167,23 @@ export class ModalComponent extends AbstractModal {
             manualTargetTime: new FormControl(this.component.properties.manualTargetTime),
         });
     }
+
+    private async loadPlan(): Promise<void> {
+        if (this.edge == null || this.config == null) {
+            return;
+        }
+        try {
+            const plan = await GridOptimizedChargePlan.load(this.edge, this.websocket, this.config);
+            this.planText = GridOptimizedChargePlan.describe(plan, this.translate);
+            this.planNextText = plan?.current != null && plan.next != null
+                ? GridOptimizedChargePlan.describe({ current: null, next: plan.next }, this.translate)
+                : null;
+        } catch {
+            this.planText = GridOptimizedChargePlan.describe(null, this.translate);
+            this.planNextText = null;
+        }
+    }
+
 }
 
 export enum DelayChargeState {

@@ -448,6 +448,17 @@
                     "END_TIME_DESCRIPTION": "Die Beladung erfolgt nicht mit der Maximalleistung für wenige Stunden, sondern gleichmäßig über einen längeren Zeitraum.",
                     "END_TIME_DETAILED_DESCRIPTION": "Die Beladung erfolgt nicht mit der Maximalleistung für wenige Stunden, sondern gleichmäßig mit maximal {{ maxChargingPowerW }} bis {{ endTime }}.",
                     "END_TIME_LONG": "Endzeitpunkt der beschränkten Beladung",
+                    "ENERGY_SCHEDULER": {
+                        "AVOID_GRID_SELL_LIMIT": "Einspeisegrenze: Beladung mindestens {{power}} bis {{until}}",
+                        "CONTROLLED_BY": "Gesteuert über den Energie-Optimierer (Fahrplan)",
+                        "DELAY_CHARGE": "Beladung verzögert bis {{until}}",
+                        "INFO": "Mit dem Energie-Optimierer (V2) läuft die Beladungsoptimierung nicht mehr als eigener Regler, sondern als Teil des Fahrplans. Die Begrenzung dient dazu, den Speicher erst zum Ende der PV-Erzeugung zu füllen und Einspeisespitzen zu vermeiden.",
+                        "LIMIT_CHARGE": "Beladung begrenzt auf {{power}} bis {{until}}",
+                        "NEXT": "Keine Begrenzung; ab {{time}}: {{text}}",
+                        "NEXT_LABEL": "Danach",
+                        "NO_LIMIT": "Keine Begrenzung geplant",
+                        "NO_SCHEDULE": "Kein Fahrplan verfügbar"
+                    },
                     "EXPECTED_SOC": "Erwarteter Ladezustand",
                     "EXPECTED_SOC_WITHOUT_SELL_TO_GRID_LIMIT": "Ohne Vermeidung der maximalen Netzeinspeisung",
                     "GRID_FEED_IN_LIMITATION_AVOIDED": "Einspeisebegrenzung vermieden",

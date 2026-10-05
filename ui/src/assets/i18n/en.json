@@ -447,6 +447,17 @@
                     "END_TIME_DESCRIPTION": "The charging does not take place with the maximum amount for a few hours, but steadily over a longer period of time.",
                     "END_TIME_DETAILED_DESCRIPTION": "The charging does not take place with the maximum amount for a few hours, but steadily with a maximum of {{ maxChargingPowerW }} until {{ endTime }}.",
                     "END_TIME_LONG": "End time of restricted loading",
+                    "ENERGY_SCHEDULER": {
+                        "AVOID_GRID_SELL_LIMIT": "Feed-in limit: charging at least {{power}} until {{until}}",
+                        "CONTROLLED_BY": "Controlled by the energy scheduler (schedule)",
+                        "DELAY_CHARGE": "Charging delayed until {{until}}",
+                        "INFO": "With the energy scheduler (V2) the grid optimized charge does not run as its own controller any more but as part of the schedule. The limitation fills the storage towards the end of PV production and avoids feed-in peaks.",
+                        "LIMIT_CHARGE": "Charging limited to {{power}} until {{until}}",
+                        "NEXT": "No limitation; from {{time}}: {{text}}",
+                        "NEXT_LABEL": "Afterwards",
+                        "NO_LIMIT": "No limitation planned",
+                        "NO_SCHEDULE": "No schedule available"
+                    },
                     "EXPECTED_SOC": "Expected state of charge",
                     "EXPECTED_SOC_WITHOUT_SELL_TO_GRID_LIMIT": "Without avoiding the maximum grid feed-in",
                     "GRID_FEED_IN_LIMITATION_AVOIDED": "Grid feed-in limitation avoided",

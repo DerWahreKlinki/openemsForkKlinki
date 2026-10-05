@@ -7,6 +7,7 @@ import { ChannelAddress, CurrentData, EdgeConfig, Utils } from "src/app/shared/s
 import { DefaultTypes } from "src/app/shared/type/defaulttypes";
 
 import { ModalComponent } from "../modal/modal";
+import { EvcsPriceForecast } from "../price/price-forecast";
 
 type ChargeMode = "FORCE_CHARGE" | "EXCESS_POWER" | "OFF";
 
@@ -46,6 +47,9 @@ export class FlatComponent extends AbstractFlatWidget {
     protected status: string;
     protected isReadWrite: boolean;
     protected modalComponent: Modal | null = null;
+    protected isPriceController: boolean = false;
+    protected minHardwarePower: number | null = null;
+    protected maxHardwarePower: number | null = null;
 
     private chargePoint: EvcsComponent;
 
@@ -142,6 +146,7 @@ export class FlatComponent extends AbstractFlatWidget {
             }
             // EnergySessionLimit
             this.energySessionLimit = this.controller.properties["energySessionLimit"];
+            this.isPriceController = this.controller.factoryId === EvcsPriceForecast.FACTORY_ID;
         }
 
         this.status = this.getState(
@@ -163,6 +168,8 @@ export class FlatComponent extends AbstractFlatWidget {
 
         this.minChargePower = this.formatNumber(currentData.allComponents[this.component.id + "/MinimumHardwarePower"]);
         this.maxChargePower = this.formatNumber(currentData.allComponents[this.component.id + "/MaximumHardwarePower"]);
+        this.minHardwarePower = currentData.allComponents[this.component.id + "/MinimumHardwarePower"] ?? null;
+        this.maxHardwarePower = currentData.allComponents[this.component.id + "/MaximumHardwarePower"] ?? null;
         this.state = currentData.allComponents[this.component.id + "/Status"];
     }
 

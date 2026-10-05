@@ -1,0 +1,26 @@
+@if (segments.length > 0) {
+  <div class="surplus">
+    @for (segment of segments; track $index) {
+      <div [style.background-color]="segment.hasSurplus ? COLOR_SURPLUS : 'transparent'"></div>
+    }
+  </div>
+  <div class="band">
+    @for (segment of segments; track $index) {
+      <div [style.background-color]="segment.color" [title]="segment.title"></div>
+    }
+  </div>
+  <div class="ticks">
+    @for (tick of ticks; track tick.position) {
+      <span [style.left.%]="tick.position">{{ tick.label }}</span>
+    }
+  </div>
+  <div class="legend">
+    <span><i [style.background-color]="COLOR_FULL"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_FULL" | translate }}</span>
+    <span><i [style.background-color]="COLOR_REDUCED"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_REDUCED" | translate }}</span>
+    <span><i [style.background-color]="COLOR_NONE"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_NONE" | translate }}</span>
+    <span><i [style.background-color]="COLOR_SURPLUS"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.SURPLUS" | translate }}</span>
+  </div>
+  @if (cheapestWindow) {
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHEAPEST_WINDOW' | translate" [value]="cheapestWindow" leftColumnWidth="40"></oe-flat-widget-line>
+  }
+}

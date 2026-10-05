@@ -103,6 +103,38 @@
             >
             </oe-modal-buttons>
           }
+          <!--Price settings of Controller.Evcs.Price-->
+          @if (controller.factoryId === "Controller.Evcs.Price") {
+            <oe-modal-horizontal-line></oe-modal-horizontal-line>
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_LIMIT' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['priceLimit']" [converter]="CONVERT_TO_CENT_PER_KWH"></oe-modal-line>
+            <oe-modal-line [formGroup]="formGroup" controlName="priceLimit" [control]="{ type: 'RANGE', properties: { tickMin: 0, tickMax: 100, unit: 'ct/kWh', step: 1, pinFormatter: CENT_PIN_FORMATTER } }"></oe-modal-line>
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_LIMIT_FULL_POWER' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['priceLimitFullPower']" [converter]="CONVERT_TO_CENT_PER_KWH"></oe-modal-line>
+            <oe-modal-line [formGroup]="formGroup" controlName="priceLimitFullPower" [control]="{ type: 'RANGE', properties: { tickMin: 0, tickMax: 100, unit: 'ct/kWh', step: 1, pinFormatter: CENT_PIN_FORMATTER } }"></oe-modal-line>
+            <!--Storage: car may charge from the storage if it will be refilled by PV surplus today-->
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.NAME' | translate" [formGroup]="formGroup" [component]="controller" controlName="useStorageSurplus" [control]="{ type: 'TOGGLE' }" leftColumnWidth="100"></oe-modal-line>
+            <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.INFO' | translate" style="font-size: small"></oe-modal-info-line>
+            @if (formGroup.controls["useStorageSurplus"].value === true) {
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.TARGET' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['storageTargetSocNet']" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
+              <oe-modal-line [formGroup]="formGroup" controlName="storageTargetSocNet" [control]="{ type: 'RANGE', properties: { tickMin: 50, tickMax: 100, unit: '%', step: 5, pinFormatter: PERCENT_PIN_FORMATTER } }"></oe-modal-line>
+              @if (storageNetSoc != null) {
+                <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.NET_SOC' | translate" [value]="storageNetSoc" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
+              }
+            }
+            <!--Current blended price of charging with minimum power-->
+            @if (blendedPrice != null) {
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.CURRENT_PRICE' | translate" [value]="blendedPrice" [converter]="CONVERT_PRICE_TO_CENT_PER_KWH"></oe-modal-line>
+              @if (formGroup.controls["useStorageSurplus"].value === true && storageTargetReachable != null) {
+                <oe-modal-info-line [info]="(storageTargetReachable ? 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_PV' : 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_GRID') | translate" style="font-size: small"></oe-modal-info-line>
+              }
+            }
+            <!--Forecast needs the schedule of the Time-of-Use-Tariff controller-->
+            @if (hasTimeOfUseTariff) {
+              <oe-modal-horizontal-line></oe-modal-horizontal-line>
+              <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_TITLE' | translate"></oe-modal-info-line>
+              <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower"> </oe-evcs-price-chart>
+              <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_NOTE' | translate" style="font-size: small"></oe-modal-info-line>
+            }
+          }
           <oe-modal-horizontal-line></oe-modal-horizontal-line>
         }
         @if (controller && formGroup.value.chargeMode !== "OFF") {

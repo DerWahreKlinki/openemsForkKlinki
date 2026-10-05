@@ -11,6 +11,7 @@ import { ChannelAddress, CurrentData, EdgeConfig, Service, Utils, Websocket } fr
 import { FormUtils } from "src/app/shared/utils/form/form.utils";
 import { AdministrationComponent } from "../administration/administration.component";
 import { PopoverComponent } from "../popover/popover";
+import { EvcsPriceForecast } from "../price/price-forecast";
 
 type ChargeMode = "FORCE_CHARGE" | "EXCESS_POWER";
 @Component({
@@ -44,6 +45,16 @@ export class ModalComponent extends AbstractModal {
     protected awaitingHysteresis: boolean | null = null;
     protected isReadWrite: boolean = true;
     protected helpKey: string | null = null;
+    protected minHardwarePower: number | null = null;
+    protected maxHardwarePower: number | null = null;
+    // Controller.Evcs.Price: blended price and storage state
+    protected blendedPrice: number | null = null;
+    protected storageTargetReachable: boolean | null = null;
+    protected storageNetSoc: number | null = null;
+    // Controller.Evcs.Price: configuration values used by the forecast chart
+    protected pvPrice: number | null = null;
+    protected priceChargePower: number | null = null;
+    protected hasTimeOfUseTariff: boolean = false;
 
     private chargePoint: EvcsComponent | null = null;
 
@@ -80,9 +91,30 @@ export class ModalComponent extends AbstractModal {
         return key ? `REDIRECT.${key}` : null;
     }
 
+    /**
+     * Converts a config property to a number.
+     *
+     * @param value The property value
+     * @returns The value as number, null if not available
+     */
+    private static toNumber(value: unknown): number | null {
+        if (value == null || value === "") {
+            return null;
+        }
+        const result = Number(value);
+        return isNaN(result) ? null : result;
+    }
+
     protected readonly KILO_WATT_HOURS_PIN_FORMATTER: IonRange["pinFormatter"] = (val) =>
         this.Converter.TO_KILO_WATT_HOURS(val);
     protected readonly WATT_PIN_FORMATTER: IonRange["pinFormatter"] = (val) => this.Converter.POWER_IN_WATT(val);
+    protected readonly CENT_PIN_FORMATTER: IonRange["pinFormatter"] = (val) => val + " ct";
+    protected readonly PERCENT_PIN_FORMATTER: IonRange["pinFormatter"] = (val) => val + " %";
+    /** Converts a price in [Currency/MWh] to a string in ct/kWh */
+    protected readonly CONVERT_PRICE_TO_CENT_PER_KWH = (value: number | null): string =>
+        value == null ? "-" : (value / 10).toFixed(1) + " ct/kWh";
+    protected readonly CONVERT_TO_CENT_PER_KWH = (value: number | null): string =>
+        value == null ? "-" : value + " ct/kWh";
 
     protected async presentPopover() {
         const popover = await this.popoverctrl.create({
@@ -125,6 +157,9 @@ export class ModalComponent extends AbstractModal {
             ) || null;
 
         this.evcsComponent = this.config.getComponent(this.component.id);
+        this.pvPrice = ModalComponent.toNumber(this.controller?.properties.pvPrice);
+        this.priceChargePower = ModalComponent.toNumber(this.controller?.properties.priceChargePower);
+        this.hasTimeOfUseTariff = EvcsPriceForecast.getTimeOfUseTariffController(this.config) != null;
 
         const channels: ChannelAddress[] = [];
 
@@ -154,6 +189,13 @@ export class ModalComponent extends AbstractModal {
             new ChannelAddress(this.controller.id, "_PropertyDefaultChargeMinPower"),
             new ChannelAddress(this.controller.id, "AwaitingHysteresis"),
         );
+        if (this.controller.factoryId === "Controller.Evcs.Price") {
+            channels.push(
+                new ChannelAddress(this.controller.id, "BlendedPrice"),
+                new ChannelAddress(this.controller.id, "StorageTargetReachable"),
+                new ChannelAddress(this.controller.id, "StorageNetSoc"),
+            );
+        }
 
         return channels;
     }
@@ -188,6 +230,8 @@ export class ModalComponent extends AbstractModal {
         this.energySession = Utils.CONVERT_TO_WATTHOURS(
             currentData.allComponents[this.component.id + "/EnergySession"],
         );
+        this.minHardwarePower = currentData.allComponents[this.component.id + "/MinimumHardwarePower"] ?? null;
+        this.maxHardwarePower = currentData.allComponents[this.component.id + "/MaximumHardwarePower"] ?? null;
         this.minChargePower = this.formatNumber(currentData.allComponents[this.component.id + "/MinimumHardwarePower"]);
         this.maxChargePower = this.formatNumber(currentData.allComponents[this.component.id + "/MaximumHardwarePower"]);
         this.numberOfPhases = currentData.allComponents[this.component.id + "/Phases"]
@@ -200,6 +244,11 @@ export class ModalComponent extends AbstractModal {
 
     protected setControllerChannelValues(currentData: CurrentData, isDirty: boolean): void {
         this.defaultChargeMinPower = currentData.allComponents[this.controller?.id + "/_PropertyDefaultChargeMinPower"];
+
+        this.blendedPrice = currentData.allComponents[this.controller?.id + "/BlendedPrice"] ?? null;
+        const reachable = currentData.allComponents[this.controller?.id + "/StorageTargetReachable"];
+        this.storageTargetReachable = reachable == null ? null : reachable === 1 || reachable === true;
+        this.storageNetSoc = currentData.allComponents[this.controller?.id + "/StorageNetSoc"] ?? null;
 
         if (isDirty) {
             return;
@@ -320,6 +369,15 @@ export class ModalComponent extends AbstractModal {
             // EnergySessionLimit as kWh value, for ion-range
             energySessionLimitKwh: new FormControl(Math.round(this.controller?.properties.energySessionLimit / 1000)),
             enabledCharging: new FormControl(this.isChargingEnabled),
+            // Only available with Controller.Evcs.Price
+            priceLimit: new FormControl(ModalComponent.toNumber(this.controller?.properties.priceLimit)),
+            priceLimitFullPower: new FormControl(
+                ModalComponent.toNumber(this.controller?.properties.priceLimitFullPower),
+            ),
+            useStorageSurplus: new FormControl(this.controller?.properties.useStorageSurplus === true),
+            storageTargetSocNet: new FormControl(
+                ModalComponent.toNumber(this.controller?.properties.storageTargetSocNet),
+            ),
         });
     }
 

@@ -33,6 +33,12 @@
           <oe-flat-widget-line leftColumnWidth="50" [name]="'EDGE.INDEX.WIDGETS.EVCS.PRIORITIZATION' | translate"
             [value]="prioritization | translate">
           </oe-flat-widget-line>
+          <!-- Show price forecast of Controller.Evcs.Price -->
+          @if (isPriceController && isReadWrite) {
+            <oe-evcs-price-band [edge]="edge" [controllerId]="controller.id" [minPower]="minHardwarePower"
+              [maxPower]="maxHardwarePower">
+            </oe-evcs-price-band>
+          }
         }
         @if (chargeMode === 'FORCE_CHARGE') {
           <oe-flat-widget-line

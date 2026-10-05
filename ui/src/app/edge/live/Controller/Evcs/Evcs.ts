@@ -4,6 +4,8 @@ import { SharedModule } from "src/app/shared/shared.module";
 import { FlatComponent } from "./flat/flat";
 import { ModalComponent } from "./modal/modal";
 import { PopoverComponent } from "./popover/popover";
+import { EvcsPriceBandComponent } from "./price/price-band";
+import { EvcsPriceChartComponent } from "./price/price-chart";
 
 @NgModule({
     imports: [
@@ -14,6 +16,8 @@ import { PopoverComponent } from "./popover/popover";
         FlatComponent,
         ModalComponent,
         PopoverComponent,
+        EvcsPriceBandComponent,
+        EvcsPriceChartComponent,
     ],
     exports: [
         FlatComponent,

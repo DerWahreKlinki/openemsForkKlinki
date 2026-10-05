@@ -39,6 +39,9 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	int balancingHysteresis() default 3600; // 1hour. Depends on battery´s capacity?? Maybe it should be calculated
 	// dynamically
 
+	@AttributeDefinition(name = "Set-point semantics of a hybrid ESS", description = "AUTO: a hybrid ESS with configuration property 'setPointMode' = DC_SETPOINT (e.g. SolarEdge) takes battery power as set-point, everything else AC power including PV. AC_INCLUDING_PV / BATTERY_ONLY force the semantics.")
+	SetPointSemantics setPointSemantics() default SetPointSemantics.AUTO;
+
 	@AttributeDefinition(name = "Debug Mode", description = "Extends debugging")
 	boolean debugMode() default true;
 

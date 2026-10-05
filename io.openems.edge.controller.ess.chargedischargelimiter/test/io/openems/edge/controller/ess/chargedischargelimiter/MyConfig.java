@@ -17,6 +17,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int forceChargePower = 500;
 		private int balancingHysteresis = 3600;
 		private boolean debugMode = true;
+		private SetPointSemantics setPointSemantics = SetPointSemantics.AUTO;
 		private String essTarget = "(enabled=true)";
 
 		private Builder() {
@@ -69,6 +70,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setBalancingHysteresis(int balancingHysteresis) {
 			this.balancingHysteresis = balancingHysteresis;
+			return this;
+		}
+
+		public Builder setSetPointSemantics(SetPointSemantics setPointSemantics) {
+			this.setPointSemantics = setPointSemantics;
 			return this;
 		}
 
@@ -151,6 +157,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public boolean debugMode() {
 		return this.builder.debugMode;
+	}
+
+	@Override
+	public SetPointSemantics setPointSemantics() {
+		return this.builder.setPointSemantics;
 	}
 
 	@Override

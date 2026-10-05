@@ -230,6 +230,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	 */
 	private int calculatePvPower() {
 		if (this.ess instanceof HybridEss hss) {
+			if (this.isSetPointBatteryPower()) {
+				// The ESS takes battery power as set-point and reports battery-side
+				// Allowed*Power: no PV to add or subtract
+				return 0;
+			}
 			Integer ac = this.ess.getActivePower().get();
 			Integer dc = hss.getDcDischargePower().get();
 			if (ac != null && dc != null) {
@@ -237,6 +242,31 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			}
 		}
 		return 0;
+	}
+
+	/**
+	 * Does the ESS take battery power (instead of AC power) as set-point?
+	 *
+	 * <p>
+	 * AUTO reads the configuration property 'setPointMode' of the ESS via its
+	 * generic property channel, so there is no dependency to a specific ESS
+	 * bundle. A SolarEdge hybrid ESS in DC_SETPOINT mode is the known case.
+	 *
+	 * @return true if the set-point is battery power
+	 */
+	protected boolean isSetPointBatteryPower() {
+		return switch (this.config.setPointSemantics()) {
+		case BATTERY_ONLY -> true;
+		case AC_INCLUDING_PV -> false;
+		case AUTO -> {
+			try {
+				var value = this.ess.channel("_PropertySetPointMode").value().get();
+				yield value != null && "DC_SETPOINT".equals(value.toString());
+			} catch (RuntimeException e) {
+				yield false;
+			}
+		}
+		};
 	}
 
 	private void setEssProperties() {

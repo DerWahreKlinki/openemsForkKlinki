@@ -656,4 +656,56 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 				.deactivate();
 	}
 
+
+	/**
+	 * DC-coupled hybrid whose set-point is battery power (SolarEdge in
+	 * DC_SETPOINT): "do not charge" is battery >= 0, PV must not be added.
+	 * Otherwise the battery discharges with the PV power (observed live on
+	 * 2026-10-03: 4.2 kW discharge instead of 50 W).
+	 */
+	@Test
+	public void testHybridBatterySetPointAboveMaxSoc() throws Exception {
+		final var clock = createDummyClock();
+
+		new ControllerTest(new ControllerEssChargeDischargeLimiterImpl()) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("ess", new DummyHybridEss("ess0") //
+						.withSoc(80) //
+						.withActivePower(0) //
+						.withDcDischargePower(0) //
+						.withCapacity(10_000) //
+						.withAllowedChargePower(-10_000) //
+						.withAllowedDischargePower(10_000)) //
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setEssId("ess0") //
+						.setMinSoc(15) //
+						.setMaxSoc(90) //
+						.setEnergyBetweenBalancingCycles(0) //
+						.setSetPointSemantics(SetPointSemantics.BATTERY_ONLY) //
+						.build()) //
+				.next(new TestCase("Initialize NORMAL") //
+						.input("ess0", SOC, 80) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", DC_DISCHARGE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL)) //
+				.next(new TestCase("Above maxSoc, PV 3000 W, battery charging 1000 W") //
+						.input("ess0", SOC, 91) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output(CHARGE_LIMITED, true) //
+						.output(LIMITED_BATTERY_POWER, 0) //
+						// battery power, not AC: no PV added
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 0)) //
+				.next(new TestCase("Still above maxSoc: small recovery discharge only") //
+						.input("ess0", SOC, 91) //
+						.input("ess0", ACTIVE_POWER, 2000) //
+						.input("ess0", DC_DISCHARGE_POWER, -1000) //
+						.output(STATE_MACHINE, State.ABOVE_MAX_SOC) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS,
+								ControllerEssChargeDischargeLimiterImpl.RECOVER_DISCHARGE_W)) //
+				.deactivate();
+	}
 }

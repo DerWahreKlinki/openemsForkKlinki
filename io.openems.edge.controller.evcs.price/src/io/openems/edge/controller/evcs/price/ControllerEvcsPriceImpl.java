@@ -74,6 +74,10 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Last charge power, used for the hysteresis
 	private int lastChargePower = 0;
 
+	// Time since when a charge power above zero is calculated continuously while
+	// not charging; used for the start confirmation
+	private Instant startWantedSince = null;
+
 	@Reference
 	private ConfigurationAdmin cm;
 
@@ -737,8 +741,13 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private static int calculateExcessPowerAfterEss(Sum sum, ManagedEvcs evcs) {
 		int buyFromGrid = sum.getGridActivePower().orElse(0);
 		int evcsCharge = evcs.getActivePower().orElse(0);
+		// Power the storage is discharging is not excess power: without this the
+		// storage feeds the car and the car's own consumption looks like excess
+		// (grid stays at zero). Charging of the storage is not subtracted: the
+		// storage has priority, so that power is not available for the car.
+		int essDischarge = Math.max(sum.getEssDischargePower().orElse(0), 0);
 
-		var result = evcsCharge - buyFromGrid;
+		var result = evcsCharge - buyFromGrid - essDischarge;
 
 		// Add a buffer in Watt to have lower priority than the ess
 		result -= 200;
@@ -770,15 +779,25 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// New charge power limit
 		if (this.lastChargePower <= 0 && nextChargePower > 0) {
 			var hysteresis = Duration.ofSeconds(this.config.excessChargePauseHysteresis());
-			if (this.lastChargePause.plus(hysteresis).isBefore(now)) {
-
-				// Start charing
-				this.lastInitialCharge = now;
-			} else {
+			if (this.startWantedSince == null) {
+				this.startWantedSince = now;
+			}
+			var confirmation = Duration.ofSeconds(this.config.startConfirmationTime());
+			if (!this.lastChargePause.plus(hysteresis).isBefore(now)) {
 				// Wait for hysteresis
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
+			} else if (this.startWantedSince.plus(confirmation).isAfter(now)) {
+				// Wait for the start confirmation: the charge power has to stay above
+				// zero for a while, a single wrong measurement must not start charging
+				showWarning = true;
+				targetChargePower = this.lastChargePower;
+			} else {
+				// Start charing
+				this.lastInitialCharge = now;
 			}
+		} else {
+			this.startWantedSince = null;
 		}
 
 		// Pause charging by limiting to zero

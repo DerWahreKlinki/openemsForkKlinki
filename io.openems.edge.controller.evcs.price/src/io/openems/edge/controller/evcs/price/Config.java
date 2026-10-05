@@ -49,6 +49,9 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Minimum pause time while charging with excess power", description = "Minimum time (Seconds) is applied to avoid continuous switching between charging and not charging")
 	int excessChargePauseHysteresis() default 30;
 
+	@AttributeDefinition(name = "Start confirmation time [s]", description = "Charging is only started after the charge power has been above zero for this time (Seconds). Avoids starts on a single wrong measurement, e.g. right after a restart when grid and storage values lag behind; '0' starts immediately.")
+	int startConfirmationTime() default 10;
+
 	@AttributeDefinition(name = "Price limit [Cent/kWh]", description = "In excess power mode: charge from grid if the grid buy price is below this limit. Starts with the minimum hardware power at this limit and increases linearly down to the 'Price limit for full power'; '0' deactivates charging by price.")
 	double priceLimit() default 30;
 

@@ -27,6 +27,7 @@ import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_LI
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_REQUEST;
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_POWER;
 import static java.time.temporal.ChronoUnit.MINUTES;
+import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -838,5 +839,98 @@ public class ControllerEvcsPriceImplTest {
 		assertEquals(5600, ControllerEvcsPriceImpl.calculateEnergyToTarget(
 				List.of(new ControllerEvcsPriceImpl.StorageWindow(10000, 5, 20, 90)), 80));
 		assertNull(ControllerEvcsPriceImpl.calculateEnergyToTarget(List.of(), 80));
+	}
+
+	@Test
+	public void storagePriorityIgnoresStorageDischargeTest() throws Exception {
+		// Priority STORAGE: the car charges 5405 W, grid 54 W, storage discharges
+		// 4740 W, PV only 2 kW. The storage discharge is not excess power: 5405 -
+		// 54 - 4740 - 200 = 411 W -> below minimum -> no excess charging; blended
+		// price 411 W at 7 ct + 3729 W at 44.3 ct = 40.6 ct -> no charging
+		new ControllerTest(new ControllerEvcsPriceImpl(createDummyClock())) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(Priority.STORAGE) //
+						.setEnergySessionLimit(0) //
+						.setPriceLimit(30) //
+						.setPriceLimitFullPower(20) //
+						.setPriceChargePower(11040) //
+						.setExcessChargeHystersis(0) //
+						.setExcessChargePauseHysteresis(0) //
+						.build()) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 443.) //
+						.input(ESS_SOC, 60) //
+						.input(ESS_DISCHARGE_POWER, 4740) //
+						.input(ESS_MAX_DISCHARGE_POWER, 10000) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, 54) //
+						.input("evcs0", ACTIVE_POWER, 5405) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				.next(new TestCase("real feed-in of 5 kW counts as excess") //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input(GRID_ACTIVE_POWER, -5000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4800)) //
+				.deactivate();
+	}
+
+	@Test
+	public void startConfirmationTest() throws Exception {
+		// A single cycle with apparent excess must not start charging; after the
+		// confirmation time of 10 s with continuous excess it does
+		final var clock = createDummyClock();
+		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setPriceLimit(0) //
+						.setExcessChargeHystersis(0) //
+						.setExcessChargePauseHysteresis(0) //
+						.setStartConfirmationTime(10) //
+						.build()) //
+				.next(new TestCase("apparent excess for one cycle") //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase("excess gone again: no start") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase("excess again, counter restarts") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase("still excess after 11 s: start") //
+						.timeleap(clock, 11, SECONDS) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
 	}
 }

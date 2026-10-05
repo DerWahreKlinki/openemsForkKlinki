@@ -9,5 +9,26 @@
         </svg>
       }
     }
+    <!-- ChargeDischargeLimiter markers, if assigned -->
+    @if (chargeDischargeLimiterController() !== null) {
+      <svg>
+        @if (limiterMinSoc !== null) {
+          <rect y="2" rx="0" ry="0" width="1%" height="18"
+            [style]="'x: calc(' + (limiterMinSoc > 98 ? 98 : limiterMinSoc) + '% + 2px); fill: #3c383888;'" />
+        }
+        <!-- Balancing SoC while force charging or balancing (states 6..9), otherwise max. SoC -->
+        @if (limiterState !== null && limiterState >= 6 && limiterState <= 9) {
+          @if (limiterBalancingSoc !== null) {
+            <rect y="2" rx="0" ry="0" width="1%" height="18"
+              [style]="'x: calc(' + (limiterBalancingSoc > 98 ? 98 : limiterBalancingSoc) + '% + 2px); fill: #88000088;'" />
+          }
+        } @else {
+          @if (limiterMaxSoc !== null) {
+            <rect y="2" rx="0" ry="0" width="1%" height="18"
+              [style]="'x: calc(' + (limiterMaxSoc > 98 ? 98 : limiterMaxSoc) + '% + 2px); fill: #3c383888;'" />
+          }
+        }
+      </svg>
+    }
   </oe-flat-widget-percentagebar>
 }

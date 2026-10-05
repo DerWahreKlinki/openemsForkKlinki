@@ -48,6 +48,8 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
     private static CHANNEL_ID_PREPARE_BATTERY_EXTENSION_PROPERTY_TARGET_TIME_BUFFER = "_PropertyTargetTimeBuffer";
     private static CHANNEL_ID_PREPARE_BATTERY_EXTENSION_PROPERTY_EXPECTED_EPOCH_SECONDS = "ExpectedStartEpochSeconds";
     private static CHANNEL_ID_META_IS_ESS_CHARGE_FROM_GRID_ALLOWED = "IsEssChargeFromGridAllowed";
+    private static CHANNEL_ID_CHARGE_DISCHARGE_LIMITER_MIN_SOC = "_PropertyMinSoc";
+    private static CHANNEL_ID_CHARGE_DISCHARGE_LIMITER_MAX_SOC = "_PropertyMaxSoc";
 
     protected override formlyWrapper: "formly-field-modal" | "formly-field-navigation" = "formly-field-navigation";
 
@@ -60,6 +62,12 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
     ) => CommonStorageSettingsComponent.CONTROL_NAME_PREFIX(essComponent) + "emergencyReserveIsEnabled";
     private static FORMCONTROL_EMERGENCY_RESERVE_SOC: (essComponent: EdgeConfig.Component) => string = (essComponent) =>
         CommonStorageSettingsComponent.CONTROL_NAME_PREFIX(essComponent) + "emergencyReserveSoc";
+    private static FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MIN_SOC: (essComponent: EdgeConfig.Component) => string = (
+        essComponent,
+    ) => CommonStorageSettingsComponent.CONTROL_NAME_PREFIX(essComponent) + "chargeDischargeLimiterMinSoc";
+    private static FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MAX_SOC: (essComponent: EdgeConfig.Component) => string = (
+        essComponent,
+    ) => CommonStorageSettingsComponent.CONTROL_NAME_PREFIX(essComponent) + "chargeDischargeLimiterMaxSoc";
     private static FORMCONTROL_PREPARE_BATTERY_EXTENSION_IS_RUNNING: (essComponent: EdgeConfig.Component) => string = (
         essComponent,
     ) => CommonStorageSettingsComponent.CONTROL_NAME_PREFIX(essComponent) + "prepareBatteryExtensionIsRunning";
@@ -172,6 +180,20 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
                 );
             }
 
+            const chargeDischargeLimiterCtrl = config
+                .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+                .find((el) => el.isEnabled && el.getPropertyFromComponent("ess.id") == essComponent.id);
+            if (chargeDischargeLimiterCtrl != null) {
+                formGroup.addControl(
+                    CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MIN_SOC(essComponent),
+                    new FormControl(null),
+                );
+                formGroup.addControl(
+                    CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MAX_SOC(essComponent),
+                    new FormControl(null),
+                );
+            }
+
             const meta = new MetaComponent(config);
             if (meta != null) {
                 formGroup.addControl(
@@ -198,7 +220,16 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
                     .getComponentsByFactory("Controller.Ess.PrepareBatteryExtension")
                     .find((el) => el.getPropertyFromComponent("ess.id") == essComponent.id) ?? null;
 
-            if (essComponents.length > 1 && emergencyReserveCtrl != null && prepareBatteryExtensionCtrl != null) {
+            const chargeDischargeLimiterCtrl =
+                viewContext.config
+                    .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+                    .find((el) => el.isEnabled && el.getPropertyFromComponent("ess.id") == essComponent.id) ?? null;
+
+            if (
+                essComponents.length > 1 &&
+                ((emergencyReserveCtrl != null && prepareBatteryExtensionCtrl != null) ||
+                    chargeDischargeLimiterCtrl != null)
+            ) {
                 lines.push({
                     type: "name-line",
                     name: Name.METER_ALIAS_OR_ID(essComponent),
@@ -206,6 +237,7 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
             }
 
             lines.push(...this.getEmergencyReserveForEss(essComponent, emergencyReserveCtrl, viewContext.config));
+            lines.push(...this.getChargeDischargeLimiterForEss(essComponent, chargeDischargeLimiterCtrl));
 
             if (viewContext.edge.roleIsAtLeast(Role.INSTALLER)) {
                 lines.push(
@@ -252,6 +284,30 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
                     new ChannelAddress(
                         emergencyReserveCtrl.id,
                         CommonStorageSettingsComponent.CHANNEL_ID_EMERGENCY_RESERVE_SOC,
+                    ),
+                );
+            }
+
+            const chargeDischargeLimiterCtrl = config
+                .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+                .find((el) => el.isEnabled && el.getPropertyFromComponent("ess.id") == essComponent.id);
+            if (chargeDischargeLimiterCtrl != null) {
+                this.setFormControlSafelyWithChannel(
+                    this.form,
+                    CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MIN_SOC(essComponent),
+                    currentData,
+                    new ChannelAddress(
+                        chargeDischargeLimiterCtrl.id,
+                        CommonStorageSettingsComponent.CHANNEL_ID_CHARGE_DISCHARGE_LIMITER_MIN_SOC,
+                    ),
+                );
+                this.setFormControlSafelyWithChannel(
+                    this.form,
+                    CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MAX_SOC(essComponent),
+                    currentData,
+                    new ChannelAddress(
+                        chargeDischargeLimiterCtrl.id,
+                        CommonStorageSettingsComponent.CHANNEL_ID_CHARGE_DISCHARGE_LIMITER_MAX_SOC,
                     ),
                 );
             }
@@ -378,6 +434,21 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
                     ),
                 );
             }
+            const chargeDischargeLimiterCtrl = config
+                .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+                .find((el) => el.isEnabled && el.getPropertyFromComponent("ess.id") == essComponent.id);
+            if (chargeDischargeLimiterCtrl != null) {
+                channelAddresses.push(
+                    new ChannelAddress(
+                        chargeDischargeLimiterCtrl.id,
+                        CommonStorageSettingsComponent.CHANNEL_ID_CHARGE_DISCHARGE_LIMITER_MIN_SOC,
+                    ),
+                    new ChannelAddress(
+                        chargeDischargeLimiterCtrl.id,
+                        CommonStorageSettingsComponent.CHANNEL_ID_CHARGE_DISCHARGE_LIMITER_MAX_SOC,
+                    ),
+                );
+            }
             const meta = new MetaComponent(config);
             if (meta != null) {
                 channelAddresses.push(
@@ -473,6 +544,32 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
                     ),
                 ].filter((entry) => entry != null);
                 updateArray.set(emergencyReserveCtrl.id, updateObj);
+            }
+
+            const chargeDischargeLimiterCtrl = config
+                .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+                .find((el) => el.isEnabled && el.getPropertyFromComponent("ess.id") == essComponent.id);
+            if (chargeDischargeLimiterCtrl != null) {
+                // Only changed values: an update restarts the controller and resets its state
+                const dirtyEntry = (name: string, controlName: string) => {
+                    const control = formGroup.get(controlName);
+                    return control != null && control.dirty
+                        ? CommonStorageSettingsComponent.getUpdateComponentPropertyEntry(name, control)
+                        : null;
+                };
+                const updateObj: Parameters<Edge["updateComponentConfig"]>[2] = [
+                    dirtyEntry(
+                        "minSoc",
+                        CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MIN_SOC(essComponent),
+                    ),
+                    dirtyEntry(
+                        "maxSoc",
+                        CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MAX_SOC(essComponent),
+                    ),
+                ].filter((entry) => entry != null);
+                if (updateObj.length > 0) {
+                    updateArray.set(chargeDischargeLimiterCtrl.id, updateObj);
+                }
             }
 
             const meta = new MetaComponent(config);
@@ -667,6 +764,54 @@ export class CommonStorageSettingsComponent extends AbstractFormlyComponent<any>
             ];
         }
         return [];
+    }
+
+    private getChargeDischargeLimiterForEss(
+        essComponent: EdgeConfig.Component,
+        chargeDischargeLimiterCtrl: EdgeConfig.Component | null,
+    ): OeFormlyField[] {
+        if (chargeDischargeLimiterCtrl == null) {
+            return [];
+        }
+        const prefix = "EDGE.INDEX.WIDGETS.CONFIGURATION_CHARGE_DISCHARGE_LIMITER.";
+        const minSoc = CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MIN_SOC(essComponent);
+        const maxSoc = CommonStorageSettingsComponent.FORMCONTROL_CHARGE_DISCHARGE_LIMITER_MAX_SOC(essComponent);
+        const percent = (val: number) => Converter.STATE_IN_PERCENT(val);
+
+        return [
+            { type: "horizontal-line" },
+            {
+                type: "info-line",
+                name: [
+                    {
+                        text: this.translate.instant("EDGE.INDEX.CHARGE_DISCHARGE_LIMITER.CHARGE_DISCHARGE_LIMITER"),
+                        lineStyle: "font-weight: bold",
+                    },
+                ],
+            },
+            {
+                type: "info-line",
+                icon: { color: "medium", name: "information-outline", size: "large" },
+                name: [
+                    {
+                        text: this.translate.instant(prefix + "CHARGE_DISCHARGE_LIMITER_NOTE"),
+                        lineStyle: "font-size: smaller",
+                    },
+                ],
+            },
+            { type: "info-line", name: [{ text: this.translate.instant(prefix + "MIN_SOC") }] },
+            {
+                type: "range-button-from-form-control-line",
+                controlName: minSoc,
+                properties: { tickMin: 5, tickMax: 80, step: 1, tickFormatter: percent, pinFormatter: percent },
+            },
+            { type: "info-line", name: [{ text: this.translate.instant(prefix + "MAX_SOC") }] },
+            {
+                type: "range-button-from-form-control-line",
+                controlName: maxSoc,
+                properties: { tickMin: 80, tickMax: 100, step: 1, tickFormatter: percent, pinFormatter: percent },
+            },
+        ];
     }
 
     private getEmergencyReserveForEss(

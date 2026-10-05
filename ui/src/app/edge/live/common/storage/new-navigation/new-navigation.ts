@@ -75,6 +75,16 @@ export class CommonStorageHomeComponent extends AbstractFormlyComponent {
                 };
             }, {});
 
+        const chargeDischargeLimiterComponents: { [essId: string]: EdgeConfig.Component } = config
+            .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")
+            .filter((component) => component.isEnabled)
+            .reduce((result, component) => {
+                return {
+                    ...result,
+                    [component.properties["ess.id"]]: component,
+                };
+            }, {});
+
         const controllerLines = essComponents.reduce((arr: OeFormlyField[] = [], ess, i) => {
             if (essComponents.length > 1) {
                 arr.push({
@@ -84,6 +94,7 @@ export class CommonStorageHomeComponent extends AbstractFormlyComponent {
             }
 
             const emergencyReserveCtrl = emergencyReserveComponents[ess.id];
+            const chargeDischargeLimiterCtrl = chargeDischargeLimiterComponents[ess.id] ?? null;
             arr.push(
                 {
                     type: "component-line",
@@ -91,10 +102,15 @@ export class CommonStorageHomeComponent extends AbstractFormlyComponent {
                     inputs: {
                         essComponentId: ess.id,
                         emergencyReserveController: emergencyReserveCtrl,
+                        chargeDischargeLimiterController: chargeDischargeLimiterCtrl,
                     },
                 },
                 ...SharedStorage.getChargeDischargeLinesInKw(ess, config, translate),
             );
+
+            if (chargeDischargeLimiterCtrl !== null) {
+                arr.push(...CommonStorageHomeComponent.getChargeDischargeLimiterLines(chargeDischargeLimiterCtrl, translate));
+            }
 
             const prepareBatteryExtensionCtrlForEss =
                 ess.id in prepareBatteryExtensionCtrl ? prepareBatteryExtensionCtrl[ess.id] : null;
@@ -240,6 +256,60 @@ export class CommonStorageHomeComponent extends AbstractFormlyComponent {
         return lines;
     }
 
+    /**
+     * Gets the lines for a 'Controller.Ess.ChargeDischargeLimiter': state, SoC range and - while relevant - the
+     * progress of the balancing.
+     *
+     * @param controller The controller
+     * @param translate The translate service
+     * @returns The lines
+     */
+    private static getChargeDischargeLimiterLines(
+        controller: EdgeConfig.Component,
+        translate: TranslateService,
+    ): OeFormlyField[] {
+        const prefix = "EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.";
+        const channel = (channelId: string) => new ChannelAddress(controller.id, channelId);
+        const value = (currentData: CurrentData, channelId: string): number | null =>
+            currentData.allComponents[controller.id + "/" + channelId] ?? null;
+
+        return [
+            {
+                type: "value-from-channels-line",
+                name: translate.instant("EDGE.INDEX.CHARGE_DISCHARGE_LIMITER.CHARGE_DISCHARGE_LIMITER"),
+                channelsToSubscribe: [channel("_PropertyMinSoc"), channel("_PropertyMaxSoc")],
+                value: (currentData: CurrentData) => {
+                    const minSoc = value(currentData, "_PropertyMinSoc");
+                    const maxSoc = value(currentData, "_PropertyMaxSoc");
+                    return minSoc == null || maxSoc == null ? null : minSoc + " % - " + maxSoc + " %";
+                },
+            },
+            {
+                type: "value-from-channels-line",
+                name: translate.instant("GENERAL.MODE"),
+                channelsToSubscribe: [channel("StateMachine")],
+                value: (currentData: CurrentData) => {
+                    const state = value(currentData, "StateMachine");
+                    const key = state == null ? null : CHARGE_DISCHARGE_LIMITER_STATES[state];
+                    return key == null ? null : translate.instant(prefix + key);
+                },
+            },
+            {
+                type: "value-from-channels-line",
+                name: translate.instant(prefix + "BALANCING_DEFERRAL_REASON_LABEL"),
+                channelsToSubscribe: [channel("StateMachine"), channel("BalancingDeferralReason")],
+                value: (currentData: CurrentData) => {
+                    const reason = value(currentData, "BalancingDeferralReason");
+                    const key = reason == null ? null : CHARGE_DISCHARGE_LIMITER_DEFERRAL_REASONS[reason];
+                    return key == null ? null : translate.instant(prefix + "BALANCING_DEFERRAL_REASON." + key);
+                },
+                // Only while balancing is wanted and deferred
+                filter: (currentData: CurrentData) =>
+                    value(currentData, "StateMachine") === 7 && (value(currentData, "BalancingDeferralReason") ?? 0) > 0,
+            },
+        ];
+    }
+
     public override getFormGroup(): FormGroup {
         return new FormGroup({
             soc: new FormControl(null),
@@ -274,6 +344,28 @@ export class CommonStorageHomeComponent extends AbstractFormlyComponent {
     }
 
 }
+
+/** States of the 'Controller.Ess.ChargeDischargeLimiter'; value to translation key */
+const CHARGE_DISCHARGE_LIMITER_STATES: { [state: number]: string } = {
+    [-1]: "UNDEFINED",
+    0: "NORMAL",
+    1: "ERROR",
+    2: "BELOW_MIN_SOC",
+    3: "ABOVE_MAX_SOC",
+    4: "MIN_SOC_REACHED",
+    5: "MAX_SOC_REACHED",
+    6: "FORCE_CHARGE_ACTIVE",
+    7: "BALANCING_WANTED",
+    8: "BALANCING_ACTIVE",
+    10: "APPROACHING_MIN_SOC",
+    11: "APPROACHING_MAX_SOC",
+};
+
+/** Reasons for a deferred balancing; value to translation key */
+const CHARGE_DISCHARGE_LIMITER_DEFERRAL_REASONS: { [reason: number]: string } = {
+    1: "PEAKSHAVING",
+    2: "PRICE_LIMIT",
+};
 
 export const ESS_CHARGE_OR_DISCHARGE =
     (translate: TranslateService): Converter =>

@@ -1,0 +1,9 @@
+= ESS Cluster Hybrid
+
+Copy of the ESS Cluster for Clusters that contain hybrid ESS, optionally mixed with AC-coupled ESS.
+
+The active power and energy of the Cluster are the battery side of its members: for a hybrid ESS its DC discharge power and DC energy, for an AC-coupled ESS its AC values. This way the Cluster behaves like one AC-coupled ESS and its measured power matches its set-point.
+
+It requires that the hybrid ESS interpret their power set-point as battery power (e.g. set-point mode `DC_SETPOINT` of the SolarEdge Hybrid ESS).
+
+https://github.com/DerWahreKlinki/openemsForkKlinki/tree/develop/io.openems.edge.ess.cluster.hybrid[Source Code icon:github[]]

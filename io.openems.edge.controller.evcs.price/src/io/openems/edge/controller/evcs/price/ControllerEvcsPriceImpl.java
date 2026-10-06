@@ -78,6 +78,10 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// not charging; used for the start confirmation
 	private Instant startWantedSince = null;
 
+	// True while the storage is already above its evening target: that surplus
+	// may go to the car even without PV surplus
+	private boolean storageAboveTarget = false;
+
 	@Reference
 	private ConfigurationAdmin cm;
 
@@ -270,8 +274,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// Not enough excess power for the minimum hardware power: take the missing
 			// power from storage/grid if the blended price is below the limit
 			if (nextChargePower == 0) {
+				// With storage pricing the missing power may also come from the storage
+				// alone, as long as the storage is above its evening target right now
+				final var available = excessPower > 0
+						|| (this.config.useStorageSurplus() && this.storageAboveTarget && storagePower > 0);
 				final var belowLimit = this.config.useStorageSurplus() //
-						? excessPower > 0 && this.config.priceLimit() > 0 && blendedPrice != null
+						? available && this.config.priceLimit() > 0 && blendedPrice != null
 								&& blendedPrice < this.config.priceLimit()
 						: isBlendedPriceBelowLimit(gridBuyPrice, excessPower, minimumHardwarePower,
 								this.config.pvPrice(), this.config.priceLimit());
@@ -425,6 +433,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var energyToTarget = calculateEnergyToTarget(windows, this.config.storageTargetSocNet());
 
 		final var targetReachable = isStorageTargetReachable(expectedSurplus, energyToTarget);
+		this.storageAboveTarget = energyToTarget != null && energyToTarget == 0;
 		final var storagePrice = calculateStoragePrice(gridBuyPrice, this.config.pvPrice(),
 				this.config.storageLossSurcharge(), targetReachable);
 

@@ -933,4 +933,39 @@ public class ControllerEvcsPriceImplTest {
 						.output(AWAITING_HYSTERESIS, false)) //
 				.deactivate();
 	}
+
+	@Test
+	public void storageAboveTargetChargesWithoutPvTest() throws Exception {
+		// Evening, no PV: storage 20 kWh at 95 % (net 95 % > target 80 %) -> the
+		// surplus above the target may go to the car at 8 ct, grid 50 ct.
+		// After the storage dropped to the target: priced like grid -> stop.
+		final var clock = createDummyClock();
+		prepareStoragePriceTest(clock, true, 0, 2000, 96) //
+				.next(new TestCase("storage above target, no PV") //
+						.input(GRID_BUY_PRICE, 500.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 95) //
+						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
+						.input(ESS_DISCHARGE_POWER, 2000) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_ENERGY_TO_TARGET, 0) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_PRICE, 80.) //
+						.output(BLENDED_PRICE, 80.) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(PRICE_CHARGING, true)) //
+				.next(new TestCase("storage at target: no PV, storage like grid -> stop") //
+						.timeleap(clock, 5, MINUTES) //
+						.input(ESS_SOC, 79) //
+						.input(ESS_DISCHARGE_POWER, 6000) //
+						.input("evcs0", ACTIVE_POWER, 4000) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
 }

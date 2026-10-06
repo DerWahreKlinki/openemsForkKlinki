@@ -87,6 +87,12 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                     yAxisId: ChartAxis.RIGHT,
                     displayGrid: false,
                 },
+                {
+                    unit: YAxisType.PERCENTAGE,
+                    position: "right",
+                    yAxisId: ChartAxis.RIGHT_2,
+                    displayGrid: false,
+                },
             ],
         };
     }
@@ -198,6 +204,37 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             bar(EvcsPriceForecast.Zone.NO_SURPLUS, "ZONE_NO_SURPLUS", ChartConstants.Colors.DARK_GREY),
             gridPrice,
             {
+                // Expected charge power of the car, same axis as the PV production
+                type: "line",
+                label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHARGE_POWER"),
+                data: slots.map((slot) => slot.chargePower / 1000), // [W] to [kW]
+                hidden: false,
+                order: 0,
+                yAxisID: ChartAxis.RIGHT,
+                borderDash: [6, 3],
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: false,
+                stepped: true,
+                backgroundColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.GREEN, 0.2),
+                borderColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.GREEN, 1),
+            },
+            {
+                // Planned storage SoC; hidden by default, toggled via the legend
+                type: "line",
+                label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.STORAGE_SOC"),
+                data: slots.map((slot) => slot.soc),
+                hidden: true,
+                order: 0,
+                yAxisID: ChartAxis.RIGHT_2,
+                borderDash: [2, 3],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: false,
+                backgroundColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.BLUE_GREY, 0.2),
+                borderColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.BLUE_GREY, 1),
+            },
+            {
                 type: "line",
                 label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.PRODUCTION"),
                 data: slots.map((slot) => slot.production / 1000), // [W] to [kW]
@@ -262,6 +299,9 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 if (item.dataset.yAxisID === ChartAxis.RIGHT) {
                     return label + ": " + formatNumber(value, locale, "1.0-1") + " kW";
                 }
+                if (item.dataset.yAxisID === ChartAxis.RIGHT_2) {
+                    return label + ": " + formatNumber(value, locale, "1.0-0") + " %";
+                }
                 if (item.datasetIndex === 4) {
                     // grey segment: show the grid price itself, not the difference
                     const slot = this.slots[item.dataIndex];
@@ -288,13 +328,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                     return [];
                 }
                 const prefix = "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.";
-                return [
-                    this.translate.instant(prefix + "PV_SHARE") + ": " + slot.pvShare + " %",
-                    this.translate.instant(prefix + "CHARGE_POWER") +
-                        ": " +
-                        formatNumber(slot.chargePower / 1000, locale, "1.0-1") +
-                        " kW",
-                ];
+                return [this.translate.instant(prefix + "PV_SHARE") + ": " + slot.pvShare + " %"];
             };
         }
 
@@ -309,6 +343,12 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             };
             rightScale.suggestedMin = 0;
             rightScale.suggestedMax = 1;
+        }
+        const right2Scale = options.scales?.[ChartAxis.RIGHT_2];
+        if (right2Scale != null) {
+            right2Scale.grid = { ...right2Scale.grid, display: false };
+            right2Scale.min = 0;
+            right2Scale.max = 100;
         }
 
         if (leftScale != null && options.scales != null) {

@@ -413,6 +413,7 @@
                         "GRID_PRICE": "Strompreis",
                         "PRODUCTION": "PV-Erzeugung",
                         "PV_SHARE": "PV-Anteil",
+                        "STORAGE_SOC": "Speicher-Ladestand (Plan)",
                         "SURPLUS": "PV-Überschuss",
                         "ZONE_FULL": "Volle Ladeleistung",
                         "ZONE_NONE": "Zu teuer",

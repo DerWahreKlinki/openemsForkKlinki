@@ -413,6 +413,7 @@
                         "GRID_PRICE": "Grid price",
                         "PRODUCTION": "PV production",
                         "PV_SHARE": "PV share",
+                        "STORAGE_SOC": "Storage SoC (plan)",
                         "SURPLUS": "PV surplus",
                         "ZONE_FULL": "Full charge power",
                         "ZONE_NONE": "Too expensive",

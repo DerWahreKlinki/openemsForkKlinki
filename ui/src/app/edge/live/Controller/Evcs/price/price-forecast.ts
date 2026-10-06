@@ -92,6 +92,8 @@ export namespace EvcsPriceForecast {
         storagePrice: number | null;
         /** Storage is (planned to be) above its evening target in this quarter-hour */
         storageAboveTarget: boolean;
+        /** Planned state of charge of the storage in [%]; null if unknown */
+        soc: number | null;
         zone: Zone;
     };
 
@@ -364,6 +366,7 @@ export namespace EvcsPriceForecast {
                 effectivePrice: Math.round(effectivePrice * 100) / 100,
                 storagePrice: storagePrice,
                 storageAboveTarget: storageAboveTarget,
+                soc: entry.soc ?? null,
                 zone: zone,
             });
         }

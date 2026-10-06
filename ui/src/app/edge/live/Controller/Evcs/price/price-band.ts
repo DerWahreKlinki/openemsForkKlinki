@@ -70,6 +70,8 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
     @Input({ required: true }) public controllerId!: string;
     @Input() public minPower: number | null = null;
     @Input() public maxPower: number | null = null;
+    /** Current replacement cost of storage power in [Cent/kWh]; null if unknown */
+    @Input() public storagePrice: number | null = null;
 
     protected readonly COLOR_FULL = ChartConstants.Colors.GREEN;
     protected readonly COLOR_REDUCED = ChartConstants.Colors.ORANGE;
@@ -108,7 +110,7 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
             return;
         }
         try {
-            const settings = EvcsPriceForecast.getSettings(controller, this.minPower, this.maxPower);
+            const settings = EvcsPriceForecast.getSettings(controller, this.minPower, this.maxPower, this.storagePrice);
             const slots = await EvcsPriceForecast.load(this.edge, this.websocket, config, settings);
             this.update(slots, settings);
         } catch (error) {

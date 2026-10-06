@@ -2,6 +2,9 @@ import { EvcsPriceForecast } from "./price-forecast";
 
 describe("EvcsPriceForecast", () => {
     const SETTINGS: EvcsPriceForecast.Settings = {
+        priority: "CAR",
+        useStorageSurplus: false,
+        storagePrice: null,
         priceLimit: 30,
         priceLimitFullPower: 20,
         priceChargePower: 11040,
@@ -16,12 +19,14 @@ describe("EvcsPriceForecast", () => {
         price: number | null,
         production: number,
         consumption: number,
+        ess: number | null = null,
     ): EvcsPriceForecast.ScheduleEntry {
         return {
             timestamp: "2026-10-02T" + time + ":00Z",
             price: price,
             production: production,
             consumption: consumption,
+            ess: ess,
         };
     }
 
@@ -121,5 +126,42 @@ describe("EvcsPriceForecast", () => {
             averagePrice: 16,
         });
         expect(EvcsPriceForecast.getCheapestWindow(slots, 6)).toBeNull();
+    });
+    it("#calculateSurplus follows the priority", () => {
+        // PV 5 kW, house 1 kW, storage planned to charge 3 kW
+        expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 3000, "CAR")).toBe(4000);
+        expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 3000, "STORAGE")).toBe(1000);
+        // storage takes everything
+        expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 6000, "STORAGE")).toBe(0);
+        // storage discharging (positive ess -> charge 0)
+        expect(EvcsPriceForecast.calculateSurplus(500, 2000, 0, "STORAGE")).toBe(0);
+    });
+
+    it("#calculate with priority STORAGE: no charging while the storage takes the surplus", () => {
+        // 06.10.2026 10:00: PV 5 kW, house 1 kW, storage charges 4 kW (balancing), 42 ct
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8 };
+        const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -4000)], settings, NOW)[0];
+        expect(slot.surplus).toBe(0);
+        expect(slot.storageCharge).toBe(4000);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
+        expect(slot.chargePower).toBe(0);
+    });
+
+    it("#calculate with priority STORAGE: charges from the grid-bound rest when the storage is limited", () => {
+        // storage limited to 3 kW: 1 kW would go to grid -> blended price with storage at 8 ct: (1000*7 + 3140*8)/4140
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8 };
+        const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -3000)], settings, NOW)[0];
+        expect(slot.surplus).toBe(1000);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(slot.chargePower).toBe(4140);
+        expect(slot.effectivePrice).toBe(7.76);
+    });
+
+    it("#calculate with priority STORAGE: storage priced like grid when the evening target is not reachable", () => {
+        // same as above, but storagePrice = grid price 42 ct -> (1000*7 + 3140*42)/4140 = 33.5 ct -> locked
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 42 };
+        const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -3000)], settings, NOW)[0];
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
+        expect(slot.effectivePrice).toBe(33.55);
     });
 });

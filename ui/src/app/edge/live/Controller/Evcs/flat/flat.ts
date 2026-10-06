@@ -50,6 +50,8 @@ export class FlatComponent extends AbstractFlatWidget {
     protected isPriceController: boolean = false;
     protected minHardwarePower: number | null = null;
     protected maxHardwarePower: number | null = null;
+    /** Replacement cost of storage power in [Cent/kWh], Controller.Evcs.Price only */
+    protected storagePrice: number | null = null;
 
     private chargePoint: EvcsComponent;
 
@@ -91,12 +93,19 @@ export class FlatComponent extends AbstractFlatWidget {
             if ("evcs.id" in properties && properties["evcs.id"] === this.componentId) {
                 this.controller = controller;
                 result.push(new ChannelAddress(controller.id, "_PropertyEnabledCharging"));
+                if (controller.factoryId === EvcsPriceForecast.FACTORY_ID) {
+                    result.push(new ChannelAddress(controller.id, "StoragePrice"));
+                }
             }
         }
         return result;
     }
 
     protected override onCurrentData(currentData: CurrentData) {
+        if (this.controller != null && this.controller.factoryId === EvcsPriceForecast.FACTORY_ID) {
+            const storagePrice = currentData.allComponents[this.controller.id + "/StoragePrice"];
+            this.storagePrice = storagePrice == null ? null : storagePrice / 10;
+        }
         this.evcsComponent = this.config.getComponent(this.component.id);
         this.isConnectionSuccessful = currentData.allComponents[this.component.id + "/State"] != 3 ? true : false;
         this.isReadWrite = this.component.hasPropertyValue<boolean>("readOnly", true) === false;

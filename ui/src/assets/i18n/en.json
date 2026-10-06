@@ -406,7 +406,7 @@
                     "PHASE_SWITCHING_INFO": "How many phases should the vehicle be loaded with?",
                     "PRICE_FORECAST": {
                         "CHARGE_POWER": "Charge power",
-                        "CHART_NOTE": "Bar height: effective charge price from PV share and grid price. For 'Charging locked' it applies to the minimum charge power. Forecast without storage system.",
+                        "CHART_NOTE": "Bar height: effective charge price from PV share, storage power (at the current storage price) and grid price, taking the planned storage charging of the schedule and the configured priority into account. For 'Charging locked' it applies to the minimum charge power.",
                         "CHART_TITLE": "Charge forecast: effective charge price and PV production",
                         "CHEAPEST_WINDOW": "Cheapest 3 h",
                         "GRID_PRICE": "Grid price",

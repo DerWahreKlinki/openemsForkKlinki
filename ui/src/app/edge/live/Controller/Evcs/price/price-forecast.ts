@@ -23,6 +23,15 @@ export namespace EvcsPriceForecast {
     }
 
     export type Settings = {
+        /** Priority of the controller: CAR takes surplus before the storage, STORAGE only what would go to grid */
+        priority: "CAR" | "STORAGE";
+        /** Price storage power for the blended price (useStorageSurplus of the controller) */
+        useStorageSurplus: boolean;
+        /**
+         * Current replacement cost of storage power in [Cent/kWh] (channel StoragePrice of the controller); null
+         * prices storage power like grid power
+         */
+        storagePrice: number | null;
         /** Upper price limit in [Cent/kWh]; 0 deactivates charging by price */
         priceLimit: number;
         /** Lower price limit in [Cent/kWh] */
@@ -45,6 +54,8 @@ export namespace EvcsPriceForecast {
         production: number | null;
         /** Predicted consumption in [W] */
         consumption: number | null;
+        /** Planned storage power in [W]; positive discharge, negative charge; null if unknown */
+        ess?: number | null;
     };
 
     export type Slot = {
@@ -53,8 +64,10 @@ export namespace EvcsPriceForecast {
         price: number;
         /** Predicted production in [W] */
         production: number;
-        /** Predicted surplus (production minus consumption) in [W]; never negative */
+        /** Surplus available for the car in [W] according to the priority; never negative */
         surplus: number;
+        /** Planned storage charging in [W]; never negative */
+        storageCharge: number;
         /** Expected charge power in [W]; 0 if the controller would not charge */
         chargePower: number;
         /** Share of PV power in percent; of the minimum power if the controller would not charge */
@@ -77,15 +90,20 @@ export namespace EvcsPriceForecast {
      * @param controller The controller
      * @param minPower The minimum hardware power of the EVCS in [W]
      * @param maxPower The maximum hardware power of the EVCS in [W]
+     * @param storagePrice The current replacement cost of storage power in [Cent/kWh]; null if unknown
      * @returns The settings
      */
     export function getSettings(
         controller: EdgeConfig.Component,
         minPower: number | null,
         maxPower: number | null,
+        storagePrice: number | null = null,
     ): Settings {
         const properties = controller.properties;
         return {
+            priority: properties["priority"] === "STORAGE" ? "STORAGE" : "CAR",
+            useStorageSurplus: properties["useStorageSurplus"] === true || properties["useStorageSurplus"] === "true",
+            storagePrice: storagePrice,
             priceLimit: toNumber(properties["priceLimit"], 0),
             priceLimitFullPower: toNumber(properties["priceLimitFullPower"], 0),
             priceChargePower: toNumber(properties["priceChargePower"], 0),
@@ -128,9 +146,41 @@ export namespace EvcsPriceForecast {
      * @param pvPrice The value of PV power in [Cent/kWh]
      * @returns The blended price in [Cent/kWh]
      */
-    export function calculateBlendedPrice(price: number, surplus: number, power: number, pvPrice: number): number {
+    export function calculateBlendedPrice(
+        price: number,
+        surplus: number,
+        power: number,
+        pvPrice: number,
+        storagePrice: number | null = null,
+    ): number {
         const pvPower = Math.min(Math.max(surplus, 0), power);
-        return (pvPower * pvPrice + (power - pvPower) * price) / power;
+        // The missing power comes from the storage (at its replacement cost) if it is priced, else from grid
+        const restPrice = storagePrice ?? price;
+        return (pvPower * pvPrice + (power - pvPower) * restPrice) / power;
+    }
+
+    /**
+     * Calculates the surplus that is available for the car, mirroring the priority of the controller: with
+     * priority CAR the car may take what the storage would charge; with priority STORAGE only the power that
+     * would be fed into the grid after the planned storage charging counts.
+     *
+     * @param production The predicted production in [W]
+     * @param consumption The predicted consumption in [W]
+     * @param storageCharge The planned storage charging in [W]; never negative
+     * @param priority The priority of the controller
+     * @returns The surplus in [W]; never negative
+     */
+    export function calculateSurplus(
+        production: number,
+        consumption: number,
+        storageCharge: number,
+        priority: "CAR" | "STORAGE",
+    ): number {
+        const pvSurplus = Math.max(Math.max(production, 0) - Math.max(consumption, 0), 0);
+        if (priority === "STORAGE") {
+            return Math.max(pvSurplus - Math.max(storageCharge, 0), 0);
+        }
+        return pvSurplus;
     }
 
     /**
@@ -168,7 +218,9 @@ export namespace EvcsPriceForecast {
             }
             const price = entry.price / 10; // [Currency/MWh] to [Cent/kWh]
             const production = Math.max(entry.production ?? 0, 0);
-            const surplus = Math.max(production - Math.max(entry.consumption ?? 0, 0), 0);
+            const storageCharge = Math.max(-(entry.ess ?? 0), 0);
+            const surplus = calculateSurplus(production, entry.consumption ?? 0, storageCharge, settings.priority);
+            const storagePrice = settings.useStorageSurplus ? settings.storagePrice : null;
 
             // Charging below the minimum hardware power is not possible
             let surplusPower = surplus >= settings.minPower ? surplus : 0;
@@ -184,7 +236,8 @@ export namespace EvcsPriceForecast {
                 chargePower <= 0 &&
                 surplus > 0 &&
                 settings.priceLimit > 0 &&
-                calculateBlendedPrice(price, surplus, settings.minPower, settings.pvPrice) < settings.priceLimit
+                calculateBlendedPrice(price, surplus, settings.minPower, settings.pvPrice, storagePrice) <
+                    settings.priceLimit
             ) {
                 chargePower = settings.minPower;
             }
@@ -201,13 +254,20 @@ export namespace EvcsPriceForecast {
             // Without charging: what would it cost at minimum power
             const referencePower = chargePower > 0 ? chargePower : settings.minPower;
             const pvPower = Math.min(surplus, referencePower);
-            const effectivePrice = calculateBlendedPrice(price, surplus, referencePower, settings.pvPrice);
+            const effectivePrice = calculateBlendedPrice(
+                price,
+                surplus,
+                referencePower,
+                settings.pvPrice,
+                storagePrice,
+            );
 
             result.push({
                 timestamp: timestamp,
                 price: price,
                 production: production,
                 surplus: surplus,
+                storageCharge: storageCharge,
                 chargePower: chargePower,
                 pvShare: Math.round((pvPower / referencePower) * 100),
                 effectivePrice: Math.round(effectivePrice * 100) / 100,

@@ -145,7 +145,7 @@
             @if (hasTimeOfUseTariff) {
               <oe-modal-horizontal-line></oe-modal-horizontal-line>
               <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_TITLE' | translate"></oe-modal-info-line>
-              <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower"> </oe-evcs-price-chart>
+              <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower" [storagePrice]="storagePrice"> </oe-evcs-price-chart>
               <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_NOTE' | translate" style="font-size: small"></oe-modal-info-line>
             }
           }

@@ -411,8 +411,6 @@
                         "CHART_TITLE": "Charge forecast: effective charge price and PV production",
                         "CHEAPEST_WINDOW": "Cheapest 3 h",
                         "GRID_PRICE": "Grid price",
-                        "LIMIT_FULL": "Full power below",
-                        "LIMIT_LOCKED": "Charging locked above",
                         "PRODUCTION": "PV production",
                         "PV_SHARE": "PV share",
                         "SURPLUS": "PV surplus",

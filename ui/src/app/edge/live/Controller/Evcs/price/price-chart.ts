@@ -160,37 +160,33 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             data: slots.map((slot) => (slot.zone === zone ? slot.effectivePrice : null)),
             hidden: false,
             order: 1,
-            // All zones share the same position on the x axis
-            grouped: false,
+            // All zones and the grid price share one stack per quarter-hour
+            stack: "price",
             yAxisID: ChartAxis.LEFT,
             backgroundColor: ColorUtils.rgbStringToRgba(color, 0.5),
             borderColor: ColorUtils.rgbStringToRgba(color, 1),
         });
 
-        // Thin dotted reference lines for the two price limits: above the upper
-        // limit charging is locked, below the lower limit the car charges with full
-        // power. They explain the bar colours at a glance.
-        const limitLine = (translationKey: string, value: number | null, color: string): Chart.ChartDataset => ({
-            type: "line",
-            label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST." + translationKey),
-            data: slots.map(() => (value != null && value > 0 ? value : null)),
+        // Grey segment on top of the coloured one: from the blended price up to the
+        // grid price, so that the bar as a whole shows the grid price and the
+        // coloured part the price the car would actually pay
+        const gridPrice: Chart.ChartDataset = {
+            type: "bar",
+            label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.GRID_PRICE"),
+            data: slots.map((slot) => Math.max(slot.price - Math.max(slot.effectivePrice, 0), 0)),
             hidden: false,
-            order: 0,
+            order: 1,
+            stack: "price",
             yAxisID: ChartAxis.LEFT,
-            borderDash: [2, 4],
-            borderWidth: 1,
-            pointRadius: 0,
-            fill: false,
-            backgroundColor: ColorUtils.rgbStringToRgba(color, 0.2),
-            borderColor: ColorUtils.rgbStringToRgba(color, 0.9),
-        });
+            backgroundColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.GREY, 0.35),
+            borderColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.GREY, 0.6),
+        };
 
         return [
             bar(EvcsPriceForecast.Zone.FULL, "ZONE_FULL", ChartConstants.Colors.GREEN),
             bar(EvcsPriceForecast.Zone.REDUCED, "ZONE_REDUCED", ChartConstants.Colors.ORANGE),
             bar(EvcsPriceForecast.Zone.NONE, "ZONE_NONE", ChartConstants.Colors.RED),
-            limitLine("LIMIT_LOCKED", this.priceLimit, ChartConstants.Colors.RED),
-            limitLine("LIMIT_FULL", this.priceLimitFullPower, ChartConstants.Colors.GREEN),
+            gridPrice,
             {
                 type: "line",
                 label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.PRODUCTION"),
@@ -256,8 +252,12 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 if (item.dataset.yAxisID === ChartAxis.RIGHT) {
                     return label + ": " + formatNumber(value, locale, "1.0-1") + " kW";
                 }
-                if (item.dataset.type === "line") {
-                    return label + ": " + formatNumber(value, locale, ChartConstants.NumberFormat.TWO) + " " + currencyLabel;
+                if (item.datasetIndex === 3) {
+                    // grey segment: show the grid price itself, not the difference
+                    const slot = this.slots[item.dataIndex];
+                    return (
+                        label + ": " + formatNumber(slot?.price ?? value, locale, ChartConstants.NumberFormat.TWO) + " " + currencyLabel
+                    );
                 }
                 // Bars: "Blended price: 8.00 ct/kWh (Charging locked)"
                 return (
@@ -279,11 +279,6 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 }
                 const prefix = "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.";
                 return [
-                    this.translate.instant(prefix + "GRID_PRICE") +
-                        ": " +
-                        formatNumber(slot.price, locale, ChartConstants.NumberFormat.TWO) +
-                        " " +
-                        currencyLabel,
                     this.translate.instant(prefix + "PV_SHARE") + ": " + slot.pvShare + " %",
                     this.translate.instant(prefix + "CHARGE_POWER") +
                         ": " +
@@ -336,12 +331,12 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             if (this.slots.every((slot) => slot.effectivePrice >= 0)) {
                 leftAxis.min = 0;
             }
-            const highestBar = Math.max(0, ...this.slots.map((slot) => slot.effectivePrice));
-            const highest = Math.max(highestBar, this.priceLimit ?? 0);
+            const highest = Math.max(0, ...this.slots.map((slot) => Math.max(slot.effectivePrice, slot.price)));
             if (highest > 0) {
-                leftAxis.suggestedMax = Math.ceil(highest * 1.15);
+                leftAxis.suggestedMax = Math.ceil(highest * 1.05);
                 delete leftAxis.max;
             }
+            (leftAxis as { stacked?: boolean }).stacked = true;
         }
 
         options.animation = false;

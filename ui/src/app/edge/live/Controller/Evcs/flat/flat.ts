@@ -52,6 +52,8 @@ export class FlatComponent extends AbstractFlatWidget {
     protected maxHardwarePower: number | null = null;
     /** Replacement cost of storage power in [Cent/kWh], Controller.Evcs.Price only */
     protected storagePrice: number | null = null;
+    /** Total storage capacity in [Wh] */
+    protected storageCapacity: number | null = null;
 
     private chargePoint: EvcsComponent;
 
@@ -95,6 +97,7 @@ export class FlatComponent extends AbstractFlatWidget {
                 result.push(new ChannelAddress(controller.id, "_PropertyEnabledCharging"));
                 if (controller.factoryId === EvcsPriceForecast.FACTORY_ID) {
                     result.push(new ChannelAddress(controller.id, "StoragePrice"));
+                    result.push(new ChannelAddress("_sum", "EssCapacity"));
                 }
             }
         }
@@ -105,6 +108,7 @@ export class FlatComponent extends AbstractFlatWidget {
         if (this.controller != null && this.controller.factoryId === EvcsPriceForecast.FACTORY_ID) {
             const storagePrice = currentData.allComponents[this.controller.id + "/StoragePrice"];
             this.storagePrice = storagePrice == null ? null : storagePrice / 10;
+            this.storageCapacity = currentData.allComponents["_sum/EssCapacity"] ?? null;
         }
         this.evcsComponent = this.config.getComponent(this.component.id);
         this.isConnectionSuccessful = currentData.allComponents[this.component.id + "/State"] != 3 ? true : false;

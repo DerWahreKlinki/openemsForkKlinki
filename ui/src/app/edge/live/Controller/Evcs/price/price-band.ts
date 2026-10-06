@@ -72,10 +72,13 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
     @Input() public maxPower: number | null = null;
     /** Current replacement cost of storage power in [Cent/kWh]; null if unknown */
     @Input() public storagePrice: number | null = null;
+    /** Total storage capacity in [Wh]; null if unknown */
+    @Input() public storageCapacity: number | null = null;
 
     protected readonly COLOR_FULL = ChartConstants.Colors.GREEN;
     protected readonly COLOR_REDUCED = ChartConstants.Colors.ORANGE;
     protected readonly COLOR_NONE = ChartConstants.Colors.RED;
+    protected readonly COLOR_NO_SURPLUS = "rgb(169, 169, 169)";
     protected readonly COLOR_SURPLUS = ChartConstants.Colors.BLUE;
 
     protected segments: Segment[] = [];
@@ -110,7 +113,14 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
             return;
         }
         try {
-            const settings = EvcsPriceForecast.getSettings(controller, this.minPower, this.maxPower, this.storagePrice);
+            const settings = EvcsPriceForecast.getSettings(
+                controller,
+                this.minPower,
+                this.maxPower,
+                this.storagePrice,
+                this.storageCapacity,
+                config,
+            );
             const slots = await EvcsPriceForecast.load(this.edge, this.websocket, config, settings);
             this.update(slots, settings);
         } catch (error) {
@@ -130,7 +140,9 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
                     ? this.COLOR_FULL
                     : slot.zone === EvcsPriceForecast.Zone.REDUCED
                       ? this.COLOR_REDUCED
-                      : this.COLOR_NONE,
+                      : slot.zone === EvcsPriceForecast.Zone.NONE
+                        ? this.COLOR_NONE
+                        : this.COLOR_NO_SURPLUS,
             hasSurplus: settings != null && slot.surplus >= settings.minPower,
             title: time(slot.timestamp) + ": " + formatNumber(slot.effectivePrice, locale, "1.0-1") + " ct/kWh",
         }));

@@ -38,6 +38,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     @Input() public storagePrice: number | null = null;
     /** Priority as currently selected in the form; falls back to the configuration */
     @Input() public priority: "CAR" | "STORAGE" | null = null;
+    /** Total storage capacity in [Wh] (channel _sum/EssCapacity); null if unknown */
+    @Input() public storageCapacity: number | null = null;
 
     private currencyLabel: Currency.Label | undefined = undefined;
     private currencyUnit: Currency.Unit | undefined = undefined;
@@ -113,7 +115,14 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
 
             this.chartObject = this.getChartData();
 
-            const base = EvcsPriceForecast.getSettings(this.component, this.minPower, this.maxPower, this.storagePrice);
+            const base = EvcsPriceForecast.getSettings(
+                this.component,
+                this.minPower,
+                this.maxPower,
+                this.storagePrice,
+                this.storageCapacity,
+                this.config,
+            );
             this.slots = await EvcsPriceForecast.load(this.edge, this.websocket, this.config, {
                 ...base,
                 priority: this.priority ?? base.priority,
@@ -186,6 +195,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             bar(EvcsPriceForecast.Zone.FULL, "ZONE_FULL", ChartConstants.Colors.GREEN),
             bar(EvcsPriceForecast.Zone.REDUCED, "ZONE_REDUCED", ChartConstants.Colors.ORANGE),
             bar(EvcsPriceForecast.Zone.NONE, "ZONE_NONE", ChartConstants.Colors.RED),
+            bar(EvcsPriceForecast.Zone.NO_SURPLUS, "ZONE_NO_SURPLUS", ChartConstants.Colors.DARK_GREY),
             gridPrice,
             {
                 type: "line",
@@ -252,7 +262,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 if (item.dataset.yAxisID === ChartAxis.RIGHT) {
                     return label + ": " + formatNumber(value, locale, "1.0-1") + " kW";
                 }
-                if (item.datasetIndex === 3) {
+                if (item.datasetIndex === 4) {
                     // grey segment: show the grid price itself, not the difference
                     const slot = this.slots[item.dataIndex];
                     return (

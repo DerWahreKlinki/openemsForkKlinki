@@ -36,7 +36,7 @@
           <!-- Show price forecast of Controller.Evcs.Price -->
           @if (isPriceController && isReadWrite) {
             <oe-evcs-price-band [edge]="edge" [controllerId]="controller.id" [minPower]="minHardwarePower"
-              [maxPower]="maxHardwarePower" [storagePrice]="storagePrice">
+              [maxPower]="maxHardwarePower" [storagePrice]="storagePrice" [storageCapacity]="storageCapacity">
             </oe-evcs-price-band>
           }
         }

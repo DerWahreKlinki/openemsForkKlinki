@@ -407,7 +407,7 @@
                     "PRICE_FORECAST": {
                         "BLENDED_PRICE": "Blended price",
                         "CHARGE_POWER": "Charge power",
-                        "CHART_NOTE": "Bar height: effective charge price from PV share, storage power (at the current storage price) and grid price, taking the planned storage charging of the schedule and the configured priority into account. For 'Charging locked' it applies to the minimum charge power.",
+                        "CHART_NOTE": "Bar height: grid price (grey) with the blended price as coloured base. The blended price applies to the minimum power from PV surplus (after the planned storage charging), storage and grid; storage power counts like PV as long as the storage reaches its evening target according to the schedule, otherwise like grid. Red: too expensive. Grey: no surplus and storage not above its evening target.",
                         "CHART_TITLE": "Charge forecast: effective charge price and PV production",
                         "CHEAPEST_WINDOW": "Cheapest 3 h",
                         "GRID_PRICE": "Grid price",
@@ -415,7 +415,8 @@
                         "PV_SHARE": "PV share",
                         "SURPLUS": "PV surplus",
                         "ZONE_FULL": "Full charge power",
-                        "ZONE_NONE": "Charging locked",
+                        "ZONE_NONE": "Too expensive",
+                        "ZONE_NO_SURPLUS": "Nothing available",
                         "ZONE_REDUCED": "Reduced charge power"
                     },
                     "PRIORITIZATION": "Prioritization",

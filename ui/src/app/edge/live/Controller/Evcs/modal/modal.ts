@@ -51,6 +51,8 @@ export class ModalComponent extends AbstractModal {
     protected blendedPrice: number | null = null;
     /** Replacement cost of storage power in [Cent/kWh] */
     protected storagePrice: number | null = null;
+    /** Total storage capacity in [Wh] */
+    protected storageCapacity: number | null = null;
     protected storageTargetReachable: boolean | null = null;
     protected storageNetSoc: number | null = null;
     // Controller.Evcs.Price: configuration values used by the forecast chart
@@ -193,6 +195,7 @@ export class ModalComponent extends AbstractModal {
             channels.push(
                 new ChannelAddress(this.controller.id, "BlendedPrice"),
                 new ChannelAddress(this.controller.id, "StoragePrice"),
+                new ChannelAddress("_sum", "EssCapacity"),
                 new ChannelAddress(this.controller.id, "StorageTargetReachable"),
                 new ChannelAddress(this.controller.id, "StorageNetSoc"),
             );
@@ -250,6 +253,7 @@ export class ModalComponent extends AbstractModal {
         this.blendedPrice = currentData.allComponents[this.controller?.id + "/BlendedPrice"] ?? null;
         const storagePrice = currentData.allComponents[this.controller?.id + "/StoragePrice"];
         this.storagePrice = storagePrice == null ? null : storagePrice / 10; // [Currency/MWh] to [Cent/kWh]
+        this.storageCapacity = currentData.allComponents["_sum/EssCapacity"] ?? null;
         const reachable = currentData.allComponents[this.controller?.id + "/StorageTargetReachable"];
         this.storageTargetReachable = reachable == null ? null : reachable === 1 || reachable === true;
         this.storageNetSoc = currentData.allComponents[this.controller?.id + "/StorageNetSoc"] ?? null;

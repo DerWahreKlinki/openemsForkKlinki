@@ -18,8 +18,10 @@ export namespace EvcsPriceForecast {
         FULL = "FULL",
         /** Charges with reduced power. */
         REDUCED = "REDUCED",
-        /** Does not charge. */
+        /** Does not charge: too expensive (blended price above the limit). */
         NONE = "NONE",
+        /** Does not charge: nothing available (no PV surplus, storage not above its evening target). */
+        NO_SURPLUS = "NO_SURPLUS",
     }
 
     export type Settings = {
@@ -28,10 +30,20 @@ export namespace EvcsPriceForecast {
         /** Price storage power for the blended price (useStorageSurplus of the controller) */
         useStorageSurplus: boolean;
         /**
-         * Current replacement cost of storage power in [Cent/kWh] (channel StoragePrice of the controller); null
-         * prices storage power like grid power
+         * Current replacement cost of storage power in [Cent/kWh] (channel StoragePrice of the controller); used
+         * when the storage price cannot be calculated per quarter-hour; null prices storage power like grid power
          */
         storagePrice: number | null;
+        /** Evening target of the storage in [%] of the usable capacity */
+        storageTargetSocNet: number;
+        /** Loss surcharge on the PV price for storage power in [Cent/kWh] */
+        storageLossSurcharge: number;
+        /** Total storage capacity in [Wh]; null if unknown */
+        storageCapacity: number | null;
+        /** Lower border of the usable SoC window in [%] (ChargeDischargeLimiter) */
+        storageMinSoc: number;
+        /** Upper border of the usable SoC window in [%] (ChargeDischargeLimiter) */
+        storageMaxSoc: number;
         /** Upper price limit in [Cent/kWh]; 0 deactivates charging by price */
         priceLimit: number;
         /** Lower price limit in [Cent/kWh] */
@@ -56,6 +68,8 @@ export namespace EvcsPriceForecast {
         consumption: number | null;
         /** Planned storage power in [W]; positive discharge, negative charge; null if unknown */
         ess?: number | null;
+        /** Planned state of charge of the storage in [%]; null if unknown */
+        soc?: number | null;
     };
 
     export type Slot = {
@@ -74,6 +88,10 @@ export namespace EvcsPriceForecast {
         pvShare: number;
         /** Effective price of a kWh in the car in [Cent/kWh] */
         effectivePrice: number;
+        /** Replacement cost of storage power in this quarter-hour in [Cent/kWh]; null = like grid */
+        storagePrice: number | null;
+        /** Storage is (planned to be) above its evening target in this quarter-hour */
+        storageAboveTarget: boolean;
         zone: Zone;
     };
 
@@ -98,12 +116,20 @@ export namespace EvcsPriceForecast {
         minPower: number | null,
         maxPower: number | null,
         storagePrice: number | null = null,
+        storageCapacity: number | null = null,
+        config: EdgeConfig | null = null,
     ): Settings {
         const properties = controller.properties;
+        const window = getStorageWindow(config);
         return {
             priority: properties["priority"] === "STORAGE" ? "STORAGE" : "CAR",
             useStorageSurplus: properties["useStorageSurplus"] === true || properties["useStorageSurplus"] === "true",
             storagePrice: storagePrice,
+            storageTargetSocNet: toNumber(properties["storageTargetSocNet"], 80),
+            storageLossSurcharge: toNumber(properties["storageLossSurcharge"], 1),
+            storageCapacity: storageCapacity,
+            storageMinSoc: window.min,
+            storageMaxSoc: window.max,
             priceLimit: toNumber(properties["priceLimit"], 0),
             priceLimitFullPower: toNumber(properties["priceLimitFullPower"], 0),
             priceChargePower: toNumber(properties["priceChargePower"], 0),
@@ -111,6 +137,38 @@ export namespace EvcsPriceForecast {
             minPower: minPower != null && minPower > 0 ? minPower : DEFAULT_MIN_POWER,
             maxPower: maxPower != null && maxPower > 0 ? maxPower : null,
         };
+    }
+
+    /**
+     * Reads the usable SoC window from the enabled ChargeDischargeLimiter controllers (the widest common window);
+     * 0..100 % without limiter.
+     *
+     * @param config The EdgeConfig
+     * @returns The window in [%]
+     */
+    export function getStorageWindow(config: EdgeConfig | null): { min: number; max: number } {
+        const limiters = config?.getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter")?.filter((c) => c.isEnabled) ?? [];
+        if (limiters.length === 0) {
+            return { min: 0, max: 100 };
+        }
+        const mins = limiters.map((c) => toNumber(c.properties["minSoc"], 0));
+        const maxs = limiters.map((c) => toNumber(c.properties["maxSoc"], 100));
+        return { min: Math.min(...mins), max: Math.max(...maxs) };
+    }
+
+    /**
+     * Net state of charge within the usable window.
+     *
+     * @param soc The state of charge in [%]
+     * @param minSoc The lower border in [%]
+     * @param maxSoc The upper border in [%]
+     * @returns the net SoC in [%]
+     */
+    export function toNetSoc(soc: number, minSoc: number, maxSoc: number): number {
+        if (maxSoc <= minSoc) {
+            return soc;
+        }
+        return Math.min(Math.max(((soc - minSoc) / (maxSoc - minSoc)) * 100, 0), 100);
     }
 
     /**
@@ -207,20 +265,53 @@ export namespace EvcsPriceForecast {
     export function calculate(schedule: ScheduleEntry[], settings: Settings, now: Date): Slot[] {
         const quarter = 15 * 60 * 1000;
         const result: Slot[] = [];
-        for (const entry of schedule) {
-            const timestamp = new Date(entry.timestamp);
-            if (
-                entry.price == null ||
-                Number.isNaN(timestamp.getTime()) ||
-                timestamp.getTime() + quarter <= now.getTime()
-            ) {
-                continue;
-            }
-            const price = entry.price / 10; // [Currency/MWh] to [Cent/kWh]
+        const entries = schedule
+            .map((entry) => ({ entry, timestamp: new Date(entry.timestamp) }))
+            .filter(
+                ({ entry, timestamp }) =>
+                    entry.price != null &&
+                    !Number.isNaN(timestamp.getTime()) &&
+                    timestamp.getTime() + quarter > now.getTime(),
+            )
+            .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        const usable =
+            settings.storageCapacity != null
+                ? (settings.storageCapacity * (settings.storageMaxSoc - settings.storageMinSoc)) / 100
+                : null;
+
+        for (let i = 0; i < entries.length; i++) {
+            const { entry, timestamp } = entries[i];
+            const price = entry.price! / 10; // [Currency/MWh] to [Cent/kWh]
             const production = Math.max(entry.production ?? 0, 0);
             const storageCharge = Math.max(-(entry.ess ?? 0), 0);
             const surplus = calculateSurplus(production, entry.consumption ?? 0, storageCharge, settings.priority);
-            const storagePrice = settings.useStorageSurplus ? settings.storagePrice : null;
+
+            // Storage price of this quarter-hour, mirroring the controller: PV price plus
+            // loss surcharge if the storage is above its evening target or the remaining
+            // PV surplus of the day (after the car) still reaches it; otherwise grid price
+            let storageAboveTarget = false;
+            let storagePrice: number | null = settings.useStorageSurplus ? settings.storagePrice : null;
+            if (settings.useStorageSurplus && entry.soc != null && usable != null) {
+                const netSoc = toNetSoc(entry.soc, settings.storageMinSoc, settings.storageMaxSoc);
+                const energyToTarget = Math.max(((settings.storageTargetSocNet - netSoc) / 100) * usable, 0);
+                storageAboveTarget = energyToTarget <= 0;
+                let surplusToEndOfDay = 0;
+                for (let k = i; k < entries.length; k++) {
+                    const e = entries[k];
+                    if (e.timestamp.toDateString() !== timestamp.toDateString()) {
+                        break;
+                    }
+                    const prod = Math.max(e.entry.production ?? 0, 0);
+                    if (prod <= 0) {
+                        continue;
+                    }
+                    surplusToEndOfDay += Math.max(prod - Math.max(e.entry.consumption ?? 0, 0) - settings.minPower, 0) / 4;
+                }
+                storagePrice =
+                    surplusToEndOfDay >= energyToTarget ? settings.pvPrice + settings.storageLossSurcharge : price;
+            }
+            // While the storage is above its target the car may charge from it without PV
+            const available = surplus > 0 || (settings.useStorageSurplus && storageAboveTarget);
 
             // Charging below the minimum hardware power is not possible
             let surplusPower = surplus >= settings.minPower ? surplus : 0;
@@ -234,7 +325,7 @@ export namespace EvcsPriceForecast {
             // blended price is below the limit
             if (
                 chargePower <= 0 &&
-                surplus > 0 &&
+                available &&
                 settings.priceLimit > 0 &&
                 calculateBlendedPrice(price, surplus, settings.minPower, settings.pvPrice, storagePrice) <
                     settings.priceLimit
@@ -244,7 +335,7 @@ export namespace EvcsPriceForecast {
 
             let zone: Zone;
             if (chargePower <= 0) {
-                zone = Zone.NONE;
+                zone = available ? Zone.NONE : Zone.NO_SURPLUS;
             } else if (chargePower >= getFullPower(settings)) {
                 zone = Zone.FULL;
             } else {
@@ -271,6 +362,8 @@ export namespace EvcsPriceForecast {
                 chargePower: chargePower,
                 pvShare: Math.round((pvPower / referencePower) * 100),
                 effectivePrice: Math.round(effectivePrice * 100) / 100,
+                storagePrice: storagePrice,
+                storageAboveTarget: storageAboveTarget,
                 zone: zone,
             });
         }

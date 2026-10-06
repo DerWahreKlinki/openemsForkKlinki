@@ -407,7 +407,7 @@
                     "PRICE_FORECAST": {
                         "BLENDED_PRICE": "Mischpreis",
                         "CHARGE_POWER": "Ladeleistung",
-                        "CHART_NOTE": "Balkenhöhe: effektiver Ladepreis aus PV-Anteil, Speicherstrom (zum aktuellen Speicherpreis) und Strompreis, mit der geplanten Speicherladung aus dem Fahrplan und der eingestellten Priorität. Bei 'Laden gesperrt' gilt er für die minimale Ladeleistung.",
+                        "CHART_NOTE": "Balkenhöhe: Strompreis (grau) mit dem Mischpreis als farbigem Sockel. Der Mischpreis gilt für die Mindestleistung aus PV-Überschuss (nach geplanter Speicherladung), Speicherstrom und Netz; Speicherstrom zählt wie PV, solange der Speicher sein Abendziel laut Fahrplan erreicht, sonst wie Netz. Rot: zu teuer. Grau: kein Überschuss und Speicher nicht über dem Abendziel.",
                         "CHART_TITLE": "Ladeprognose: effektiver Ladepreis und PV-Erzeugung",
                         "CHEAPEST_WINDOW": "Günstigste 3 h",
                         "GRID_PRICE": "Strompreis",
@@ -415,7 +415,8 @@
                         "PV_SHARE": "PV-Anteil",
                         "SURPLUS": "PV-Überschuss",
                         "ZONE_FULL": "Volle Ladeleistung",
-                        "ZONE_NONE": "Laden gesperrt",
+                        "ZONE_NONE": "Zu teuer",
+                        "ZONE_NO_SURPLUS": "Nichts verfügbar",
                         "ZONE_REDUCED": "Ladeleistung vermindert"
                     },
                     "PRIORITIZATION": "Priorisierung",

@@ -5,6 +5,11 @@ describe("EvcsPriceForecast", () => {
         priority: "CAR",
         useStorageSurplus: false,
         storagePrice: null,
+        storageTargetSocNet: 80,
+        storageLossSurcharge: 1,
+        storageCapacity: null,
+        storageMinSoc: 20,
+        storageMaxSoc: 90,
         priceLimit: 30,
         priceLimitFullPower: 20,
         priceChargePower: 11040,
@@ -143,7 +148,7 @@ describe("EvcsPriceForecast", () => {
         const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -4000)], settings, NOW)[0];
         expect(slot.surplus).toBe(0);
         expect(slot.storageCharge).toBe(4000);
-        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
         expect(slot.chargePower).toBe(0);
     });
 
@@ -163,5 +168,39 @@ describe("EvcsPriceForecast", () => {
         const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -3000)], settings, NOW)[0];
         expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
         expect(slot.effectivePrice).toBe(33.55);
+    });
+    it("#calculate per quarter-hour: storage price from the planned SoC and the remaining PV surplus", () => {
+        // 20 kWh storage, window 20-90 % -> usable 14 kWh, target 80 % = 11.2 kWh net
+        const settings: EvcsPriceForecast.Settings = {
+            ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8, storageCapacity: 20000,
+        };
+        const e = (time: string, price: number, prod: number, cons: number, ess: number, soc: number) =>
+            ({ ...entry(time, price, prod, cons, ess), soc: soc });
+        const slots = EvcsPriceForecast.calculate([
+            // 10:00: PV 6 kW, house 1 kW, storage charges 3 kW, SoC 50 % (net 43 %): 5.2 kWh missing;
+            // remaining surplus after car (4140): (6000-1000-4140)/4 + (8000-1000-4140)/4 = 215 + 715 -> not enough
+            e("10:00", 420, 6000, 1000, -3000, 50),
+            // 10:15: PV 8 kW, storage charges 3 kW, SoC 88 % (net 97 %) -> above target: storage 8 ct
+            e("10:15", 420, 8000, 1000, -3000, 88),
+            // 20:00: no PV, SoC 85 % (net 93 %) -> above target: car may charge from storage, 8 ct, reduced
+            e("20:00", 500, 0, 1500, 1500, 85),
+            // 21:00: no PV, SoC 70 % (net 71 %) -> below target: storage like grid, no surplus -> too expensive? no:
+            // nothing available (no PV, storage below target) -> NO_SURPLUS
+            e("21:00", 500, 0, 1500, 1500, 70),
+        ], settings, NOW);
+        expect(slots[0].storagePrice).toBe(42);
+        expect(slots[0].storageAboveTarget).toBe(false);
+        // 2000 W PV at 7 ct + 2140 W storage at 42 ct = 25.09 ct -> still below the 30 ct limit
+        expect(slots[0].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(slots[0].effectivePrice).toBe(25.09);
+        expect(slots[1].storagePrice).toBe(8);
+        expect(slots[1].storageAboveTarget).toBe(true);
+        expect(slots[1].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(slots[2].storageAboveTarget).toBe(true);
+        expect(slots[2].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(slots[2].effectivePrice).toBe(8);
+        expect(slots[3].storageAboveTarget).toBe(false);
+        expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        expect(slots[3].storagePrice).toBe(50);
     });
 });

@@ -148,11 +148,13 @@
 	bnd.identity;id='io.openems.edge.evcs.webasto.unite',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.alfen',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.alpitronic',\
+	bnd.identity;id='io.openems.edge.evse.chargepoint.ambibox',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.bender',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.hardybarth',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.heidelberg',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.keba',\
 	bnd.identity;id='io.openems.edge.evse.chargepoint.mennekes',\
+	bnd.identity;id='io.openems.edge.evse.chargepoint.voltie',\
 	bnd.identity;id='io.openems.edge.evse.electricvehicle.generic',\
 	bnd.identity;id='io.openems.edge.fenecon.dess',\
 	bnd.identity;id='io.openems.edge.fenecon.mini',\
@@ -377,11 +379,13 @@
 	io.openems.edge.evse.api;version=snapshot,\
 	io.openems.edge.evse.chargepoint.alfen;version=snapshot,\
 	io.openems.edge.evse.chargepoint.alpitronic;version=snapshot,\
+	io.openems.edge.evse.chargepoint.ambibox;version=snapshot,\
 	io.openems.edge.evse.chargepoint.bender;version=snapshot,\
 	io.openems.edge.evse.chargepoint.hardybarth;version=snapshot,\
 	io.openems.edge.evse.chargepoint.heidelberg;version=snapshot,\
 	io.openems.edge.evse.chargepoint.keba;version=snapshot,\
 	io.openems.edge.evse.chargepoint.mennekes;version=snapshot,\
+	io.openems.edge.evse.chargepoint.voltie;version=snapshot,\
 	io.openems.edge.evse.electricvehicle.generic;version=snapshot,\
 	io.openems.edge.fenecon.dess;version=snapshot,\
 	io.openems.edge.fenecon.mini;version=snapshot,\
@@ -515,7 +519,7 @@
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)';startlevel=11,\
 	org.apache.felix.eventadmin;version='[1.6.4,1.6.5)';startlevel=12,\
 	org.apache.felix.fileinstall;version='[3.7.4,3.7.5)';startlevel=13,\
-	org.apache.felix.http.jetty12;version='[2.0.6,2.0.7)',\
+	org.apache.felix.http.jetty12;version='[2.0.8,2.0.9)',\
 	org.apache.felix.http.servlet-api;version='[6.1.0,6.1.1)',\
 	org.apache.felix.inventory;version='[2.0.0,2.0.1)',\
 	org.apache.felix.metatype;version='[1.2.4,1.2.5)';startlevel=14,\

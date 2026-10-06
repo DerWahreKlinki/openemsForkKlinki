@@ -167,10 +167,30 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             borderColor: ColorUtils.rgbStringToRgba(color, 1),
         });
 
+        // Thin dotted reference lines for the two price limits: above the upper
+        // limit charging is locked, below the lower limit the car charges with full
+        // power. They explain the bar colours at a glance.
+        const limitLine = (translationKey: string, value: number | null, color: string): Chart.ChartDataset => ({
+            type: "line",
+            label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST." + translationKey),
+            data: slots.map(() => (value != null && value > 0 ? value : null)),
+            hidden: false,
+            order: 0,
+            yAxisID: ChartAxis.LEFT,
+            borderDash: [2, 4],
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            backgroundColor: ColorUtils.rgbStringToRgba(color, 0.2),
+            borderColor: ColorUtils.rgbStringToRgba(color, 0.9),
+        });
+
         return [
             bar(EvcsPriceForecast.Zone.FULL, "ZONE_FULL", ChartConstants.Colors.GREEN),
             bar(EvcsPriceForecast.Zone.REDUCED, "ZONE_REDUCED", ChartConstants.Colors.ORANGE),
             bar(EvcsPriceForecast.Zone.NONE, "ZONE_NONE", ChartConstants.Colors.RED),
+            limitLine("LIMIT_LOCKED", this.priceLimit, ChartConstants.Colors.RED),
+            limitLine("LIMIT_FULL", this.priceLimitFullPower, ChartConstants.Colors.GREEN),
             {
                 type: "line",
                 label: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.PRODUCTION"),
@@ -235,6 +255,9 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 const label = item.dataset.label ?? "";
                 if (item.dataset.yAxisID === ChartAxis.RIGHT) {
                     return label + ": " + formatNumber(value, locale, "1.0-1") + " kW";
+                }
+                if (item.dataset.type === "line") {
+                    return label + ": " + formatNumber(value, locale, ChartConstants.NumberFormat.TWO) + " " + currencyLabel;
                 }
                 // Bars: "Blended price: 8.00 ct/kWh (Charging locked)"
                 return (
@@ -313,9 +336,10 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             if (this.slots.every((slot) => slot.effectivePrice >= 0)) {
                 leftAxis.min = 0;
             }
-            const highest = Math.max(0, ...this.slots.map((slot) => Math.max(slot.effectivePrice, slot.price)));
+            const highestBar = Math.max(0, ...this.slots.map((slot) => slot.effectivePrice));
+            const highest = Math.max(highestBar, this.priceLimit ?? 0);
             if (highest > 0) {
-                leftAxis.suggestedMax = Math.ceil(highest * 1.1);
+                leftAxis.suggestedMax = Math.ceil(highest * 1.15);
                 delete leftAxis.max;
             }
         }

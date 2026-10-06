@@ -411,6 +411,8 @@
                         "CHART_TITLE": "Ladeprognose: effektiver Ladepreis und PV-Erzeugung",
                         "CHEAPEST_WINDOW": "Günstigste 3 h",
                         "GRID_PRICE": "Strompreis",
+                        "LIMIT_FULL": "Volle Leistung bis",
+                        "LIMIT_LOCKED": "Netzladen gesperrt ab",
                         "PRODUCTION": "PV-Erzeugung",
                         "PV_SHARE": "PV-Anteil",
                         "SURPLUS": "PV-Überschuss",

@@ -236,8 +236,16 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 if (item.dataset.yAxisID === ChartAxis.RIGHT) {
                     return label + ": " + formatNumber(value, locale, "1.0-1") + " kW";
                 }
+                // Bars: "Blended price: 8.00 ct/kWh (Charging locked)"
                 return (
-                    label + ": " + formatNumber(value, locale, ChartConstants.NumberFormat.TWO) + " " + currencyLabel
+                    this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.BLENDED_PRICE") +
+                    ": " +
+                    formatNumber(value, locale, ChartConstants.NumberFormat.TWO) +
+                    " " +
+                    currencyLabel +
+                    " (" +
+                    label +
+                    ")"
                 );
             };
 
@@ -298,10 +306,18 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             };
         }
 
-        // Bars start at zero, as long as there are no negative prices
+        // Bars start at zero, as long as there are no negative prices; the highest
+        // price (bars or grid price) sets the top of the axis, with a little head room
         const leftAxis = options.scales?.[ChartAxis.LEFT];
-        if (leftAxis != null && this.slots.every((slot) => slot.effectivePrice >= 0)) {
-            leftAxis.min = 0;
+        if (leftAxis != null) {
+            if (this.slots.every((slot) => slot.effectivePrice >= 0)) {
+                leftAxis.min = 0;
+            }
+            const highest = Math.max(0, ...this.slots.map((slot) => Math.max(slot.effectivePrice, slot.price)));
+            if (highest > 0) {
+                leftAxis.suggestedMax = Math.ceil(highest * 1.1);
+                delete leftAxis.max;
+            }
         }
 
         options.animation = false;

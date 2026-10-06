@@ -405,6 +405,7 @@
                     "PHASE_SWITCHING": "Phasenumschaltung",
                     "PHASE_SWITCHING_INFO": "Mit wie vielen Phasen soll das Fahrzeug beladen werden?",
                     "PRICE_FORECAST": {
+                        "BLENDED_PRICE": "Mischpreis",
                         "CHARGE_POWER": "Ladeleistung",
                         "CHART_NOTE": "Balkenhöhe: effektiver Ladepreis aus PV-Anteil, Speicherstrom (zum aktuellen Speicherpreis) und Strompreis, mit der geplanten Speicherladung aus dem Fahrplan und der eingestellten Priorität. Bei 'Laden gesperrt' gilt er für die minimale Ladeleistung.",
                         "CHART_TITLE": "Ladeprognose: effektiver Ladepreis und PV-Erzeugung",

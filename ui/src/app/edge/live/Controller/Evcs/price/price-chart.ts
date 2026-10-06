@@ -36,6 +36,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     @Input() public maxPower: number | null = null;
     /** Current replacement cost of storage power in [Cent/kWh]; null if unknown */
     @Input() public storagePrice: number | null = null;
+    /** Priority as currently selected in the form; falls back to the configuration */
+    @Input() public priority: "CAR" | "STORAGE" | null = null;
 
     private currencyLabel: Currency.Label | undefined = undefined;
     private currencyUnit: Currency.Unit | undefined = undefined;
@@ -114,6 +116,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             const base = EvcsPriceForecast.getSettings(this.component, this.minPower, this.maxPower, this.storagePrice);
             this.slots = await EvcsPriceForecast.load(this.edge, this.websocket, this.config, {
                 ...base,
+                priority: this.priority ?? base.priority,
                 priceLimit: this.priceLimit ?? 0,
                 priceLimitFullPower: this.priceLimitFullPower ?? 0,
                 priceChargePower: this.priceChargePower ?? 0,

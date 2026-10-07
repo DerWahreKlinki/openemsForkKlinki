@@ -177,8 +177,16 @@ public class VictronEssImplTest {
 
 	@Test
 	public void testCalculateAcInSetpoint_dischargeWithinLimits() {
-		// Discharge request of 2kW, maxDischarge 3kW
+		// Discharge request of 2kW with 1kW AC-out load, maxDischarge 3kW: the
+		// battery supplies the AC-out load anyway, so AC-in gets 1kW and
+		// ActivePower (AC-in + AC-out) equals the 2kW target
 		var result = VictronEssImpl.calculateAcInSetpoint(2000, 1000, 3000, 3000);
+		assertEquals(1000, result);
+	}
+
+	@Test
+	public void testCalculateAcInSetpoint_dischargeNoAcOut() {
+		var result = VictronEssImpl.calculateAcInSetpoint(2000, 0, 3000, 3000);
 		assertEquals(2000, result);
 	}
 

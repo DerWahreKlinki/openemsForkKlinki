@@ -587,8 +587,13 @@ public class VictronEssImpl extends AbstractOpenemsModbusComponent
 			activePowerTarget = maxDischargePower;
 		}
 
-		// CHARGE: AC-Out draws power from battery, subtract from target
-		if (activePowerTarget < 0) {
+		// The AC-Out loads are always supplied by the battery in addition to the
+		// AC-In set-point, and ActivePower reports AC-In + AC-Out. To make the ESS
+		// deliver exactly the target, the AC-Out power has to be subtracted in both
+		// directions: charging (more from grid) and discharging (less to grid).
+		// Discharging used to ignore it, which made the ESS deliver target + AC-Out
+		// and left the AC-Out load as permanent grid feed-in while discharging.
+		if (activePowerTarget != 0) {
 			activePowerTarget -= acOutputActivePowerSum;
 		}
 

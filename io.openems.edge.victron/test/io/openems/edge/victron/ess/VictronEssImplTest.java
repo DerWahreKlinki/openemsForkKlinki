@@ -149,7 +149,7 @@ public class VictronEssImplTest {
 	@Test
 	public void testGetPowerPrecision() {
 		var victronEss = new VictronEssImpl();
-		assertEquals(100, victronEss.getPowerPrecision());
+		assertEquals(1, victronEss.getPowerPrecision());
 	}
 
 	@Test

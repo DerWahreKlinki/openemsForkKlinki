@@ -240,7 +240,11 @@ public class VictronEssImpl extends AbstractOpenemsModbusComponent
 
 	@Override
 	public int getPowerPrecision() {
-		return 100;
+		// Register 37/40/41 (ESS power setpoint per phase) is int16 in Watt with
+		// scale factor 1 (CCGX Modbus-TCP register list 2.80), so the inverter
+		// accepts the set-point in 1 W steps. 100 W used to leave up to +-100 W at
+		// the grid while this ESS carries the load.
+		return 1;
 	}
 
 	/**

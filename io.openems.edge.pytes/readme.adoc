@@ -93,11 +93,18 @@ Effects::
   chew through 150-400 W for minutes. The regression gives `battery = -78 W + 1.09 *
   command`; below ~500 W of command the inverter follows with a gain of only about 0.4,
   which a single line cannot capture - the remainder is left to the trim.
-* Below 100 W of PV a battery target under 50 W is not chased at all (dead band, set-point
-  0): at night the house load is a few tens of watts, and commanding that drives the
-  inverter against its bias until the battery cycles around zero - measured over one night
-  at 22 W of house load: 519 Wh out, 484 Wh in, 15 % of SoC gone. The house takes those
-  watts from the grid instead.
+* Below 100 W of PV a battery target under 50 W is not chased (dead band): at night the
+  house load is a few tens of watts, and chasing it was measured over one night at 22 W of
+  house load as 519 Wh out, 484 Wh in, 15 % of SoC gone.
+* Reg 44106 is never written with a value near zero. Below about 25 W the inverter ignores
+  the remote set-point and falls back to its own regulation, pushing the PV surplus into
+  the battery: measured 2026-10-03, 11 of 11 excursions began with the register between -2
+  and +2, the battery then swung by 700-1000 W and the AC output collapsed from 700 W to
+  below zero for 3-6 s, repeating every 22-27 s. Commands inside that band are moved to
+  50 W in the direction the controller wants, as far as the battery limits allow. The dead
+  band therefore writes the smallest effective value rather than 0. This trades a known
+  50 W deviation for an unknown one of up to 1000 W; outside the band the inverter follows
+  closely (limit -446 W, battery -496 W).
 
 Use it when the intent is battery-related: self-consumption with a limiter, "do not charge
 above x %", PV pass-through, robust operation on days with broken clouds. This is the

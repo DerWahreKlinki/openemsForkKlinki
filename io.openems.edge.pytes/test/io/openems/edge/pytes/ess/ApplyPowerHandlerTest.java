@@ -179,21 +179,69 @@ public class ApplyPowerHandlerTest {
 		// losses 30 + 3 % of 520) = 46 W on top -> 66 W -> register -7
 		this.charger.withActualPower(500);
 		assertEquals(-7, this.applyBatteryControl(520));
-		// at a battery target of 0 nothing is added: there the inverter has no bias
-		assertEquals(0, this.applyBatteryControl(500));
+		// At a battery target of 0 the feed-forward adds nothing - the inverter has
+		// no bias there - but 0 is the one value the inverter ignores, so the band
+		// guard writes the smallest effective discharge instead (see
+		// smallCommandsNeverLandInTheIneffectiveBandOfReg44106).
+		assertEquals(-5, this.applyBatteryControl(500));
 		// above MIN_TARGET_W the full feed-forward applies again: 100 + correction
 		// 63 + losses (30 + 3 % of 600) = 211 W -> register -21
 		assertEquals(-21, this.applyBatteryControl(600));
 	}
 
 	@Test
-	public void deadBandKeepsTheInverterStillAtNight() throws Exception {
-		// No PV and a battery target of a few tens of watts: commanding it would
-		// drive the inverter against its bias and the battery would cycle around
-		// zero all night (measured 29./30.09.2026: 519 Wh out, 484 Wh in at 22 W
-		// of house load). The set-point is 0 instead.
-		assertEquals(0, this.applyBatteryControl(22));
-		assertEquals(0, this.applyBatteryControl(-30));
+	public void smallCommandsNeverLandInTheIneffectiveBandOfReg44106() throws Exception {
+		// A register value near zero is ignored by the inverter, which then falls
+		// back to its own regulation: measured 2026-10-03, 11 of 11 excursions
+		// began with reg 44106 between -2 and +2, the battery swung by 700-1000 W
+		// and the AC output collapsed below zero for 3-6 s every 22-27 s. With PV
+		// the dead band is off, so a target that lands in the band has to be
+		// pushed out of it - keeping its direction.
+		this.charger.withActualPower(500);
+		// A 510 W AC target against 500 W PV wants 10 W of discharge; feed-forward
+		// and trim stay below 50 W at that fade, so the raw command is inside the
+		// band and comes out at the minimum discharge.
+		int discharge = this.applyBatteryControl(510);
+		assertTrue("discharge must leave the band, was " + discharge, discharge <= -5);
+		// the other direction likewise
+		int charge = this.applyBatteryControl(490);
+		assertTrue("charge must leave the band, was " + charge, charge >= 5 || charge <= -5);
+		// A command well outside the band is untouched. 600 W AC against 500 W PV
+		// is a battery target of 100 W, above MIN_TARGET_W, so the full
+		// feed-forward applies - the same cycle as in feedForwardFadesOutTowardsZero.
+		assertEquals(-21, this.applyBatteryControl(600));
+	}
+
+	@Test
+	public void theIneffectiveBandIsLeftOnlyWhereTheBatteryLimitsAllowIt() throws Exception {
+		// The band guard must not push the command past a battery limit. With
+		// discharging blocked (empty battery) a tiny discharge wish may only
+		// leave the band towards charging, never towards discharge.
+		this.ess.withBatteryLimits(-2100, 0);
+		assertEquals(5, this.applyBatteryControl(20)); // -50 W charge, not +50 W
+		// With both directions blocked there is nothing better than the clamp.
+		this.ess.withBatteryLimits(0, 0);
+		assertEquals(0, this.applyBatteryControl(20));
+	}
+
+	@Test
+	public void acOutputControlIsNotTouchedByTheBandGuard() throws Exception {
+		// The band was measured in battery control, where reg 44106 carries a
+		// battery set-point. In AC output control the same register is the grid
+		// port set-point, and forcing it off zero would be a permanent 50 W
+		// deviation at the grid.
+		assertEquals(0, this.applyAcOutputControl(0));
+	}
+
+	@Test
+	public void deadBandCommandsTheSmallestEffectiveValue() throws Exception {
+		// No PV and a battery target of a few tens of watts is not worth chasing
+		// (measured 29./30.09.2026: 519 Wh out, 484 Wh in at 22 W of house load).
+		// Commanding 0 is not the answer either - that is exactly the value the
+		// inverter ignores (see avoidIneffectiveBand) - so the dead band writes
+		// the smallest effective value in the direction the target points.
+		assertEquals(-5, this.applyBatteryControl(22)); // +50 W discharge
+		assertEquals(5, this.applyBatteryControl(-30)); // -50 W charge
 		// a real request is still followed, however small the house load is
 		assertEquals(-67, this.applyBatteryControl(600));
 		// and with PV the band is off again, see feedForwardFadesOutTowardsZero

@@ -40,10 +40,16 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     @Input() public priority: "CAR" | "STORAGE" | null = null;
     /** Total storage capacity in [Wh] (channel _sum/EssCapacity); null if unknown */
     @Input() public storageCapacity: number | null = null;
+    /** Current state of the controller; drawn instead of the forecast for the running quarter-hour */
+    @Input() public live: EvcsPriceForecast.Live | null = null;
 
     private currencyLabel: Currency.Label | undefined = undefined;
     private currencyUnit: Currency.Unit | undefined = undefined;
+    /** Slots as shown: the forecast with the running quarter-hour replaced by the live state */
     private slots: EvcsPriceForecast.Slot[] = [];
+    /** Slots of the forecast only */
+    private forecastSlots: EvcsPriceForecast.Slot[] = [];
+    private settings: EvcsPriceForecast.Settings | null = null;
 
     constructor(
         public override service: Service,
@@ -61,7 +67,17 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
         if (!this.config) {
             return;
         }
-        if (Object.keys(changes).length > 0) {
+        const keys = Object.keys(changes);
+        if (keys.length === 1 && keys[0] === "live") {
+            // Live values change every cycle: only redraw, do not reload the schedule
+            if (this.forecastSlots.length > 0 && this.settings != null) {
+                this.slots = EvcsPriceForecast.applyLive(this.forecastSlots, this.live, this.settings, new Date());
+                this.datasets = this.createDatasets(this.slots);
+                this.options = this.createOptions();
+            }
+            return;
+        }
+        if (keys.length > 0) {
             this.updateChart();
         }
     }
@@ -129,7 +145,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 this.storageCapacity,
                 this.config,
             );
-            this.slots = await EvcsPriceForecast.load(this.edge, this.websocket, this.config, {
+            const settings: EvcsPriceForecast.Settings = {
                 ...base,
                 priority: this.priority ?? base.priority,
                 priceLimit: this.priceLimit ?? 0,
@@ -137,7 +153,10 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 priceChargePower: this.priceChargePower ?? 0,
                 pvPrice: this.pvPrice ?? 0,
                 maxPower: this.maxPower,
-            });
+            };
+            this.settings = settings;
+            this.forecastSlots = await EvcsPriceForecast.load(this.edge, this.websocket, this.config, settings);
+            this.slots = EvcsPriceForecast.applyLive(this.forecastSlots, this.live, settings, new Date());
 
             if (this.slots.length === 0) {
                 this.initializeChart();
@@ -328,6 +347,9 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                     return [];
                 }
                 const prefix = "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.";
+                if (slot.live) {
+                    return [this.translate.instant(prefix + "LIVE")];
+                }
                 return [this.translate.instant(prefix + "PV_SHARE") + ": " + slot.pvShare + " %"];
             };
         }

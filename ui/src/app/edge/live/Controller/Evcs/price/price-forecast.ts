@@ -95,7 +95,25 @@ export namespace EvcsPriceForecast {
         /** Planned state of charge of the storage in [%]; null if unknown */
         soc: number | null;
         zone: Zone;
+        /** The values of this quarter-hour are measured (current state of the controller), not predicted */
+        live?: boolean;
     };
+
+    /** Current state of the controller, used for the running quarter-hour instead of the forecast */
+    export type Live = {
+        /** Charge power currently set by the controller in [W]; null if unknown */
+        chargePower: number | null;
+        /** Blended price currently reported by the controller in [Cent/kWh]; null if unknown */
+        blendedPrice: number | null;
+        /** Current production in [W]; null if unknown */
+        production: number | null;
+    };
+
+    /**
+     * Buffer in [W] the controller subtracts from the measured excess power before it counts as
+     * available, so that the storage keeps priority (CHARGE_POWER_BUFFER of the controller).
+     */
+    export const CHARGE_POWER_BUFFER = 200;
 
     export type Window = {
         from: Date;
@@ -238,9 +256,54 @@ export namespace EvcsPriceForecast {
     ): number {
         const pvSurplus = Math.max(Math.max(production, 0) - Math.max(consumption, 0), 0);
         if (priority === "STORAGE") {
-            return Math.max(pvSurplus - Math.max(storageCharge, 0), 0);
+            return Math.max(pvSurplus - Math.max(storageCharge, 0) - CHARGE_POWER_BUFFER, 0);
         }
         return pvSurplus;
+    }
+
+    /**
+     * Replaces the forecast of the running quarter-hour by the current state of the controller, so that
+     * the chart never contradicts what the controller is doing right now.
+     *
+     * @param slots The slots of the forecast
+     * @param live The current state of the controller; null leaves the forecast untouched
+     * @param settings The settings
+     * @param now The current time
+     * @returns A new array with the running quarter-hour replaced; the input if there is none
+     */
+    export function applyLive(slots: Slot[], live: Live | null, settings: Settings, now: Date): Slot[] {
+        if (live == null || slots.length === 0) {
+            return slots;
+        }
+        const quarter = 15 * 60 * 1000;
+        const index = slots.findIndex(
+            (slot) => slot.timestamp.getTime() <= now.getTime() && now.getTime() < slot.timestamp.getTime() + quarter,
+        );
+        if (index < 0) {
+            return slots;
+        }
+        const slot = slots[index];
+        const chargePower = live.chargePower ?? slot.chargePower;
+        const effectivePrice = live.blendedPrice ?? slot.effectivePrice;
+        let zone: Zone;
+        if (chargePower <= 0) {
+            // Price below the limit but still not charging: nothing is available right now
+            zone = settings.priceLimit > 0 && effectivePrice < settings.priceLimit ? Zone.NO_SURPLUS : Zone.NONE;
+        } else if (chargePower >= getFullPower(settings)) {
+            zone = Zone.FULL;
+        } else {
+            zone = Zone.REDUCED;
+        }
+        const result = [...slots];
+        result[index] = {
+            ...slot,
+            production: live.production ?? slot.production,
+            chargePower: chargePower,
+            effectivePrice: Math.round(effectivePrice * 100) / 100,
+            zone: zone,
+            live: true,
+        };
+        return result;
     }
 
     /**

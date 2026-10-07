@@ -135,7 +135,8 @@ describe("EvcsPriceForecast", () => {
     it("#calculateSurplus follows the priority", () => {
         // PV 5 kW, house 1 kW, storage planned to charge 3 kW
         expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 3000, "CAR")).toBe(4000);
-        expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 3000, "STORAGE")).toBe(1000);
+        // 200 W buffer of the controller: 5000 - 1000 - 3000 - 200
+        expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 3000, "STORAGE")).toBe(800);
         // storage takes everything
         expect(EvcsPriceForecast.calculateSurplus(5000, 1000, 6000, "STORAGE")).toBe(0);
         // storage discharging (positive ess -> charge 0)
@@ -153,21 +154,22 @@ describe("EvcsPriceForecast", () => {
     });
 
     it("#calculate with priority STORAGE: charges from the grid-bound rest when the storage is limited", () => {
-        // storage limited to 3 kW: 1 kW would go to grid -> blended price with storage at 8 ct: (1000*7 + 3140*8)/4140
+        // storage limited to 3 kW: 1 kW would go to grid, 800 W after the 200 W buffer
+        // -> blended price with storage at 8 ct: (800*7 + 3340*8)/4140
         const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8 };
         const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -3000)], settings, NOW)[0];
-        expect(slot.surplus).toBe(1000);
+        expect(slot.surplus).toBe(800);
         expect(slot.zone).toBe(EvcsPriceForecast.Zone.REDUCED);
         expect(slot.chargePower).toBe(4140);
-        expect(slot.effectivePrice).toBe(7.76);
+        expect(slot.effectivePrice).toBe(7.81);
     });
 
     it("#calculate with priority STORAGE: storage priced like grid when the evening target is not reachable", () => {
-        // same as above, but storagePrice = grid price 42 ct -> (1000*7 + 3140*42)/4140 = 33.5 ct -> locked
+        // same as above, but storagePrice = grid price 42 ct -> (800*7 + 3340*42)/4140 = 35.2 ct -> locked
         const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 42 };
         const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -3000)], settings, NOW)[0];
         expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
-        expect(slot.effectivePrice).toBe(33.55);
+        expect(slot.effectivePrice).toBe(35.24);
     });
     it("#calculate per quarter-hour: storage price from the planned SoC and the remaining PV surplus", () => {
         // 20 kWh storage, window 20-90 % -> usable 14 kWh, target 80 % = 11.2 kWh net
@@ -190,9 +192,9 @@ describe("EvcsPriceForecast", () => {
         ], settings, NOW);
         expect(slots[0].storagePrice).toBe(42);
         expect(slots[0].storageAboveTarget).toBe(false);
-        // 2000 W PV at 7 ct + 2140 W storage at 42 ct = 25.09 ct -> still below the 30 ct limit
+        // 1800 W PV (after the 200 W buffer) at 7 ct + 2340 W storage at 42 ct = 26.78 ct -> below the 30 ct limit
         expect(slots[0].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
-        expect(slots[0].effectivePrice).toBe(25.09);
+        expect(slots[0].effectivePrice).toBe(26.78);
         expect(slots[1].storagePrice).toBe(8);
         expect(slots[1].storageAboveTarget).toBe(true);
         expect(slots[1].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
@@ -202,5 +204,37 @@ describe("EvcsPriceForecast", () => {
         expect(slots[3].storageAboveTarget).toBe(false);
         expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
         expect(slots[3].storagePrice).toBe(50);
+    });
+
+    it("#applyLive replaces the running quarter-hour by the state of the controller", () => {
+        // 07.10.2026 10:15: forecast PV 5.5 kW -> reduced charging; measured: 4.4 kW, controller not charging,
+        // blended price 8 ct (below the limit) -> nothing available right now
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8 };
+        const forecast = EvcsPriceForecast.calculate([
+            entry("10:00", 435, 5500, 2300, -2000),
+            entry("10:15", 416, 5800, 1100, -2900),
+        ], settings, new Date("2026-10-02T10:05:00Z"));
+        expect(forecast[0].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+
+        const live = EvcsPriceForecast.applyLive(forecast, { chargePower: 0, blendedPrice: 8, production: 4400 },
+            settings, new Date("2026-10-02T10:05:00Z"));
+        expect(live[0].live).toBe(true);
+        expect(live[0].zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        expect(live[0].chargePower).toBe(0);
+        expect(live[0].effectivePrice).toBe(8);
+        expect(live[0].production).toBe(4400);
+        // the forecast of the next quarter-hour and the input are untouched
+        expect(live[1]).toBe(forecast[1]);
+        expect(forecast[0].live).toBeUndefined();
+
+        // charging at 4.1 kW -> reduced; too expensive and not charging -> locked
+        expect(EvcsPriceForecast.applyLive(forecast, { chargePower: 4140, blendedPrice: 7.8, production: 6000 },
+            settings, new Date("2026-10-02T10:05:00Z"))[0].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(EvcsPriceForecast.applyLive(forecast, { chargePower: 0, blendedPrice: 35, production: 4400 },
+            settings, new Date("2026-10-02T10:05:00Z"))[0].zone).toBe(EvcsPriceForecast.Zone.NONE);
+        // no running quarter-hour (now is before the first slot) or no live data -> unchanged
+        expect(EvcsPriceForecast.applyLive(forecast, { chargePower: 0, blendedPrice: 8, production: 0 },
+            settings, new Date("2026-10-02T09:00:00Z"))).toBe(forecast);
+        expect(EvcsPriceForecast.applyLive(forecast, null, settings, new Date("2026-10-02T10:05:00Z"))).toBe(forecast);
     });
 });

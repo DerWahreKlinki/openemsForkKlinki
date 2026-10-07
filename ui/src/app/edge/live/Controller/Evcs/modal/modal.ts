@@ -55,6 +55,8 @@ export class ModalComponent extends AbstractModal {
     protected storageCapacity: number | null = null;
     protected storageTargetReachable: boolean | null = null;
     protected storageNetSoc: number | null = null;
+    /** Current state of the price controller for the forecast chart; replaced only when a value changes */
+    protected live: EvcsPriceForecast.Live | null = null;
     // Controller.Evcs.Price: configuration values used by the forecast chart
     protected pvPrice: number | null = null;
     protected priceChargePower: number | null = null;
@@ -198,6 +200,8 @@ export class ModalComponent extends AbstractModal {
                 new ChannelAddress("_sum", "EssCapacity"),
                 new ChannelAddress(this.controller.id, "StorageTargetReachable"),
                 new ChannelAddress(this.controller.id, "StorageNetSoc"),
+                new ChannelAddress(this.controller.id, "ChargePowerLimit"),
+                new ChannelAddress("_sum", "ProductionActivePower"),
             );
         }
 
@@ -257,6 +261,20 @@ export class ModalComponent extends AbstractModal {
         const reachable = currentData.allComponents[this.controller?.id + "/StorageTargetReachable"];
         this.storageTargetReachable = reachable == null ? null : reachable === 1 || reachable === true;
         this.storageNetSoc = currentData.allComponents[this.controller?.id + "/StorageNetSoc"] ?? null;
+
+        if (this.controller?.factoryId === "Controller.Evcs.Price") {
+            const blendedPrice = currentData.allComponents[this.controller.id + "/BlendedPrice"];
+            const production = currentData.allComponents["_sum/ProductionActivePower"];
+            const live: EvcsPriceForecast.Live = {
+                chargePower: currentData.allComponents[this.controller.id + "/ChargePowerLimit"] ?? null,
+                blendedPrice: blendedPrice == null ? null : Math.round(blendedPrice) / 10, // [Currency/MWh] to [Cent/kWh]
+                production: production == null ? null : Math.round(production / 100) * 100,
+            };
+            // Keep the same object unless a value changed, so the chart is not redrawn every second
+            if (JSON.stringify(live) !== JSON.stringify(this.live)) {
+                this.live = live;
+            }
+        }
 
         if (isDirty) {
             return;

@@ -309,6 +309,12 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
         }
 
         if (tooltipCallbacks != null) {
+            // The running quarter-hour shows the current state, not the forecast: mark it as "now"
+            tooltipCallbacks.title = (items: Chart.TooltipItem<any>[]): string => {
+                const label = items[0]?.label ?? "";
+                const slot = items.length > 0 ? this.slots[items[0].dataIndex] : null;
+                return slot?.live ? label + " (" + this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOW") + ")" : label;
+            };
             tooltipCallbacks.label = (item: Chart.TooltipItem<any>): string | undefined => {
                 const value = item.dataset.data[item.dataIndex];
                 if (value == null) {
@@ -348,7 +354,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 }
                 const prefix = "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.";
                 if (slot.live) {
-                    return [this.translate.instant(prefix + "LIVE")];
+                    // the PV share is only known for the forecast
+                    return [];
                 }
                 return [this.translate.instant(prefix + "PV_SHARE") + ": " + slot.pvShare + " %"];
             };

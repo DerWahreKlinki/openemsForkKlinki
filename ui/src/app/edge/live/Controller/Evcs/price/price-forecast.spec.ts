@@ -144,13 +144,26 @@ describe("EvcsPriceForecast", () => {
     });
 
     it("#calculate with priority STORAGE: no charging while the storage takes the surplus", () => {
-        // 06.10.2026 10:00: PV 5 kW, house 1 kW, storage charges 4 kW (balancing), 42 ct
-        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8 };
+        // 06.10.2026 10:00: PV 5 kW, house 1 kW, storage charges 4 kW (balancing), 42 ct; the controller
+        // prices the storage like grid (no reserve) -> the bar shows 42 ct: too expensive
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 42 };
         const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -4000)], settings, NOW)[0];
         expect(slot.surplus).toBe(0);
         expect(slot.storageCharge).toBe(4000);
-        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
         expect(slot.chargePower).toBe(0);
+        expect(slot.effectivePrice).toBe(42);
+    });
+
+    it("#calculate with priority STORAGE: charges from the storage reserve the controller reports", () => {
+        // same, but the controller prices the storage at 8 ct (reserve above the evening target) -> the car
+        // may take the minimum power from the storage
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 8 };
+        const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -4000)], settings, NOW)[0];
+        expect(slot.storageAboveTarget).toBe(true);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(slot.chargePower).toBe(4140);
+        expect(slot.effectivePrice).toBe(8);
     });
 
     it("#calculate with priority STORAGE: charges from the grid-bound rest when the storage is limited", () => {

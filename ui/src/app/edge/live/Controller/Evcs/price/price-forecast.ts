@@ -408,9 +408,13 @@ export namespace EvcsPriceForecast {
             if (settings.useStorageSurplus && entry.soc != null && usable != null) {
                 const netSoc = toNetSoc(entry.soc, settings.storageMinSoc, settings.storageMaxSoc);
                 storageSurplus = calculateStorageSurplus(entries.slice(i), (netSoc / 100) * usable, usable, settings);
-                storagePrice = storageSurplus >= 0 ? settings.pvPrice + settings.storageLossSurcharge : price;
+                // storage power counts like PV only while a reserve is actually there
+                storagePrice = storageSurplus > 0 ? settings.pvPrice + settings.storageLossSurcharge : price;
             }
-            const storageAboveTarget = storageSurplus != null && storageSurplus > 0;
+            // A storage reserve is available while the projection ends above the target; without a
+            // projection, while the controller itself prices the storage below grid
+            const storageAboveTarget =
+                storageSurplus != null ? storageSurplus > 0 : storagePrice != null && storagePrice < price;
             // While the storage is above its target the car may charge from it without PV
             const available = surplus > 0 || (settings.useStorageSurplus && storageAboveTarget);
 

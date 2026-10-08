@@ -701,10 +701,10 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void storageTargetNotReachableTest() throws Exception {
-		// Production 6 kW, consumption 2 kW, car 4140 W -> -140 W for the storage
-		// although there is 4 kW surplus before the car: 10 kWh - 3.36 kWh = 6.64 kWh
-		// in the evening, 9.36 kWh below the target -> storage like grid (43.1 ct):
-		// 24.5 ct blended -> still below the 30 ct limit -> charging
+		// Production 6 kW, consumption 2 kW, car 4140 W -> the car takes the whole
+		// 4 kW surplus, nothing left for the storage: 10 kWh in the evening, 6 kWh
+		// below the target -> storage like grid (43.1 ct): 24.5 ct blended -> still
+		// below the 30 ct limit -> charging
 		final var clock = createDummyClock();
 		prepareStoragePriceTest(clock, true, 6000, 2000, 96) //
 				.next(new TestCase() //
@@ -718,7 +718,7 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, -9360) //
+						.output(STORAGE_SURPLUS_ENERGY, -6000) //
 						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
 						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output(STORAGE_PRICE, 431.) //
@@ -765,20 +765,24 @@ public class ControllerEvcsPriceImplTest {
 		final var zone = ZoneId.of("Europe/Berlin");
 		final var now = ZonedDateTime.of(2026, 10, 3, 10, 7, 0, 0, zone);
 		final var start = now.withMinute(0).toInstant();
-		// 8 quarters from 10:00; car 1000 W: balance +3000, +3000, -2000, -2000, +2000 x 4
+		// 8 quarters from 10:00; car 1000 W takes from the surplus only: balance
+		// +3000, +3000, -1000, -1000, +2000 x 4
 		final var production = Prediction.from(start, 6000, 6000, 1000, 1000, 5000, 5000, 5000, 5000);
 		final var consumption = Prediction.from(start, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000);
-		// 5000 + (3000 + 3000 - 2000 - 2000 + 2000 * 4) / 4 = 7500 Wh
-		assertEquals(7500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
+		// 5000 + (3000 + 3000 - 1000 - 1000 + 2000 * 4) / 4 = 8000 Wh
+		assertEquals(8000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
+				5000, 20000, now));
+		// a car drawing more than the surplus takes the whole surplus, nothing more
+		assertEquals(4500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 9000,
 				5000, 20000, now));
 		// without car: 5000 + (4000 + 4000 - 1000 - 1000 + 3000 * 4) / 4 = 9500 Wh
 		assertEquals(9500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 0,
 				5000, 20000, now));
-		// nearly full: 19000 -> 19750 -> 20000 (capped) -> 19500 -> 19000 -> ... -> 20000
+		// nearly full: 19000 -> 19750 -> 20000 (capped) -> 19750 -> 19500 -> 20000 ...
 		assertEquals(20000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
 				19000, 20000, now));
-		// nearly empty: 500 -> 1250 -> 2000 -> 1500 -> 1000 -> 3000
-		assertEquals(3000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
+		// nearly empty: 500 -> 1250 -> 2000 -> 1750 -> 1500 -> 3500
+		assertEquals(3500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
 				500, 20000, now));
 
 		// the projection ends with the last quarter-hour with production of today;

@@ -390,8 +390,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 *
 	 * <p>
 	 * The energy of the storage is projected until the end of PV production
-	 * today: the current energy plus production minus consumption minus the car,
-	 * quarter-hour by quarter-hour, within the usable capacity. If the projection
+	 * today: the current energy plus production minus consumption, minus what the
+	 * car takes from the surplus, quarter-hour by quarter-hour, within the usable
+	 * capacity. If the projection
 	 * ends above the evening target, the storage will have that surplus anyway and
 	 * power taken from it now is replaced by PV: it costs the PV price plus the
 	 * loss surcharge, and the car may take the surplus even without PV. Otherwise
@@ -592,15 +593,16 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	/**
 	 * Projects the energy of the storage from now until the end of PV production
-	 * today: quarter-hour by quarter-hour, production minus consumption minus the
-	 * assumed car power is added, negative balances included, and the energy is
-	 * kept within the usable capacity. "Evening" is the last quarter-hour of today
-	 * with predicted production; without any production left the storage keeps
-	 * what it has.
+	 * today: quarter-hour by quarter-hour, production minus consumption is added,
+	 * negative balances included, and the energy is kept within the usable
+	 * capacity. The car takes from a positive balance up to its assumed power; it
+	 * charges from PV surplus only, so it never makes the balance negative.
+	 * "Evening" is the last quarter-hour of today with predicted production;
+	 * without any production left the storage keeps what it has.
 	 *
 	 * @param production  the production prediction in [W] per quarter-hour
 	 * @param consumption the consumption prediction in [W] per quarter-hour
-	 * @param carPower    the power the car is assumed to draw in [W]
+	 * @param carPower    the power the car is assumed to draw from PV surplus in [W]
 	 * @param storedWh    the energy stored now within the SoC windows in [Wh]
 	 * @param usableWh    the usable capacity within the SoC windows in [Wh]
 	 * @param now         the current time
@@ -639,7 +641,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			if (prod == null || cons == null) {
 				continue;
 			}
-			energy += (prod - cons - carPower) / 4.;
+			final var balance = prod - cons;
+			energy += (balance > 0 ? Math.max(balance - carPower, 0) : balance) / 4.;
 			// the storage can neither hold more than its usable capacity nor less than nothing
 			energy = Math.min(Math.max(energy, 0), usableWh);
 		}

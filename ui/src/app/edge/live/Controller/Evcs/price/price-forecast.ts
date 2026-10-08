@@ -271,8 +271,8 @@ export namespace EvcsPriceForecast {
      * Projects the energy of the storage from the first entry until the last quarter-hour with PV production
      * of that day and returns what is left above the evening target, mirroring the controller: per
      * quarter-hour production minus consumption is added, negative balances included, within the usable
-     * capacity; the car takes from a positive balance up to its minimum power (it charges from PV surplus
-     * only).
+     * capacity. With priority CAR the car takes from a positive balance up to its minimum power (it charges
+     * from PV surplus only); with priority STORAGE the storage is filled first, so the car does not count.
      *
      * @param entries The schedule entries from the quarter-hour on, in chronological order
      * @param storedWh The energy stored at the first entry within the SoC window in [Wh]
@@ -293,11 +293,12 @@ export namespace EvcsPriceForecast {
                 lastProduction = k;
             }
         });
+        const carPower = settings.priority === "STORAGE" ? 0 : settings.minPower;
         let energy = storedWh;
         for (let k = 0; k <= lastProduction; k++) {
             const e = entries[k].entry;
             const balance = Math.max(e.production ?? 0, 0) - Math.max(e.consumption ?? 0, 0);
-            energy += (balance > 0 ? Math.max(balance - settings.minPower, 0) : balance) / 4;
+            energy += (balance > 0 ? Math.max(balance - carPower, 0) : balance) / 4;
             energy = Math.min(Math.max(energy, 0), usableWh);
         }
         return Math.round(energy - (settings.storageTargetSocNet / 100) * usableWh);

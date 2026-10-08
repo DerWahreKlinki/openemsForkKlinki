@@ -413,10 +413,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @return the storage price in [Cent/kWh]; null if no grid buy price is known
 	 */
 	private Double updateStoragePrice(Double gridBuyPrice) {
-		// Conservative assumption: the car keeps drawing what it draws now until the
-		// end of PV production; at least the minimum power while it is plugged in
-		final var carPower = calculateAssumedCarPower(this.evcs.getActivePower().orElse(0), this.evcs.getStatus(),
-				this.evcs.getMinimumHardwarePower().orElse(0));
+		// With priority CAR the car takes PV surplus before the storage: conservative
+		// assumption that it keeps drawing what it draws now until the end of PV
+		// production, at least the minimum power while it is plugged in. With
+		// priority STORAGE the storage is filled first and the car only gets what the
+		// storage cannot take, so the car does not reduce the projection.
+		final var carPower = this.config.priority() == Priority.STORAGE //
+				? 0
+				: calculateAssumedCarPower(this.evcs.getActivePower().orElse(0), this.evcs.getStatus(),
+						this.evcs.getMinimumHardwarePower().orElse(0));
 
 		// Usable capacity within the SoC windows of the ChargeDischargeLimiters; falls
 		// back to the total capacity of _sum if there is no limiter

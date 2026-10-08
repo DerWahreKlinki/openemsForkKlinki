@@ -15,6 +15,7 @@ import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelI
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_TARGET_REACHABLE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PRICE_CHARGING;
 import static io.openems.edge.controller.evcs.price.Priority.CAR;
+import static io.openems.edge.controller.evcs.price.Priority.STORAGE;
 import static io.openems.edge.evcs.api.ChargeMode.EXCESS_POWER;
 import static io.openems.edge.evcs.api.ChargeMode.FORCE_CHARGE;
 import static io.openems.edge.evcs.api.Evcs.ChannelId.MAXIMUM_HARDWARE_POWER;
@@ -671,6 +672,13 @@ public class ControllerEvcsPriceImplTest {
 
 	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
 			boolean enablePriceCharging, int productionW, int consumptionW, int quarters) throws Exception {
+		return prepareStoragePriceTest(clock, useStorageSurplus, enablePriceCharging, CAR, productionW, consumptionW,
+				quarters);
+	}
+
+	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
+			boolean enablePriceCharging, Priority priority, int productionW, int consumptionW, int quarters)
+			throws Exception {
 		final var now = Instant.now(clock);
 		final var cm = new DummyComponentManager(clock);
 		final var sum = new DummySum();
@@ -698,7 +706,7 @@ public class ControllerEvcsPriceImplTest {
 						.setChargeMode(EXCESS_POWER) //
 						.setForceChargeMinPower(3680) //
 						.setDefaultChargeMinPower(0) //
-						.setPriority(CAR) //
+						.setPriority(priority) //
 						.setEnergySessionLimit(0) //
 						.setEnablePriceCharging(enablePriceCharging) //
 						.setPriceLimit(30) //
@@ -775,6 +783,29 @@ public class ControllerEvcsPriceImplTest {
 						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void storagePriorityIgnoresCarInProjectionTest() throws Exception {
+		// Same as storageTargetNotReachableTest, but with priority STORAGE: the storage
+		// is filled first, so the 4 kW surplus goes to the storage in the projection
+		// -> full in the evening, 4 kWh above the target -> storage like PV (8 ct)
+		prepareStoragePriceTest(createDummyClock(), true, true, STORAGE, 6000, 2000, 96) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_SURPLUS_ENERGY, 4000) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_PRICE, 80.)) //
 				.deactivate();
 	}
 

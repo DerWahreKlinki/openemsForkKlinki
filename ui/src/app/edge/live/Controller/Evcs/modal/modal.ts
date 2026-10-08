@@ -402,6 +402,7 @@ export class ModalComponent extends AbstractModal {
             energySessionLimitKwh: new FormControl(Math.round(this.controller?.properties.energySessionLimit / 1000)),
             enabledCharging: new FormControl(this.isChargingEnabled),
             // Only available with Controller.Evcs.Price
+            enablePriceCharging: new FormControl(this.controller?.properties.enablePriceCharging !== false),
             priceLimit: new FormControl(ModalComponent.toNumber(this.controller?.properties.priceLimit)),
             priceLimitFullPower: new FormControl(
                 ModalComponent.toNumber(this.controller?.properties.priceLimitFullPower),

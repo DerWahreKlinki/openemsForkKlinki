@@ -52,19 +52,22 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Start confirmation time [s]", description = "Charging is only started after the charge power has been above zero for this time (Seconds). Avoids starts on a single wrong measurement, e.g. right after a restart when grid and storage values lag behind; '0' starts immediately.")
 	int startConfirmationTime() default 10;
 
-	@AttributeDefinition(name = "Price limit [Cent/kWh]", description = "In excess power mode: charge from grid if the grid buy price is below this limit. Starts with the minimum hardware power at this limit and increases linearly down to the 'Price limit for full power'; '0' deactivates charging by price.")
+	@AttributeDefinition(name = "Price-based charging", description = "In excess power mode: charge from grid depending on the grid buy price (the two price limits below), and fill up the minimum hardware power from grid while the blended price of surplus, storage and grid power is below the 'Price limit'. Switched off, grid power is never taken because of its price: the car charges only from surplus power that would otherwise be fed into the grid and, if included, from the storage reserve; the price limits have no effect.")
+	boolean enablePriceCharging() default true;
+
+	@AttributeDefinition(name = "Price limit [Cent/kWh]", description = "In excess power mode with price-based charging: charge from grid if the grid buy price is below this limit. Starts with the minimum hardware power at this limit and increases linearly down to the 'Price limit for full power'. A limit of 0 charges only at negative prices.")
 	double priceLimit() default 30;
 
-	@AttributeDefinition(name = "Price limit for full power [Cent/kWh]", description = "In excess power mode: charge from grid with full power if the grid buy price is at or below this limit; includes negative prices.")
+	@AttributeDefinition(name = "Price limit for full power [Cent/kWh]", description = "In excess power mode with price-based charging: charge from grid with full power if the grid buy price is at or below this limit; includes negative prices.")
 	double priceLimitFullPower() default 20;
 
 	@AttributeDefinition(name = "Full charge power by price [W]", description = "Charge power in Watt that is applied while the grid buy price is at or below the 'Price limit for full power'.")
 	int priceChargePower() default 11040;
 
-	@AttributeDefinition(name = "Value of PV power [Cent/kWh]", description = "Opportunity cost of surplus PV power, e.g. the feed-in tariff. In excess power mode: if the excess power is below the minimum hardware power, the missing power is taken from grid as long as the blended price of PV and grid power is below the 'Price limit'.")
+	@AttributeDefinition(name = "Value of surplus power [Cent/kWh]", description = "Opportunity cost of surplus power that would otherwise be fed into the grid, e.g. the feed-in tariff. In excess power mode with price-based charging: if the surplus is below the minimum hardware power, the missing power is taken from grid as long as the blended price of surplus and grid power is below the 'Price limit'.")
 	double pvPrice() default 7;
 
-	@AttributeDefinition(name = "Use storage surplus", description = "In excess power mode: the energy of the storage is projected until the end of PV production (production minus consumption, minus what the car takes from the surplus, quarter-hour by quarter-hour). If it ends above the evening target, the car may charge that surplus from the storage already now, even without PV surplus; storage power is then priced like PV power (plus loss surcharge) in the blended price. Otherwise storage power is priced like grid power. The storage price is always calculated and available as channel.")
+	@AttributeDefinition(name = "Include storage with foresight", description = "In excess power mode: the energy of the storage is projected until the end of PV production (production minus consumption, minus what the car takes from the surplus, quarter-hour by quarter-hour). If it ends above the evening target, the car may charge that surplus from the storage already now, even without PV surplus; storage power is then priced like PV power (plus loss surcharge) in the blended price. Otherwise storage power is priced like grid power. The storage price is always calculated and available as channel.")
 	boolean useStorageSurplus() default false;
 
 	@AttributeDefinition(name = "Storage target in the evening [% net]", description = "State of charge the storage should have at the end of PV production, in percent of the usable capacity (within the SoC windows of the ChargeDischargeLimiters, if present). Power from the storage is priced like PV power only while the projected state at the end of PV production - with the car drawing what it draws now - stays above this target.")

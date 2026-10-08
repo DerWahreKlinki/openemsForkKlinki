@@ -10,6 +10,7 @@ describe("EvcsPriceForecast", () => {
         storageCapacity: null,
         storageMinSoc: 20,
         storageMaxSoc: 90,
+        enablePriceCharging: true,
         priceLimit: 30,
         priceLimitFullPower: 20,
         priceChargePower: 11040,
@@ -222,6 +223,29 @@ describe("EvcsPriceForecast", () => {
         expect(slots[3].storageAboveTarget).toBe(false);
         expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NONE);
         expect(slots[3].storagePrice).toBe(50);
+    });
+
+    it("#calculate without price-based charging uses surplus and storage reserve only", () => {
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, enablePriceCharging: false };
+        // negative price, 4000 W surplus below the minimum power -> no charging, and never "too expensive"
+        let slot = EvcsPriceForecast.calculate([entry("10:00", -10, 5000, 1000)], settings, NOW)[0];
+        expect(slot.chargePower).toBe(0);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        // 5000 W surplus covers the minimum power
+        slot = EvcsPriceForecast.calculate([entry("10:00", 500, 6000, 1000)], settings, NOW)[0];
+        expect(slot.chargePower).toBe(5000);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        // storage reserve reported by the controller covers the minimum power
+        slot = EvcsPriceForecast.calculate([entry("10:00", 500, 0, 1000)],
+            { ...settings, useStorageSurplus: true, storagePrice: 8 }, NOW)[0];
+        expect(slot.chargePower).toBe(4140);
+        expect(slot.effectivePrice).toBe(8);
+    });
+
+    it("#calculateChargePowerFromPrice with limit 0 charges at negative prices only", () => {
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priceLimit: 0, priceLimitFullPower: 0 };
+        expect(EvcsPriceForecast.calculateChargePowerFromPrice(0, settings)).toBe(0);
+        expect(EvcsPriceForecast.calculateChargePowerFromPrice(-1, settings)).toBe(11040);
     });
 
     it("#applyLive replaces the running quarter-hour by the state of the controller", () => {

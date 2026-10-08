@@ -28,6 +28,8 @@ import { EvcsPriceForecast } from "./price-forecast";
 export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnChanges {
     @Input({ required: true }) public override edge!: Edge;
     @Input({ required: true }) public override component!: EdgeConfig.Component;
+    /** Price-based charging as currently selected in the form; falls back to the configuration */
+    @Input() public enablePriceCharging: boolean | null = null;
     @Input({ required: true }) public priceLimit!: number;
     @Input({ required: true }) public priceLimitFullPower!: number;
     @Input({ required: true }) public priceChargePower!: number;
@@ -148,6 +150,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             const settings: EvcsPriceForecast.Settings = {
                 ...base,
                 priority: this.priority ?? base.priority,
+                enablePriceCharging: this.enablePriceCharging ?? base.enablePriceCharging,
                 priceLimit: this.priceLimit ?? 0,
                 priceLimitFullPower: this.priceLimitFullPower ?? 0,
                 priceChargePower: this.priceChargePower ?? 0,

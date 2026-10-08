@@ -155,7 +155,7 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
                 position: (index / slots.length) * 100,
             }));
 
-        const window = EvcsPriceForecast.getCheapestWindow(slots);
+        const window = settings?.enablePriceCharging ? EvcsPriceForecast.getCheapestWindow(slots) : null;
         this.cheapestWindow =
             window == null
                 ? null

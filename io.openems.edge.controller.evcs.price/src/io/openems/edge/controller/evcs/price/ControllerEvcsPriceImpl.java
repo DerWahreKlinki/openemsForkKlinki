@@ -257,11 +257,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		var priceCharging = false;
 		if (chargeMode == ChargeMode.EXCESS_POWER) {
 			final var gridBuyPrice = this.sum.getGridBuyPrice().get();
-			var priceChargePower = calculateChargePowerFromPrice(gridBuyPrice, this.config.priceLimit(),
-					this.config.priceLimitFullPower(), minimumHardwarePower, this.config.priceChargePower());
-			if (priceChargePower > nextChargePower) {
-				nextChargePower = priceChargePower;
-				priceCharging = true;
+			final var priceChargingEnabled = this.config.enablePriceCharging();
+			if (priceChargingEnabled) {
+				var priceChargePower = calculateChargePowerFromPrice(gridBuyPrice, this.config.priceLimit(),
+						this.config.priceLimitFullPower(), minimumHardwarePower, this.config.priceChargePower());
+				if (priceChargePower > nextChargePower) {
+					nextChargePower = priceChargePower;
+					priceCharging = true;
+				}
 			}
 
 			// Blended price of filling up to the minimum hardware power from PV surplus,
@@ -273,20 +276,27 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.setBlendedPrice(blendedPrice == null ? null : blendedPrice * 10);
 
 			// Not enough excess power for the minimum hardware power: take the missing
-			// power from storage/grid if the blended price is below the limit
+			// power from the storage reserve and, with price-based charging, from grid
 			if (nextChargePower == 0) {
 				// With storage pricing the missing power may also come from the storage
 				// alone, as long as the storage is above its evening target right now
-				final var available = excessPower > 0
-						|| (this.config.useStorageSurplus() && this.storageAboveTarget && storagePower > 0);
-				final var belowLimit = this.config.useStorageSurplus() //
-						? available && this.config.priceLimit() > 0 && blendedPrice != null
-								&& blendedPrice < this.config.priceLimit()
-						: isBlendedPriceBelowLimit(gridBuyPrice, excessPower, minimumHardwarePower,
-								this.config.pvPrice(), this.config.priceLimit());
-				if (belowLimit) {
+				final var storageAvailable = this.config.useStorageSurplus() && this.storageAboveTarget
+						&& storagePower > 0;
+				final var available = excessPower > 0 || storageAvailable;
+				final boolean fillUp;
+				if (priceChargingEnabled) {
+					fillUp = this.config.useStorageSurplus() //
+							? available && blendedPrice != null && blendedPrice < this.config.priceLimit()
+							: isBlendedPriceBelowLimit(gridBuyPrice, excessPower, minimumHardwarePower,
+									this.config.pvPrice(), this.config.priceLimit());
+				} else {
+					// Without price-based charging no grid power at all: excess power and the
+					// storage reserve have to cover the minimum power by themselves
+					fillUp = Math.max(excessPower, 0) + (storageAvailable ? storagePower : 0) >= minimumHardwarePower;
+				}
+				if (fillUp) {
 					nextChargePower = minimumHardwarePower;
-					priceCharging = true;
+					priceCharging = priceChargingEnabled;
 				}
 			}
 		} else {
@@ -692,8 +702,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 *
 	 * @param gridBuyPrice        the grid buy price in [Currency/MWh]; possibly
 	 *                            null
-	 * @param priceLimit          the upper limit in [Cent/kWh]; '0' deactivates
-	 *                            charging by price
+	 * @param priceLimit          the upper limit in [Cent/kWh]; 0 allows
+	 *                            negative prices only
 	 * @param priceLimitFullPower the lower limit in [Cent/kWh]
 	 * @param minPower            the minimum hardware power in [W]
 	 * @param fullPower           the full charge power by price in [W]
@@ -701,7 +711,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 */
 	protected static int calculateChargePowerFromPrice(Double gridBuyPrice, double priceLimit,
 			double priceLimitFullPower, int minPower, int fullPower) {
-		if (gridBuyPrice == null || priceLimit <= 0 || fullPower <= 0 || fullPower < minPower) {
+		if (gridBuyPrice == null || fullPower <= 0 || fullPower < minPower) {
 			return 0;
 		}
 		// 1 Cent/kWh = 10 Currency/MWh
@@ -771,13 +781,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @param excessPower  the available excess power in [W]
 	 * @param minPower     the minimum hardware power in [W]
 	 * @param pvPrice      the value of PV power in [Cent/kWh]
-	 * @param priceLimit   the upper limit in [Cent/kWh]; '0' deactivates charging
-	 *                     by price
+	 * @param priceLimit   the upper limit in [Cent/kWh]
 	 * @return true if the blended price is below the limit
 	 */
 	protected static boolean isBlendedPriceBelowLimit(Double gridBuyPrice, int excessPower, int minPower,
 			double pvPrice, double priceLimit) {
-		if (priceLimit <= 0 || excessPower <= 0) {
+		if (excessPower <= 0) {
 			return false;
 		}
 		final var blendedPrice = calculateBlendedPrice(gridBuyPrice, excessPower, minPower, pvPrice);

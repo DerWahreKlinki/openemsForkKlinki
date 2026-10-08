@@ -410,6 +410,11 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	private static ControllerTest preparePriceTest(ChargeMode chargeMode, double priceLimit) throws Exception {
+		return preparePriceTest(chargeMode, priceLimit, true);
+	}
+
+	private static ControllerTest preparePriceTest(ChargeMode chargeMode, double priceLimit,
+			boolean enablePriceCharging) throws Exception {
 		return new ControllerTest(new ControllerEvcsPriceImpl(createDummyClock())) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("componentManager", new DummyComponentManager()) //
@@ -424,6 +429,7 @@ public class ControllerEvcsPriceImplTest {
 						.setDefaultChargeMinPower(DEFAULT_CHARGE_MIN_POWER) //
 						.setPriority(CAR) //
 						.setEnergySessionLimit(0) //
+						.setEnablePriceCharging(enablePriceCharging) //
 						.setPriceLimit(priceLimit) //
 						.setPriceLimitFullPower(20) //
 						.setPriceChargePower(11040) //
@@ -531,7 +537,8 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
-	public void priceLimitDeactivatedTest() throws Exception {
+	public void priceLimitZeroChargesAtNegativePriceTest() throws Exception {
+		// A limit of 0 is a limit, not a switch: charging at negative prices only
 		preparePriceTest(EXCESS_POWER, 0) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, -10.) //
@@ -539,7 +546,33 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input(GRID_ACTIVE_POWER, 300) //
 						.input("evcs0", ACTIVE_POWER, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.output(PRICE_CHARGING, true)) //
+				.deactivate();
+	}
+
+	@Test
+	public void priceChargingDisabledTest() throws Exception {
+		// Without price-based charging the price does not matter at all: only
+		// excess power that covers the minimum hardware power is used
+		preparePriceTest(EXCESS_POWER, 30, false) //
+				.next(new TestCase("negative price, no excess power") //
+						.input(GRID_BUY_PRICE, -10.) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, 300) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				.next(new TestCase("excess power below the minimum: no fill-up from grid") //
+						.input(GRID_BUY_PRICE, 150.) //
+						.input(GRID_ACTIVE_POWER, -3000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				.next(new TestCase("excess power covers the minimum") //
+						.input(GRID_ACTIVE_POWER, -5000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 5000) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();
 	}
@@ -571,9 +604,12 @@ public class ControllerEvcsPriceImplTest {
 		assertEquals(11040, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(-120., 30, 20, 4140, 11040));
 		// lower limit not below upper limit: full power below the upper limit
 		assertEquals(11040, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(250., 30, 30, 4140, 11040));
-		// unknown price, deactivated, full power below minimum hardware power
-		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(null, 30, 20, 4140, 11040));
+		// limit 0: negative prices only
 		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(100., 0, 20, 4140, 11040));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(0., 0, 20, 4140, 11040));
+		assertEquals(11040, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(-10., 0, 20, 4140, 11040));
+		// unknown price, full power below minimum hardware power
+		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(null, 30, 20, 4140, 11040));
 		assertEquals(0, ControllerEvcsPriceImpl.calculateChargePowerFromPrice(100., 30, 20, 4140, 3000));
 	}
 
@@ -630,6 +666,11 @@ public class ControllerEvcsPriceImplTest {
 	// the given number of quarter-hours from the clock time on.
 	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
 			int productionW, int consumptionW, int quarters) throws Exception {
+		return prepareStoragePriceTest(clock, useStorageSurplus, true, productionW, consumptionW, quarters);
+	}
+
+	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
+			boolean enablePriceCharging, int productionW, int consumptionW, int quarters) throws Exception {
 		final var now = Instant.now(clock);
 		final var cm = new DummyComponentManager(clock);
 		final var sum = new DummySum();
@@ -659,6 +700,7 @@ public class ControllerEvcsPriceImplTest {
 						.setDefaultChargeMinPower(0) //
 						.setPriority(CAR) //
 						.setEnergySessionLimit(0) //
+						.setEnablePriceCharging(enablePriceCharging) //
 						.setPriceLimit(30) //
 						.setPriceLimitFullPower(20) //
 						.setPriceChargePower(11040) //
@@ -947,6 +989,35 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, -6000) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
 						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void storageReserveWithoutPriceChargingTest() throws Exception {
+		// Price-based charging off, storage included: the reserve above the target
+		// (3 kWh at 95 %) may feed the car, as long as the storage can deliver the
+		// minimum power by itself; the price (50 ct) does not matter
+		final var clock = createDummyClock();
+		prepareStoragePriceTest(clock, true, false, 0, 2000, 96) //
+				.next(new TestCase("storage reserve covers the minimum power") //
+						.input(GRID_BUY_PRICE, 500.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 95) //
+						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
+						.input(ESS_DISCHARGE_POWER, 2000) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_SURPLUS_ENERGY, 3000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(PRICE_CHARGING, false)) //
+				.next(new TestCase("storage cannot deliver the minimum power: no fill-up from grid") //
+						.timeleap(clock, 5, MINUTES) //
+						.input(ESS_MAX_DISCHARGE_POWER, 3000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
 				.deactivate();
 	}
 

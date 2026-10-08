@@ -44,13 +44,15 @@ export namespace EvcsPriceForecast {
         storageMinSoc: number;
         /** Upper border of the usable SoC window in [%] (ChargeDischargeLimiter) */
         storageMaxSoc: number;
-        /** Upper price limit in [Cent/kWh]; 0 deactivates charging by price */
+        /** Charge from grid depending on the price; off: surplus and storage reserve only, never grid */
+        enablePriceCharging: boolean;
+        /** Upper price limit in [Cent/kWh]; 0 allows negative prices only */
         priceLimit: number;
         /** Lower price limit in [Cent/kWh] */
         priceLimitFullPower: number;
         /** Full charge power by price in [W] */
         priceChargePower: number;
-        /** Value of surplus PV power in [Cent/kWh] */
+        /** Value of surplus power that would otherwise be fed into the grid in [Cent/kWh] */
         pvPrice: number;
         /** Minimum hardware power in [W] */
         minPower: number;
@@ -152,6 +154,8 @@ export namespace EvcsPriceForecast {
             storageCapacity: storageCapacity,
             storageMinSoc: window.min,
             storageMaxSoc: window.max,
+            enablePriceCharging:
+                properties["enablePriceCharging"] !== false && properties["enablePriceCharging"] !== "false",
             priceLimit: toNumber(properties["priceLimit"], 0),
             priceLimitFullPower: toNumber(properties["priceLimitFullPower"], 0),
             priceChargePower: toNumber(properties["priceChargePower"], 0),
@@ -203,7 +207,7 @@ export namespace EvcsPriceForecast {
      */
     export function calculateChargePowerFromPrice(price: number, settings: Settings): number {
         const fullPower = settings.priceChargePower;
-        if (settings.priceLimit <= 0 || fullPower <= 0 || fullPower < settings.minPower) {
+        if (!settings.enablePriceCharging || fullPower <= 0 || fullPower < settings.minPower) {
             return 0;
         }
         if (price >= settings.priceLimit) {
@@ -347,7 +351,8 @@ export namespace EvcsPriceForecast {
      */
     function getZone(chargePower: number, effectivePrice: number, settings: Settings): Zone {
         if (chargePower <= 0) {
-            return settings.priceLimit > 0 && effectivePrice < settings.priceLimit ? Zone.NO_SURPLUS : Zone.NONE;
+            // without price-based charging the price is never the reason
+            return settings.enablePriceCharging && effectivePrice >= settings.priceLimit ? Zone.NONE : Zone.NO_SURPLUS;
         }
         if (chargePower >= getFullPower(settings)) {
             return Zone.FULL;
@@ -426,16 +431,20 @@ export namespace EvcsPriceForecast {
             const pricePower = calculateChargePowerFromPrice(price, settings);
             let chargePower = Math.max(surplusPower, pricePower);
 
-            // Not enough surplus for the minimum hardware power: the missing power is taken from grid if the
-            // blended price is below the limit
-            if (
-                chargePower <= 0 &&
-                available &&
-                settings.priceLimit > 0 &&
-                calculateBlendedPrice(price, surplus, settings.minPower, settings.pvPrice, storagePrice) <
-                    settings.priceLimit
-            ) {
-                chargePower = settings.minPower;
+            // Not enough surplus for the minimum hardware power: the missing power is taken from the storage
+            // reserve and, with price-based charging, from grid if the blended price is below the limit
+            if (chargePower <= 0 && available) {
+                if (settings.enablePriceCharging) {
+                    if (
+                        calculateBlendedPrice(price, surplus, settings.minPower, settings.pvPrice, storagePrice) <
+                        settings.priceLimit
+                    ) {
+                        chargePower = settings.minPower;
+                    }
+                } else if (storageAboveTarget && settings.useStorageSurplus) {
+                    // without price-based charging the storage reserve has to cover the missing power
+                    chargePower = settings.minPower;
+                }
             }
 
             // Without charging: what would it cost at minimum power

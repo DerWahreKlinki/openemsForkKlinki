@@ -83,6 +83,10 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
 
     protected segments: Segment[] = [];
     protected ticks: Tick[] = [];
+    /** Zones that occur in the shown period; only those are listed in the legend */
+    protected zones: EvcsPriceForecast.Zone[] = [];
+    protected hasSurplus: boolean = false;
+    protected readonly Zone = EvcsPriceForecast.Zone;
     protected cheapestWindow: string | null = null;
 
     private timer: ReturnType<typeof setInterval> | null = null;
@@ -146,6 +150,9 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
             hasSurplus: settings != null && slot.surplus >= settings.minPower,
             title: time(slot.timestamp) + ": " + formatNumber(slot.effectivePrice, locale, "1.0-1") + " ct/kWh",
         }));
+
+        this.zones = Object.values(EvcsPriceForecast.Zone).filter((zone) => slots.some((slot) => slot.zone === zone));
+        this.hasSurplus = this.segments.some((segment) => segment.hasSurplus);
 
         this.ticks = slots
             .map((slot, index) => ({ slot, index }))

@@ -75,6 +75,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             if (this.forecastSlots.length > 0 && this.settings != null) {
                 this.slots = EvcsPriceForecast.applyLive(this.forecastSlots, this.live, this.settings, new Date());
                 this.datasets = this.createDatasets(this.slots);
+                this.legendOptions = this.createLegendOptions(this.datasets);
                 this.options = this.createOptions();
             }
             return;
@@ -168,11 +169,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
 
             this.labels = this.slots.map((slot) => slot.timestamp);
             this.datasets = this.createDatasets(this.slots);
-            this.legendOptions = this.datasets.map((dataset) => ({
-                label: dataset.label?.toString() ?? "",
-                strokeThroughHidingStyle: false,
-                hideLabelInLegend: false,
-            }));
+            this.legendOptions = this.createLegendOptions(this.datasets);
             this.options = this.createOptions();
 
             this.loading = false;
@@ -188,6 +185,15 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             console.error(error);
             this.initializeChart();
         }
+    }
+
+    /** Zones that do not occur in the shown period (all values null) are left out of the legend */
+    private createLegendOptions(datasets: Chart.ChartDataset[]): typeof this.legendOptions {
+        return datasets.map((dataset) => ({
+            label: dataset.label?.toString() ?? "",
+            strokeThroughHidingStyle: false,
+            hideLabelInLegend: dataset.type === "bar" && (dataset.data as (number | null)[]).every((v) => v == null),
+        }));
     }
 
     private createDatasets(slots: EvcsPriceForecast.Slot[]): Chart.ChartDataset[] {

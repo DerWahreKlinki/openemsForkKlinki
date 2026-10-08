@@ -407,7 +407,7 @@
                     "PRICE_FORECAST": {
                         "BLENDED_PRICE": "Blended price",
                         "CHARGE_POWER": "Charge power",
-                        "CHART_NOTE": "Bar height: grid price (grey) with the blended price as coloured base. The blended price applies to the minimum power from PV surplus (after the planned storage charging), storage and grid; storage power counts like PV as long as the storage reaches its evening target according to the schedule, otherwise like grid. Red: too expensive. Grey: no surplus and storage not above its evening target. \"Now\" shows the current state, everything after it is forecast.",
+                        "CHART_NOTE": "Bar height: grid price (grey) with the blended price as coloured base. The blended price applies to the minimum power from PV surplus (after the planned storage charging), storage and grid; storage power counts like PV as long as the storage reaches its evening target according to the schedule, otherwise like grid. Red: blended price above the price limit. Grey: the price would be fine, but there is neither PV surplus nor storage reserve. \"Now\" shows the current state, everything after it is forecast.",
                         "CHART_TITLE": "Charge forecast: effective charge price and PV production",
                         "CHEAPEST_WINDOW": "Cheapest 3 h",
                         "GRID_PRICE": "Grid price",

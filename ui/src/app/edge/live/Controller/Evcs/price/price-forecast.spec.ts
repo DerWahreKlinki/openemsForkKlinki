@@ -186,8 +186,7 @@ describe("EvcsPriceForecast", () => {
             e("10:15", 420, 8000, 1000, -3000, 88),
             // 20:00: no PV, SoC 85 % (net 93 %) -> above target: car may charge from storage, 8 ct, reduced
             e("20:00", 500, 0, 1500, 1500, 85),
-            // 21:00: no PV, SoC 70 % (net 71 %) -> below target: storage like grid, no surplus -> too expensive? no:
-            // nothing available (no PV, storage below target) -> NO_SURPLUS
+            // 21:00: no PV, SoC 70 % (net 71 %) -> below target: storage like grid, 50 ct -> too expensive
             e("21:00", 500, 0, 1500, 1500, 70),
         ], settings, NOW);
         // 6000 Wh stored + 215 + 715 = 6930 Wh in the evening, target 11200 Wh
@@ -208,7 +207,7 @@ describe("EvcsPriceForecast", () => {
         expect(slots[2].effectivePrice).toBe(8);
         expect(slots[3].storageSurplus).toBe(-1200);
         expect(slots[3].storageAboveTarget).toBe(false);
-        expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NONE);
         expect(slots[3].storagePrice).toBe(50);
     });
 

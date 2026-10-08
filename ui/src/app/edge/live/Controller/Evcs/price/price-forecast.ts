@@ -323,15 +323,7 @@ export namespace EvcsPriceForecast {
         const slot = slots[index];
         const chargePower = live.chargePower ?? slot.chargePower;
         const effectivePrice = live.blendedPrice ?? slot.effectivePrice;
-        let zone: Zone;
-        if (chargePower <= 0) {
-            // Price below the limit but still not charging: nothing is available right now
-            zone = settings.priceLimit > 0 && effectivePrice < settings.priceLimit ? Zone.NO_SURPLUS : Zone.NONE;
-        } else if (chargePower >= getFullPower(settings)) {
-            zone = Zone.FULL;
-        } else {
-            zone = Zone.REDUCED;
-        }
+        const zone = getZone(chargePower, effectivePrice, settings);
         const result = [...slots];
         result[index] = {
             ...slot,
@@ -342,6 +334,25 @@ export namespace EvcsPriceForecast {
             live: true,
         };
         return result;
+    }
+
+    /**
+     * Gets the zone of a quarter-hour: the price the bar shows decides between "too expensive" and "nothing
+     * available" - the latter only if the price would be fine but there is nothing to charge with.
+     *
+     * @param chargePower The expected charge power in [W]; 0 if the controller would not charge
+     * @param effectivePrice The effective price in [Cent/kWh]
+     * @param settings The settings
+     * @returns The zone
+     */
+    function getZone(chargePower: number, effectivePrice: number, settings: Settings): Zone {
+        if (chargePower <= 0) {
+            return settings.priceLimit > 0 && effectivePrice < settings.priceLimit ? Zone.NO_SURPLUS : Zone.NONE;
+        }
+        if (chargePower >= getFullPower(settings)) {
+            return Zone.FULL;
+        }
+        return Zone.REDUCED;
     }
 
     /**
@@ -423,15 +434,6 @@ export namespace EvcsPriceForecast {
                 chargePower = settings.minPower;
             }
 
-            let zone: Zone;
-            if (chargePower <= 0) {
-                zone = available ? Zone.NONE : Zone.NO_SURPLUS;
-            } else if (chargePower >= getFullPower(settings)) {
-                zone = Zone.FULL;
-            } else {
-                zone = Zone.REDUCED;
-            }
-
             // Without charging: what would it cost at minimum power
             const referencePower = chargePower > 0 ? chargePower : settings.minPower;
             const pvPower = Math.min(surplus, referencePower);
@@ -442,6 +444,8 @@ export namespace EvcsPriceForecast {
                 settings.pvPrice,
                 storagePrice,
             );
+
+            const zone = getZone(chargePower, effectivePrice, settings);
 
             result.push({
                 timestamp: timestamp,

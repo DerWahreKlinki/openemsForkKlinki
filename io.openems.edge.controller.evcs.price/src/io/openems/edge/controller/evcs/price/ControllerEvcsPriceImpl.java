@@ -78,6 +78,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Time since when a charge power above zero is calculated continuously while
 	// not charging; used for the start confirmation
 	private Instant startWantedSince = null;
+	private Instant stopWantedSince = null;
 
 	// True while the storage is already above its evening target: that surplus
 	// may go to the car even without PV surplus
@@ -870,16 +871,27 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// Pause charging by limiting to zero
 		if (this.lastChargePower > 0 && nextChargePower <= 0) {
 			var hysteresis = Duration.ofSeconds(this.config.excessChargeHystersis());
-			if (this.lastInitialCharge.plus(hysteresis).isBefore(now)) {
-
-				// Pause charing
-				targetChargePower = 0;
-				this.lastChargePause = now;
-			} else {
+			if (this.stopWantedSince == null) {
+				this.stopWantedSince = now;
+			}
+			var confirmation = Duration.ofSeconds(this.config.stopConfirmationTime());
+			if (!this.lastInitialCharge.plus(hysteresis).isBefore(now)) {
 				// Wait for hysteresis
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
+			} else if (this.stopWantedSince.plus(confirmation).isAfter(now)) {
+				// Wait for the stop confirmation: the excess has to be missing for a
+				// while; a short cloud must not end a charge process that would then
+				// need the start confirmation again
+				showWarning = true;
+				targetChargePower = this.lastChargePower;
+			} else {
+				// Pause charing
+				targetChargePower = 0;
+				this.lastChargePause = now;
 			}
+		} else {
+			this.stopWantedSince = null;
 		}
 
 		// Apply results

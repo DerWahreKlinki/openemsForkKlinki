@@ -976,6 +976,62 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void stopConfirmationTest() throws Exception {
+		// Once charging, a single cycle without excess must not pause; after the
+		// confirmation time of 10 s without excess it does
+		final var clock = createDummyClock();
+		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setPriceLimit(0) //
+						.setExcessChargeHystersis(0) //
+						.setExcessChargePauseHysteresis(0) //
+						.setStartConfirmationTime(0) //
+						.setStopConfirmationTime(10) //
+						.build()) //
+				.next(new TestCase("excess: start at once") //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000)) //
+				.next(new TestCase("excess gone for one cycle: keep charging") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, 2000) //
+						.input("evcs0", ACTIVE_POWER, 4000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase("excess back: counter restarts") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, -2000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("excess gone again") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, 2000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase("still no excess after 11 s: pause") //
+						.timeleap(clock, 11, SECONDS) //
+						.input(GRID_ACTIVE_POWER, 2000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
+	}
+
+	@Test
 	public void startConfirmationTest() throws Exception {
 		// A single cycle with apparent excess must not start charging; after the
 		// confirmation time of 10 s with continuous excess it does

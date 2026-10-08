@@ -20,6 +20,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int excessChargeHystersis = 120;
 		private int excessChargePauseHysteresis = 30;
 		private int startConfirmationTime = 0;
+		private int stopConfirmationTime = 0;
 		private boolean enablePriceCharging = true;
 		private double priceLimit = 0;
 		private double priceLimitFullPower = 0;
@@ -93,6 +94,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setStartConfirmationTime(int startConfirmationTime) {
 			this.startConfirmationTime = startConfirmationTime;
+			return this;
+		}
+
+		public Builder setStopConfirmationTime(int stopConfirmationTime) {
+			this.stopConfirmationTime = stopConfirmationTime;
 			return this;
 		}
 
@@ -210,6 +216,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int startConfirmationTime() {
 		return this.builder.startConfirmationTime;
+	}
+
+	@Override
+	public int stopConfirmationTime() {
+		return this.builder.stopConfirmationTime;
 	}
 
 	@Override

@@ -52,6 +52,9 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Start confirmation time [s]", description = "Charging is only started after the charge power has been above zero for this time (Seconds). Avoids starts on a single wrong measurement, e.g. right after a restart when grid and storage values lag behind; '0' starts immediately.")
 	int startConfirmationTime() default 10;
 
+	@AttributeDefinition(name = "Stop confirmation time [s]", description = "Charging is only paused after the charge power has been zero for this time (Seconds), in addition to the 'Minimum charging time'. A short cloud must not end a charge process that would then need the start confirmation again. '0' pauses at once.")
+	int stopConfirmationTime() default 0;
+
 	@AttributeDefinition(name = "Price-based charging", description = "In excess power mode: charge from grid depending on the grid buy price (the two price limits below), and fill up the minimum hardware power from grid while the blended price of surplus, storage and grid power is below the 'Price limit'. Switched off, grid power is never taken because of its price: the car charges only from surplus power that would otherwise be fed into the grid and, if included, from the storage reserve; the price limits have no effect.")
 	boolean enablePriceCharging() default true;
 

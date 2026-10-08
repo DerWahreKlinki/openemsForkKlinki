@@ -133,6 +133,9 @@
               @if (storageNetSoc != null) {
                 <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.NET_SOC' | translate" [value]="storageNetSoc" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
               }
+              @if (storageSurplusEnergy != null) {
+                <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.SURPLUS' | translate" [value]="storageSurplusEnergy" [converter]="CONVERT_TO_KILO_WATT_HOURS"></oe-modal-line>
+              }
             }
             <!--Current blended price of charging with minimum power-->
             @if (blendedPrice != null) {

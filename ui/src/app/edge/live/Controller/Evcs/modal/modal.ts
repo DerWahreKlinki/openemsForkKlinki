@@ -55,6 +55,8 @@ export class ModalComponent extends AbstractModal {
     protected storageCapacity: number | null = null;
     protected storageTargetReachable: boolean | null = null;
     protected storageNetSoc: number | null = null;
+    /** Projected energy above the evening target at the end of PV production in [Wh] */
+    protected storageSurplusEnergy: number | null = null;
     /** Current state of the price controller for the forecast chart; replaced only when a value changes */
     protected live: EvcsPriceForecast.Live | null = null;
     // Controller.Evcs.Price: configuration values used by the forecast chart
@@ -119,6 +121,8 @@ export class ModalComponent extends AbstractModal {
         value == null ? "-" : (value / 10).toFixed(1) + " ct/kWh";
     protected readonly CONVERT_TO_CENT_PER_KWH = (value: number | null): string =>
         value == null ? "-" : value + " ct/kWh";
+    protected readonly CONVERT_TO_KILO_WATT_HOURS = (value: number | null): string =>
+        value == null ? "-" : (value / 1000).toFixed(1) + " kWh";
 
     protected async presentPopover() {
         const popover = await this.popoverctrl.create({
@@ -200,6 +204,7 @@ export class ModalComponent extends AbstractModal {
                 new ChannelAddress("_sum", "EssCapacity"),
                 new ChannelAddress(this.controller.id, "StorageTargetReachable"),
                 new ChannelAddress(this.controller.id, "StorageNetSoc"),
+                new ChannelAddress(this.controller.id, "StorageSurplusEnergy"),
                 new ChannelAddress(this.controller.id, "ChargePowerLimit"),
                 new ChannelAddress("_sum", "ProductionActivePower"),
             );
@@ -261,6 +266,7 @@ export class ModalComponent extends AbstractModal {
         const reachable = currentData.allComponents[this.controller?.id + "/StorageTargetReachable"];
         this.storageTargetReachable = reachable == null ? null : reachable === 1 || reachable === true;
         this.storageNetSoc = currentData.allComponents[this.controller?.id + "/StorageNetSoc"] ?? null;
+        this.storageSurplusEnergy = currentData.allComponents[this.controller?.id + "/StorageSurplusEnergy"] ?? null;
 
         if (this.controller?.factoryId === "Controller.Evcs.Price") {
             const blendedPrice = currentData.allComponents[this.controller.id + "/BlendedPrice"];

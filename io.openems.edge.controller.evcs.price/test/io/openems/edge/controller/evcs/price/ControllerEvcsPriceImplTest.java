@@ -9,9 +9,9 @@ import static io.openems.edge.common.sum.Sum.ChannelId.GRID_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
-import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.EXPECTED_SURPLUS_ENERGY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_ENERGY_TO_TARGET;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_SURPLUS_ENERGY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_TARGET_REACHABLE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PRICE_CHARGING;
 import static io.openems.edge.controller.evcs.price.Priority.CAR;
@@ -673,8 +673,9 @@ public class ControllerEvcsPriceImplTest {
 	@Test
 	public void storageTargetReachableTest() throws Exception {
 		// Dummy clock starts at midnight: 96 quarters, production 12 kW, consumption
-		// 2 kW, car (plugged: at least 4140 W) -> 5860 W * 24 h = 140.6 kWh for the storage.
-		// Storage 20 kWh at 50 %, target 80 % -> 6 kWh missing -> reachable
+		// 2 kW, car (plugged: at least 4140 W) -> 5860 W for the storage: full after
+		// 7 quarters and full at the end of PV production. Storage 20 kWh at 50 %,
+		// target 80 % -> 6 kWh missing now, 4 kWh above the target in the evening
 		// -> storage like PV (8 ct): 2130 W PV at 7 ct + 2010 W storage at 8 ct
 		prepareStoragePriceTest(createDummyClock(), true, 12000, 2000, 96) //
 				.next(new TestCase() //
@@ -688,7 +689,7 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(EXPECTED_SURPLUS_ENERGY, 140640) //
+						.output(STORAGE_SURPLUS_ENERGY, 4000) //
 						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
 						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output(STORAGE_PRICE, 80.) //
@@ -700,10 +701,10 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void storageTargetNotReachableTest() throws Exception {
-		// Production 6 kW, consumption 2 kW, car 4033 W -> nothing left for the
-		// storage although there is 4 kW surplus before the car. Target not
-		// reachable -> storage like grid (43.1 ct): 24.5 ct blended -> still below
-		// the 30 ct limit -> charging
+		// Production 6 kW, consumption 2 kW, car 4140 W -> -140 W for the storage
+		// although there is 4 kW surplus before the car: 10 kWh - 3.36 kWh = 6.64 kWh
+		// in the evening, 9.36 kWh below the target -> storage like grid (43.1 ct):
+		// 24.5 ct blended -> still below the 30 ct limit -> charging
 		final var clock = createDummyClock();
 		prepareStoragePriceTest(clock, true, 6000, 2000, 96) //
 				.next(new TestCase() //
@@ -717,7 +718,7 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(EXPECTED_SURPLUS_ENERGY, 0) //
+						.output(STORAGE_SURPLUS_ENERGY, -9360) //
 						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
 						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output(STORAGE_PRICE, 431.) //
@@ -760,32 +761,44 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
-	public void calculateExpectedSurplusEnergyTest() {
+	public void calculateExpectedStorageEnergyTest() {
 		final var zone = ZoneId.of("Europe/Berlin");
 		final var now = ZonedDateTime.of(2026, 10, 3, 10, 7, 0, 0, zone);
 		final var start = now.withMinute(0).toInstant();
-		// 8 quarters from 10:00; car 1000 W: surplus 3000, 3000, 0, 0, 2000 x 4
+		// 8 quarters from 10:00; car 1000 W: balance +3000, +3000, -2000, -2000, +2000 x 4
 		final var production = Prediction.from(start, 6000, 6000, 1000, 1000, 5000, 5000, 5000, 5000);
 		final var consumption = Prediction.from(start, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000);
-		// (3000 + 3000 + 2000 * 4) / 4 = 3500 Wh
-		assertEquals(3500,
-				ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(production, consumption, 1000, now));
-		// without car: (4000 + 4000 + 3000 * 4) / 4 = 5000 Wh
-		assertEquals(5000,
-				ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(production, consumption, 0, now));
+		// 5000 + (3000 + 3000 - 2000 - 2000 + 2000 * 4) / 4 = 7500 Wh
+		assertEquals(7500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
+				5000, 20000, now));
+		// without car: 5000 + (4000 + 4000 - 1000 - 1000 + 3000 * 4) / 4 = 9500 Wh
+		assertEquals(9500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 0,
+				5000, 20000, now));
+		// nearly full: 19000 -> 19750 -> 20000 (capped) -> 19500 -> 19000 -> ... -> 20000
+		assertEquals(20000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
+				19000, 20000, now));
+		// nearly empty: 500 -> 1250 -> 2000 -> 1500 -> 1000 -> 3000
+		assertEquals(3000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
+				500, 20000, now));
 
-		// quarters without production (evening) and of the next day are ignored
+		// the projection ends with the last quarter-hour with production of today;
+		// quarters without production in between count, the next day is ignored
 		final var evening = ZonedDateTime.of(2026, 10, 3, 23, 20, 0, 0, zone);
 		final var eveningStart = evening.withMinute(15).toInstant();
 		final var production2 = Prediction.from(eveningStart, 6000, 0, 6000, 6000, 6000, 6000);
 		final var consumption2 = Prediction.from(eveningStart, 2000, 2000, 2000, 2000, 2000, 2000);
-		// 23:15 -> 1000 Wh; 23:30 no production; 23:45 -> 1000 Wh
-		assertEquals(2000,
-				ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(production2, consumption2, 0, evening));
+		// 23:15 -> +1000 Wh; 23:30 no production -> -500 Wh; 23:45 -> +1000 Wh
+		assertEquals(6500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production2, consumption2, 0,
+				5000, 20000, evening));
 
-		assertNull(ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(Prediction.EMPTY_PREDICTION, consumption,
-				0, now));
-		assertNull(ControllerEvcsPriceImpl.calculateExpectedSurplusEnergy(null, consumption, 0, now));
+		// no production left today: the storage keeps what it has
+		final var production3 = Prediction.from(eveningStart, 0, 0, 0, 6000, 6000, 6000);
+		assertEquals(5000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production3, consumption2, 0,
+				5000, 20000, evening));
+
+		assertNull(ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(Prediction.EMPTY_PREDICTION, consumption,
+				0, 5000, 20000, now));
+		assertNull(ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(null, consumption, 0, 5000, 20000, now));
 	}
 
 	@Test
@@ -801,11 +814,10 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void calculateStoragePriceTest() {
-		assertTrue(ControllerEvcsPriceImpl.isStorageTargetReachable(13000, 12000));
-		assertTrue(ControllerEvcsPriceImpl.isStorageTargetReachable(0, 0));
-		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(11999, 12000));
-		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(null, 12000));
-		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(13000, null));
+		assertTrue(ControllerEvcsPriceImpl.isStorageTargetReachable(1000));
+		assertTrue(ControllerEvcsPriceImpl.isStorageTargetReachable(0));
+		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(-1));
+		assertFalse(ControllerEvcsPriceImpl.isStorageTargetReachable(null));
 
 		assertEquals(8., ControllerEvcsPriceImpl.calculateStoragePrice(431., 7, 1, true), 0.01);
 		assertEquals(43.1, ControllerEvcsPriceImpl.calculateStoragePrice(431., 7, 1, false), 0.01);
@@ -937,8 +949,8 @@ public class ControllerEvcsPriceImplTest {
 	@Test
 	public void storageAboveTargetChargesWithoutPvTest() throws Exception {
 		// Evening, no PV: storage 20 kWh at 95 % (net 95 % > target 80 %) -> the
-		// surplus above the target may go to the car at 8 ct, grid 50 ct.
-		// After the storage dropped to the target: priced like grid -> stop.
+		// 3 kWh above the target may go to the car at 8 ct, grid 50 ct.
+		// After the storage dropped below the target: priced like grid -> stop.
 		final var clock = createDummyClock();
 		prepareStoragePriceTest(clock, true, 0, 2000, 96) //
 				.next(new TestCase("storage above target, no PV") //
@@ -953,6 +965,7 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output(STORAGE_ENERGY_TO_TARGET, 0) //
+						.output(STORAGE_SURPLUS_ENERGY, 3000) //
 						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output(STORAGE_PRICE, 80.) //
 						.output(BLENDED_PRICE, 80.) //
@@ -963,6 +976,7 @@ public class ControllerEvcsPriceImplTest {
 						.input(ESS_SOC, 79) //
 						.input(ESS_DISCHARGE_POWER, 6000) //
 						.input("evcs0", ACTIVE_POWER, 4000) //
+						.output(STORAGE_SURPLUS_ENERGY, -200) //
 						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //

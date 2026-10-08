@@ -427,11 +427,12 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Charging price now",
-                        "INFO": "If the storage is expected to reach its evening target even though the car keeps charging, the car may already charge from the storage now. Otherwise storage power counts like grid power.",
+                        "INFO": "The energy of the storage is projected until the end of PV production (production minus consumption minus the car, quarter-hour by quarter-hour). If it ends above the evening target, the car may already charge that reserve from the storage now; storage power then counts like PV power. Otherwise storage power counts like grid power.",
                         "NAME": "Include storage with foresight",
                         "NET_SOC": "Storage state of charge (net)",
-                        "REASON_GRID": "The storage would miss its evening target; its power counts like grid power.",
-                        "REASON_PV": "The storage is expected to reach its evening target despite the car charging; its power counts like PV power.",
+                        "REASON_GRID": "The storage would miss its evening target at sunset; its power counts like grid power.",
+                        "REASON_PV": "The storage is projected to be above its evening target at sunset; its power counts like PV power.",
+                        "SURPLUS": "Storage reserve above the evening target (forecast until sunset)",
                         "TARGET": "Storage target in the evening (net)"
                     },
                     "TOTAL_CHARGE": "Total charge",

@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
 
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -388,12 +389,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * power from the storage in [Cent/kWh].
 	 *
 	 * <p>
-	 * If the expected PV surplus of the day exceeds the free storage capacity plus
-	 * the configured reserve, the storage will be full anyway and power taken from
-	 * it now is replaced by PV surplus: it costs the PV price plus the loss
-	 * surcharge. Otherwise the energy is missing later and has to be bought from
-	 * grid: it costs the grid buy price. Without predictions the grid buy price is
-	 * used.
+	 * The energy of the storage is projected until the end of PV production
+	 * today: the current energy plus production minus consumption minus the car,
+	 * quarter-hour by quarter-hour, within the usable capacity. If the projection
+	 * ends above the evening target, the storage will have that surplus anyway and
+	 * power taken from it now is replaced by PV: it costs the PV price plus the
+	 * loss surcharge, and the car may take the surplus even without PV. Otherwise
+	 * the energy is missing in the evening and has to be bought from grid: it
+	 * costs the grid buy price. Without predictions the grid buy price is used.
 	 *
 	 * @param gridBuyPrice the grid buy price in [Currency/MWh]; possibly null
 	 * @return the storage price in [Cent/kWh]; null if no grid buy price is known
@@ -403,21 +406,6 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// end of PV production; at least the minimum power while it is plugged in
 		final var carPower = calculateAssumedCarPower(this.evcs.getActivePower().orElse(0), this.evcs.getStatus(),
 				this.evcs.getMinimumHardwarePower().orElse(0));
-
-		Integer expectedSurplus = null;
-		final var predictorManager = this.predictorManager;
-		if (predictorManager != null) {
-			try {
-				final var production = predictorManager
-						.getPrediction(new ChannelAddress("_sum", "ProductionActivePower"));
-				final var consumption = predictorManager
-						.getPrediction(new ChannelAddress("_sum", "ConsumptionActivePower"));
-				expectedSurplus = calculateExpectedSurplusEnergy(production, consumption, carPower,
-						ZonedDateTime.now(this.clock));
-			} catch (RuntimeException e) {
-				this.logDebug(this.log, "Unable to read predictions: " + e.getMessage());
-			}
-		}
 
 		// Usable capacity within the SoC windows of the ChargeDischargeLimiters; falls
 		// back to the total capacity of _sum if there is no limiter
@@ -429,15 +417,37 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				windows = List.of(new StorageWindow(capacity, soc, 0, 100));
 			}
 		}
+		final var energy = calculateStorageEnergy(windows);
 		final var netSoc = calculateNetSoc(windows);
 		final var energyToTarget = calculateEnergyToTarget(windows, this.config.storageTargetSocNet());
 
-		final var targetReachable = isStorageTargetReachable(expectedSurplus, energyToTarget);
-		this.storageAboveTarget = energyToTarget != null && energyToTarget == 0;
+		Integer storageSurplus = null;
+		final var predictorManager = this.predictorManager;
+		if (predictorManager != null && energy != null) {
+			try {
+				final var production = predictorManager
+						.getPrediction(new ChannelAddress("_sum", "ProductionActivePower"));
+				final var consumption = predictorManager
+						.getPrediction(new ChannelAddress("_sum", "ConsumptionActivePower"));
+				final var expected = calculateExpectedStorageEnergy(production, consumption, carPower,
+						energy.storedWh(), energy.usableWh(), ZonedDateTime.now(this.clock));
+				if (expected != null) {
+					storageSurplus = (int) Math
+							.round(expected - energy.usableWh() * this.config.storageTargetSocNet() / 100.);
+				}
+			} catch (RuntimeException e) {
+				this.logDebug(this.log, "Unable to read predictions: " + e.getMessage());
+			}
+		}
+
+		final var targetReachable = isStorageTargetReachable(storageSurplus);
+		// The car may take energy from the storage only while a surplus is left; every
+		// kWh it takes lowers the SoC and with it the surplus, so this ends by itself
+		this.storageAboveTarget = storageSurplus != null && storageSurplus > 0;
 		final var storagePrice = calculateStoragePrice(gridBuyPrice, this.config.pvPrice(),
 				this.config.storageLossSurcharge(), targetReachable);
 
-		this.setExpectedSurplusEnergy(expectedSurplus);
+		this.setStorageSurplusEnergy(storageSurplus);
 		this.setStorageEnergyToTarget(energyToTarget);
 		this.setStorageNetSoc(netSoc);
 		this.setStorageTargetReachable(targetReachable);
@@ -471,6 +481,36 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @param maxSoc   the upper border of the SoC window in [%]
 	 */
 	protected static record StorageWindow(int capacity, int soc, int minSoc, int maxSoc) {
+	}
+
+	/**
+	 * Energy of all storages within their SoC windows.
+	 *
+	 * @param storedWh the stored energy above the lower borders in [Wh]
+	 * @param usableWh the usable capacity between the borders in [Wh]
+	 */
+	protected static record StorageEnergy(double storedWh, double usableWh) {
+	}
+
+	/**
+	 * Calculates the stored and the usable energy of all storages within their SoC
+	 * windows.
+	 *
+	 * @param windows the {@link StorageWindow}s
+	 * @return the {@link StorageEnergy}; null if there is no window
+	 */
+	protected static StorageEnergy calculateStorageEnergy(List<StorageWindow> windows) {
+		if (windows == null || windows.isEmpty()) {
+			return null;
+		}
+		var stored = 0.;
+		var usable = 0.;
+		for (var w : windows) {
+			final var soc = Math.min(Math.max(w.soc(), w.minSoc()), w.maxSoc());
+			stored += w.capacity() * (soc - w.minSoc()) / 100.;
+			usable += w.capacity() * (w.maxSoc() - w.minSoc()) / 100.;
+		}
+		return new StorageEnergy(stored, usable);
 	}
 
 	private static final String LIMITER_FACTORY_PID = "Controller.Ess.ChargeDischargeLimiter";
@@ -529,17 +569,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 *         is no window
 	 */
 	protected static Integer calculateEnergyToTarget(List<StorageWindow> windows, int targetSocNet) {
-		if (windows == null || windows.isEmpty()) {
+		final var energy = calculateStorageEnergy(windows);
+		if (energy == null) {
 			return null;
 		}
-		var stored = 0.;
-		var usable = 0.;
-		for (var w : windows) {
-			final var soc = Math.min(Math.max(w.soc(), w.minSoc()), w.maxSoc());
-			stored += w.capacity() * (soc - w.minSoc()) / 100.;
-			usable += w.capacity() * (w.maxSoc() - w.minSoc()) / 100.;
-		}
-		return (int) Math.round(Math.max(usable * targetSocNet / 100. - stored, 0));
+		return (int) Math.round(Math.max(energy.usableWh() * targetSocNet / 100. - energy.storedWh(), 0));
 	}
 
 	/**
@@ -549,44 +583,55 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @return the net SoC in [%]; null if there is no window
 	 */
 	protected static Integer calculateNetSoc(List<StorageWindow> windows) {
-		if (windows == null || windows.isEmpty()) {
+		final var energy = calculateStorageEnergy(windows);
+		if (energy == null || energy.usableWh() <= 0) {
 			return null;
 		}
-		var stored = 0.;
-		var usable = 0.;
-		for (var w : windows) {
-			final var soc = Math.min(Math.max(w.soc(), w.minSoc()), w.maxSoc());
-			stored += w.capacity() * (soc - w.minSoc()) / 100.;
-			usable += w.capacity() * (w.maxSoc() - w.minSoc()) / 100.;
-		}
-		return usable <= 0 ? null : (int) Math.round(stored / usable * 100);
+		return (int) Math.round(energy.storedWh() / energy.usableWh() * 100);
 	}
 
 	/**
-	 * Calculates the expected PV surplus energy for the storage from now until the
-	 * end of PV production today: the sum of the positive differences of production
-	 * minus consumption minus the assumed car power per quarter-hour. "Evening" is
-	 * the last quarter-hour of today with predicted production.
+	 * Projects the energy of the storage from now until the end of PV production
+	 * today: quarter-hour by quarter-hour, production minus consumption minus the
+	 * assumed car power is added, negative balances included, and the energy is
+	 * kept within the usable capacity. "Evening" is the last quarter-hour of today
+	 * with predicted production; without any production left the storage keeps
+	 * what it has.
 	 *
 	 * @param production  the production prediction in [W] per quarter-hour
 	 * @param consumption the consumption prediction in [W] per quarter-hour
 	 * @param carPower    the power the car is assumed to draw in [W]
+	 * @param storedWh    the energy stored now within the SoC windows in [Wh]
+	 * @param usableWh    the usable capacity within the SoC windows in [Wh]
 	 * @param now         the current time
-	 * @return the surplus energy in [Wh]; null if there is no prediction
+	 * @return the expected energy at the end of PV production in [Wh]; null if
+	 *         there is no prediction
 	 */
-	protected static Integer calculateExpectedSurplusEnergy(Prediction production, Prediction consumption,
-			int carPower, ZonedDateTime now) {
+	protected static Integer calculateExpectedStorageEnergy(Prediction production, Prediction consumption,
+			int carPower, double storedWh, double usableWh, ZonedDateTime now) {
 		if (production == null || consumption == null || production.isEmpty() || consumption.isEmpty()) {
 			return null;
 		}
 		final var endOfDay = now.toLocalDate().plusDays(1).atStartOfDay(now.getZone()).toInstant();
 		// include the current quarter-hour
 		final var start = now.toInstant().minusSeconds(15 * 60);
-		var surplusWh = 0.;
-		var count = 0;
-		for (var entry : production.toMap().entrySet()) {
+		final var quarters = new TreeMap<>(production.toMap());
+		Instant lastProduction = null;
+		for (var entry : quarters.entrySet()) {
 			final var time = entry.getKey();
-			if (time.isBefore(start) || !time.isBefore(endOfDay)) {
+			final var prod = entry.getValue();
+			if (time.isBefore(start) || !time.isBefore(endOfDay) || prod == null || prod <= 0) {
+				continue;
+			}
+			lastProduction = time;
+		}
+		var energy = storedWh;
+		if (lastProduction == null) {
+			return (int) Math.round(energy);
+		}
+		for (var entry : quarters.entrySet()) {
+			final var time = entry.getKey();
+			if (time.isBefore(start) || time.isAfter(lastProduction)) {
 				continue;
 			}
 			final var prod = entry.getValue();
@@ -594,27 +639,23 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			if (prod == null || cons == null) {
 				continue;
 			}
-			count++;
-			if (prod <= 0) {
-				// no production: nothing for the storage (and after sunset this stays so)
-				continue;
-			}
-			surplusWh += Math.max(prod - cons - carPower, 0) / 4.;
+			energy += (prod - cons - carPower) / 4.;
+			// the storage can neither hold more than its usable capacity nor less than nothing
+			energy = Math.min(Math.max(energy, 0), usableWh);
 		}
-		return count == 0 ? null : (int) Math.round(surplusWh);
+		return (int) Math.round(energy);
 	}
 
 	/**
-	 * Decides if the storage is expected to reach its evening target by PV surplus.
+	 * Decides if the storage is expected to reach its evening target.
 	 *
-	 * @param expectedSurplusWh the expected PV surplus energy for the storage in
-	 *                          [Wh]; possibly null
-	 * @param energyToTargetWh  the energy missing to the target in [Wh]; possibly
-	 *                          null
-	 * @return true if the surplus covers the missing energy; false if unknown
+	 * @param storageSurplusWh the expected energy above the target at the end of PV
+	 *                         production in [Wh], negative if missing; possibly
+	 *                         null
+	 * @return true if nothing is missing; false if unknown
 	 */
-	protected static boolean isStorageTargetReachable(Integer expectedSurplusWh, Integer energyToTargetWh) {
-		return expectedSurplusWh != null && energyToTargetWh != null && expectedSurplusWh >= energyToTargetWh;
+	protected static boolean isStorageTargetReachable(Integer storageSurplusWh) {
+		return storageSurplusWh != null && storageSurplusWh >= 0;
 	}
 
 	/**

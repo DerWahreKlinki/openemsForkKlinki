@@ -190,17 +190,23 @@ describe("EvcsPriceForecast", () => {
             // nothing available (no PV, storage below target) -> NO_SURPLUS
             e("21:00", 500, 0, 1500, 1500, 70),
         ], settings, NOW);
+        // 6000 Wh stored + 215 + 715 = 6930 Wh in the evening, target 11200 Wh
+        expect(slots[0].storageSurplus).toBe(-4270);
         expect(slots[0].storagePrice).toBe(42);
         expect(slots[0].storageAboveTarget).toBe(false);
         // 1800 W PV (after the 200 W buffer) at 7 ct + 2340 W storage at 42 ct = 26.78 ct -> below the 30 ct limit
         expect(slots[0].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
         expect(slots[0].effectivePrice).toBe(26.78);
+        // 13600 Wh + 715 -> capped at 14000 Wh -> 2800 Wh above the target
+        expect(slots[1].storageSurplus).toBe(2800);
         expect(slots[1].storagePrice).toBe(8);
         expect(slots[1].storageAboveTarget).toBe(true);
         expect(slots[1].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
+        expect(slots[2].storageSurplus).toBe(1800);
         expect(slots[2].storageAboveTarget).toBe(true);
         expect(slots[2].zone).toBe(EvcsPriceForecast.Zone.REDUCED);
         expect(slots[2].effectivePrice).toBe(8);
+        expect(slots[3].storageSurplus).toBe(-1200);
         expect(slots[3].storageAboveTarget).toBe(false);
         expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
         expect(slots[3].storagePrice).toBe(50);

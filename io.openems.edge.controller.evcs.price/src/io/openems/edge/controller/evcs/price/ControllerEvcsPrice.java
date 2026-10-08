@@ -73,10 +73,11 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 		 * Expected PV surplus energy until the end of PV production, after house
 		 * consumption and the power the car is drawing; from the predictions.
 		 */
-		EXPECTED_SURPLUS_ENERGY(Doc.of(INTEGER) //
+		STORAGE_SURPLUS_ENERGY(Doc.of(INTEGER) //
 				.unit(Unit.WATT_HOURS) //
 				.persistencePriority(HIGH) //
-				.text("Expected PV surplus for the storage until the end of PV production, after the car")), //
+				.text("Expected energy of the storage above its evening target at the end of PV production, "
+						+ "after the car; negative if missing")), //
 		/**
 		 * Energy the storage still needs to reach the evening target.
 		 */
@@ -138,8 +139,8 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 		this.channel(ChannelId.BLENDED_PRICE).setNextValue(val);
 	}
 
-	public default void setExpectedSurplusEnergy(Integer val) {
-		this.channel(ChannelId.EXPECTED_SURPLUS_ENERGY).setNextValue(val);
+	public default void setStorageSurplusEnergy(Integer val) {
+		this.channel(ChannelId.STORAGE_SURPLUS_ENERGY).setNextValue(val);
 	}
 
 	public default void setStorageEnergyToTarget(Integer val) {
@@ -171,7 +172,7 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.channel(6, ChannelId.GRID_BUY_PRICE, ModbusType.FLOAT32) //
 				.channel(8, ChannelId.STORAGE_PRICE, ModbusType.FLOAT32) //
 				.channel(10, ChannelId.BLENDED_PRICE, ModbusType.FLOAT32) //
-				.channel(12, ChannelId.EXPECTED_SURPLUS_ENERGY, ModbusType.FLOAT32) //
+				.channel(12, ChannelId.STORAGE_SURPLUS_ENERGY, ModbusType.FLOAT32) //
 				.channel(14, ChannelId.STORAGE_ENERGY_TO_TARGET, ModbusType.FLOAT32) //
 				.channel(16, ChannelId.STORAGE_TARGET_REACHABLE, ModbusType.UINT16) //
 				.channel(17, ChannelId.STORAGE_NET_SOC, ModbusType.UINT16) //

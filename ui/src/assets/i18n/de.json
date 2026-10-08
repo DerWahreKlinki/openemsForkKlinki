@@ -427,11 +427,12 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Ladepreis jetzt",
-                        "INFO": "Erreicht der Speicher sein Abendziel voraussichtlich auch dann, wenn das Auto weiterlädt, darf das Auto schon jetzt Strom aus dem Speicher laden. Sonst zählt Speicherstrom wie Netzstrom.",
+                        "INFO": "Der Speicherstand wird bis zum Ende der PV-Erzeugung vorausgerechnet (Erzeugung minus Verbrauch minus Auto, Viertelstunde für Viertelstunde). Liegt er dann über dem Abendziel, darf das Auto diese Reserve schon jetzt aus dem Speicher laden; Speicherstrom zählt dabei wie PV-Strom. Sonst zählt Speicherstrom wie Netzstrom.",
                         "NAME": "Speicher vorausschauend einbeziehen",
                         "NET_SOC": "Speicher-Ladestand (netto)",
-                        "REASON_GRID": "Der Speicher würde sein Abendziel verfehlen; sein Strom zählt wie Netzstrom.",
-                        "REASON_PV": "Der Speicher erreicht sein Abendziel voraussichtlich trotz Autoladung; sein Strom zählt wie PV-Strom.",
+                        "REASON_GRID": "Der Speicher würde sein Abendziel bei Sonnenuntergang verfehlen; sein Strom zählt wie Netzstrom.",
+                        "REASON_PV": "Der Speicher liegt laut Prognose bei Sonnenuntergang über seinem Abendziel; sein Strom zählt wie PV-Strom.",
+                        "SURPLUS": "Speicher-Reserve über dem Abendziel (Prognose bis Sonnenuntergang)",
                         "TARGET": "Speicher-Ziel abends (netto)"
                     },
                     "TOTAL_CHARGE": "Gesamte Beladung",

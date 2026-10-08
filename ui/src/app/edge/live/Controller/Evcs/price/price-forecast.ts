@@ -92,6 +92,8 @@ export namespace EvcsPriceForecast {
         storagePrice: number | null;
         /** Storage is (planned to be) above its evening target in this quarter-hour */
         storageAboveTarget: boolean;
+        /** Projected energy above the evening target at the end of PV production in [Wh]; null if unknown */
+        storageSurplus: number | null;
         /** Planned state of charge of the storage in [%]; null if unknown */
         soc: number | null;
         zone: Zone;
@@ -262,6 +264,40 @@ export namespace EvcsPriceForecast {
     }
 
     /**
+     * Projects the energy of the storage from the first entry until the last quarter-hour with PV production
+     * of that day and returns what is left above the evening target, mirroring the controller: per
+     * quarter-hour production minus consumption minus the car (assumed at its minimum power) is added,
+     * negative balances included, within the usable capacity.
+     *
+     * @param entries The schedule entries from the quarter-hour on, in chronological order
+     * @param storedWh The energy stored at the first entry within the SoC window in [Wh]
+     * @param usableWh The usable capacity within the SoC window in [Wh]
+     * @param settings The settings
+     * @returns The energy above the target in [Wh]; negative if missing
+     */
+    export function calculateStorageSurplus(
+        entries: { entry: ScheduleEntry; timestamp: Date }[],
+        storedWh: number,
+        usableWh: number,
+        settings: Settings,
+    ): number {
+        const day = entries[0]?.timestamp.toDateString();
+        let lastProduction = -1;
+        entries.forEach((e, k) => {
+            if (e.timestamp.toDateString() === day && (e.entry.production ?? 0) > 0) {
+                lastProduction = k;
+            }
+        });
+        let energy = storedWh;
+        for (let k = 0; k <= lastProduction; k++) {
+            const e = entries[k].entry;
+            energy += (Math.max(e.production ?? 0, 0) - Math.max(e.consumption ?? 0, 0) - settings.minPower) / 4;
+            energy = Math.min(Math.max(energy, 0), usableWh);
+        }
+        return Math.round(energy - (settings.storageTargetSocNet / 100) * usableWh);
+    }
+
+    /**
      * Replaces the forecast of the running quarter-hour by the current state of the controller, so that
      * the chart never contradicts what the controller is doing right now.
      *
@@ -351,30 +387,17 @@ export namespace EvcsPriceForecast {
             const storageCharge = Math.max(-(entry.ess ?? 0), 0);
             const surplus = calculateSurplus(production, entry.consumption ?? 0, storageCharge, settings.priority);
 
-            // Storage price of this quarter-hour, mirroring the controller: PV price plus
-            // loss surcharge if the storage is above its evening target or the remaining
-            // PV surplus of the day (after the car) still reaches it; otherwise grid price
-            let storageAboveTarget = false;
+            // Storage price of this quarter-hour, mirroring the controller: the energy of the
+            // storage is projected until the last quarter-hour with PV of the day; PV price plus
+            // loss surcharge if it ends above the evening target, otherwise grid price
+            let storageSurplus: number | null = null;
             let storagePrice: number | null = settings.useStorageSurplus ? settings.storagePrice : null;
             if (settings.useStorageSurplus && entry.soc != null && usable != null) {
                 const netSoc = toNetSoc(entry.soc, settings.storageMinSoc, settings.storageMaxSoc);
-                const energyToTarget = Math.max(((settings.storageTargetSocNet - netSoc) / 100) * usable, 0);
-                storageAboveTarget = energyToTarget <= 0;
-                let surplusToEndOfDay = 0;
-                for (let k = i; k < entries.length; k++) {
-                    const e = entries[k];
-                    if (e.timestamp.toDateString() !== timestamp.toDateString()) {
-                        break;
-                    }
-                    const prod = Math.max(e.entry.production ?? 0, 0);
-                    if (prod <= 0) {
-                        continue;
-                    }
-                    surplusToEndOfDay += Math.max(prod - Math.max(e.entry.consumption ?? 0, 0) - settings.minPower, 0) / 4;
-                }
-                storagePrice =
-                    surplusToEndOfDay >= energyToTarget ? settings.pvPrice + settings.storageLossSurcharge : price;
+                storageSurplus = calculateStorageSurplus(entries.slice(i), (netSoc / 100) * usable, usable, settings);
+                storagePrice = storageSurplus >= 0 ? settings.pvPrice + settings.storageLossSurcharge : price;
             }
+            const storageAboveTarget = storageSurplus != null && storageSurplus > 0;
             // While the storage is above its target the car may charge from it without PV
             const available = surplus > 0 || (settings.useStorageSurplus && storageAboveTarget);
 
@@ -429,6 +452,7 @@ export namespace EvcsPriceForecast {
                 effectivePrice: Math.round(effectivePrice * 100) / 100,
                 storagePrice: storagePrice,
                 storageAboveTarget: storageAboveTarget,
+                storageSurplus: storageSurplus,
                 soc: entry.soc ?? null,
                 zone: zone,
             });

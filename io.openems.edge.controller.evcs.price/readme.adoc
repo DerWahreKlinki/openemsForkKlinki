@@ -2,4 +2,25 @@
 
 Copy of the EVCS Controller ("Force-Charge" and "Surplus Energy Charging") that additionally charges from grid in "Surplus Energy Charging" mode, depending on the grid buy price: no grid charging above an upper price limit, full power at or below a lower price limit and a linear ramp in between. The higher of surplus power and price dependent power is applied.
 
+== Sources of charging power
+
+In "Surplus Energy Charging" mode the car can be charged from three sources, each with its own switch:
+
+Surplus:: Always. Power that would otherwise be fed into the grid. With priority CAR the car takes the surplus before the storage, with priority STORAGE only what the storage cannot take. Surplus may also come from the storage when the energy optimizer exports it.
+Storage reserve ("Include storage with foresight"):: The energy of the storage is projected quarter-hour by quarter-hour until the last quarter-hour with predicted production: production minus consumption, negative balances included, within the usable capacity (the SoC windows of the ChargeDischargeLimiters, if present). With priority CAR the car is assumed to take from a positive balance up to its current power, at least the minimum hardware power while plugged in. The difference to the "Storage target in the evening" is the storage reserve (channel `StorageSurplusEnergy`, negative if missing). While the reserve is positive, the car may charge it from the storage even without surplus, and storage power counts like surplus power plus the "Storage loss surcharge" in the blended price. Otherwise storage power counts like grid power. Without a prediction the reserve is unknown and the storage counts like grid.
+Grid by price ("Price-based charging"):: Charge from grid depending on the grid buy price: minimum hardware power at the "Price limit", linearly up to the "Full charge power by price" at the "Price limit for full power". A price limit of 0 charges at negative prices only. If the surplus does not reach the minimum hardware power, the missing power is taken from the storage reserve and from grid as long as the blended price of surplus (at "Value of surplus power"), storage and grid power is below the "Price limit". Switched off, grid power is never taken because of its price: the car charges only when surplus and storage reserve cover the minimum hardware power by themselves, and the price limits have no effect.
+
+== Hysteresis
+
+Every start and stop of a charge process is a contactor cycle of the charging station, so both are confirmed over time:
+
+Start hysteresis:: Charging starts only after it has been allowed (by surplus, storage reserve or price) continuously for this time. A short burst of sun or a single wrong measurement right after a restart does not start the car. This is also the minimum pause after a stop.
+Stop hysteresis:: Charging stops only after it has not been allowed continuously for this time. A short cloud or a kettle does not end a charge process, which would then need the start hysteresis again. This is also the minimum charging time.
+
+Changes of the charge power while charging are applied at once, after the response time of the charging station.
+
+== Modbus/TCP
+
+The controller provides a Modbus table (`getModbusSlaveTable`) with its set-points and the storage projection, so that external systems can read the charging decision.
+
 https://github.com/DerWahreKlinki/openemsForkKlinki/tree/develop/io.openems.edge.controller.evcs.price[Source Code icon:github[]]

@@ -290,6 +290,7 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void hysteresisTest() throws Exception {
+		// Start hysteresis 30 s, stop hysteresis 120 s
 		final var clock = createDummyClock();
 		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
@@ -301,65 +302,57 @@ public class ControllerEvcsPriceImplTest {
 						.setEvcsId("evcs0") //
 						.setEnableCharging(true) //
 						.setChargeMode(EXCESS_POWER) //
-						.setForceChargeMinPower(DEFAULT_FORCE_CHARGE_MIN_POWER) //
-						.setDefaultChargeMinPower(DEFAULT_CHARGE_MIN_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
 						.setPriority(CAR) //
 						.setEnergySessionLimit(0) //
-						.setExcessChargeHystersis(120) //
-						.setExcessChargePauseHysteresis(30) //
+						.setStartConfirmationTime(30) //
+						.setStopConfirmationTime(120) //
 						.build()) //
+
+				// Excess power: start only after the start hysteresis
 				.next(new TestCase() //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input(GRID_ACTIVE_POWER, -6_000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6_000)) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, true)) //
 				.next(new TestCase() //
-						.input(ESS_DISCHARGE_POWER, 0) //
+						.timeleap(clock, 31, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6_000) //
+						.output(AWAITING_HYSTERESIS, false)) //
+
+				// Changes of the charge power while charging are applied at once
+				.next(new TestCase() //
 						.input(GRID_ACTIVE_POWER, -200) //
 						.input("evcs0", ACTIVE_POWER, 5800) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6_000)) //
 				.next(new TestCase() //
-						.input(ESS_DISCHARGE_POWER, 0) //
 						.input(GRID_ACTIVE_POWER, 500) //
 						.input("evcs0", ACTIVE_POWER, 5800) //
-						.input("evcs0", Evcs.ChannelId.MINIMUM_HARDWARE_POWER, Evcs.DEFAULT_MINIMUM_HARDWARE_POWER)
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 5300))
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 5300)) //
 
-				// Active hysteresis
+				// No excess power any more: stop only after the stop hysteresis
 				.next(new TestCase() //
-						.input(ESS_DISCHARGE_POWER, 0) //
 						.input(GRID_ACTIVE_POWER, 1000) //
 						.input("evcs0", ACTIVE_POWER, 5000) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 5_300) //
 						.output(AWAITING_HYSTERESIS, true)) //
 				.next(new TestCase() //
-						.timeleap(clock, 6, MINUTES)) //
-
-				// Passed hysteresis
-				.next(new TestCase() //
-						.input(ESS_DISCHARGE_POWER, 0) //
-						.input(GRID_ACTIVE_POWER, 1000) //
-						.input("evcs0", ACTIVE_POWER, 5000) //
+						.timeleap(clock, 6, MINUTES) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(AWAITING_HYSTERESIS, false)) //
 
-				// Active hysteresis
+				// Excess power again: start hysteresis from the beginning
 				.next(new TestCase() //
-						.input(ESS_DISCHARGE_POWER, 0) //
 						.input(GRID_ACTIVE_POWER, -5000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
-						.output(AWAITING_HYSTERESIS, true))
-
+						.output(AWAITING_HYSTERESIS, true)) //
 				.next(new TestCase() //
-						.timeleap(clock, 1, MINUTES)) //
-
-				// New charge process starting after another 30 seconds
-				.next(new TestCase() //
-						.input(ESS_DISCHARGE_POWER, 0) //
-						.input(GRID_ACTIVE_POWER, -5000) //
-						.input("evcs0", ACTIVE_POWER, 0) //
+						.timeleap(clock, 1, MINUTES) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 5000) //
 						.output(AWAITING_HYSTERESIS, false)) //
 				.deactivate();
@@ -712,8 +705,6 @@ public class ControllerEvcsPriceImplTest {
 						.setPriceLimit(30) //
 						.setPriceLimitFullPower(20) //
 						.setPriceChargePower(11040) //
-						.setExcessChargeHystersis(0) //
-						.setExcessChargePauseHysteresis(0) //
 						.setUseStorageSurplus(useStorageSurplus) //
 						.setStorageTargetSocNet(80) //
 						.setStorageLossSurcharge(1) //
@@ -953,8 +944,6 @@ public class ControllerEvcsPriceImplTest {
 						.setPriceLimit(30) //
 						.setPriceLimitFullPower(20) //
 						.setPriceChargePower(11040) //
-						.setExcessChargeHystersis(0) //
-						.setExcessChargePauseHysteresis(0) //
 						.build()) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 443.) //
@@ -995,8 +984,6 @@ public class ControllerEvcsPriceImplTest {
 						.setPriority(CAR) //
 						.setEnergySessionLimit(0) //
 						.setPriceLimit(0) //
-						.setExcessChargeHystersis(0) //
-						.setExcessChargePauseHysteresis(0) //
 						.setStartConfirmationTime(0) //
 						.setStopConfirmationTime(10) //
 						.build()) //
@@ -1051,8 +1038,6 @@ public class ControllerEvcsPriceImplTest {
 						.setPriority(CAR) //
 						.setEnergySessionLimit(0) //
 						.setPriceLimit(0) //
-						.setExcessChargeHystersis(0) //
-						.setExcessChargePauseHysteresis(0) //
 						.setStartConfirmationTime(10) //
 						.build()) //
 				.next(new TestCase("apparent excess for one cycle") //

@@ -66,17 +66,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private final ChargingLowerThanTargetHandler chargingLowerThanTargetHandler;
 	private final Clock clock;
 
-	// Time of last charge power change, used for the hysteresis
-	private Instant lastInitialCharge = Instant.MIN;
-
-	// Time of last charge pause, used for the hysteresis
-	private Instant lastChargePause = Instant.MIN;
-
 	// Last charge power, used for the hysteresis
 	private int lastChargePower = 0;
 
-	// Time since when a charge power above zero is calculated continuously while
-	// not charging; used for the start confirmation
+	// Time since when a charge power above zero (below or equal zero) is calculated
+	// continuously while not charging (charging); used for the start (stop)
+	// hysteresis
 	private Instant startWantedSince = null;
 	private Instant stopWantedSince = null;
 
@@ -844,51 +839,35 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// TODO: Show info, test and check if bellow logic still needed or need to be
 		// different (Change only when we would change for xSeconds)
 
-		// New charge power limit
+		// Start charging: the charge power has to stay above zero for the start
+		// hysteresis; a short burst of sun or a single wrong measurement must not
+		// start the car (every start is a contactor cycle)
 		if (this.lastChargePower <= 0 && nextChargePower > 0) {
-			var hysteresis = Duration.ofSeconds(this.config.excessChargePauseHysteresis());
 			if (this.startWantedSince == null) {
 				this.startWantedSince = now;
 			}
-			var confirmation = Duration.ofSeconds(this.config.startConfirmationTime());
-			if (!this.lastChargePause.plus(hysteresis).isBefore(now)) {
-				// Wait for hysteresis
+			var hysteresis = Duration.ofSeconds(this.config.startConfirmationTime());
+			if (this.startWantedSince.plus(hysteresis).isAfter(now)) {
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
-			} else if (this.startWantedSince.plus(confirmation).isAfter(now)) {
-				// Wait for the start confirmation: the charge power has to stay above
-				// zero for a while, a single wrong measurement must not start charging
-				showWarning = true;
-				targetChargePower = this.lastChargePower;
-			} else {
-				// Start charing
-				this.lastInitialCharge = now;
 			}
 		} else {
 			this.startWantedSince = null;
 		}
 
-		// Pause charging by limiting to zero
+		// Pause charging by limiting to zero: the charge power has to stay at zero
+		// for the stop hysteresis; a short cloud must not end a charge process that
+		// would then need the start hysteresis again
 		if (this.lastChargePower > 0 && nextChargePower <= 0) {
-			var hysteresis = Duration.ofSeconds(this.config.excessChargeHystersis());
 			if (this.stopWantedSince == null) {
 				this.stopWantedSince = now;
 			}
-			var confirmation = Duration.ofSeconds(this.config.stopConfirmationTime());
-			if (!this.lastInitialCharge.plus(hysteresis).isBefore(now)) {
-				// Wait for hysteresis
-				showWarning = true;
-				targetChargePower = this.lastChargePower;
-			} else if (this.stopWantedSince.plus(confirmation).isAfter(now)) {
-				// Wait for the stop confirmation: the excess has to be missing for a
-				// while; a short cloud must not end a charge process that would then
-				// need the start confirmation again
+			var hysteresis = Duration.ofSeconds(this.config.stopConfirmationTime());
+			if (this.stopWantedSince.plus(hysteresis).isAfter(now)) {
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
 			} else {
-				// Pause charing
 				targetChargePower = 0;
-				this.lastChargePause = now;
 			}
 		} else {
 			this.stopWantedSince = null;

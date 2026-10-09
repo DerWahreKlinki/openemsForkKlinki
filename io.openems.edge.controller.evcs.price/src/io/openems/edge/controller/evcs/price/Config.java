@@ -43,16 +43,10 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Energy limit in this session in [Wh]", description = "Set the Energylimit in this Session in Wh. The charging station will only charge till this limit; '0' is no limit.")
 	int energySessionLimit() default 0;
 
-	@AttributeDefinition(name = "Minimum charging time while charging with excess power", description = "Minimum time (Seconds) is applied to avoid continuous switching between charging and not charging")
-	int excessChargeHystersis() default 120;
-
-	@AttributeDefinition(name = "Minimum pause time while charging with excess power", description = "Minimum time (Seconds) is applied to avoid continuous switching between charging and not charging")
-	int excessChargePauseHysteresis() default 30;
-
-	@AttributeDefinition(name = "Start confirmation time [s]", description = "Charging is only started after the charge power has been above zero for this time (Seconds). Avoids starts on a single wrong measurement, e.g. right after a restart when grid and storage values lag behind; '0' starts immediately.")
+	@AttributeDefinition(name = "Start hysteresis [s]", description = "Charging starts only after it has been allowed (by excess power or price) continuously for this time. A short burst of sun or a single wrong measurement right after a restart does not start the car, and every start costs a contactor cycle. This is also the minimum pause after a stop. '0' starts at once.")
 	int startConfirmationTime() default 10;
 
-	@AttributeDefinition(name = "Stop confirmation time [s]", description = "Charging is only paused after the charge power has been zero for this time (Seconds), in addition to the 'Minimum charging time'. A short cloud must not end a charge process that would then need the start confirmation again. '0' pauses at once.")
+	@AttributeDefinition(name = "Stop hysteresis [s]", description = "Charging stops only after it has not been allowed continuously for this time. A short cloud or a kettle does not end a charge process, which would then need the start hysteresis again. This is also the minimum charging time. '0' stops at once.")
 	int stopConfirmationTime() default 0;
 
 	@AttributeDefinition(name = "Price-based charging", description = "In excess power mode: charge from grid depending on the grid buy price (the two price limits below), and fill up the minimum hardware power from grid while the blended price of surplus, storage and grid power is below the 'Price limit'. Switched off, grid power is never taken because of its price: the car charges only from surplus power that would otherwise be fed into the grid and, if included, from the storage reserve; the price limits have no effect.")

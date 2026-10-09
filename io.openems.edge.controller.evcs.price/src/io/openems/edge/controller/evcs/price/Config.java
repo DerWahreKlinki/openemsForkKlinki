@@ -44,10 +44,10 @@ import io.openems.edge.evcs.api.ChargeMode;
 	int energySessionLimit() default 0;
 
 	@AttributeDefinition(name = "Start hysteresis [s]", description = "Start only after charging has been allowed for this time without a gap; also the minimum pause.")
-	int startConfirmationTime() default 10;
+	int startConfirmationTime() default 30;
 
 	@AttributeDefinition(name = "Stop hysteresis [s]", description = "Stop only after charging has been denied for this time without a gap; also the minimum charging time.")
-	int stopConfirmationTime() default 0;
+	int stopConfirmationTime() default 120;
 
 	@AttributeDefinition(name = "Price-based charging", description = "Charge from grid below the price limits; off = surplus and storage reserve only, never grid.")
 	boolean enablePriceCharging() default true;

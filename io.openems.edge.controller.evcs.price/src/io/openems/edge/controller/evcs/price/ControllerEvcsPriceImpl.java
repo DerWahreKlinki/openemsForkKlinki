@@ -603,13 +603,19 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
-	 * Projects the energy of the storage from now until the end of PV production
-	 * today: quarter-hour by quarter-hour, production minus consumption is added,
+	 * Projects the energy of the storage from now until the end of PV production:
+	 * quarter-hour by quarter-hour, production minus consumption is added,
 	 * negative balances included, and the energy is kept within the usable
 	 * capacity. The car takes from a positive balance up to its assumed power; it
 	 * charges from PV surplus only, so it never makes the balance negative.
-	 * "Evening" is the last quarter-hour of today with predicted production;
-	 * without any production left the storage keeps what it has.
+	 *
+	 * <p>
+	 * "Evening" is the end of the running block of quarter-hours with predicted
+	 * production. Without production in the current quarter-hour - after the end
+	 * of PV production until sunrise - the evening has passed and the storage
+	 * keeps what it has; the PV of the next day does not count, otherwise the car
+	 * could empty the storage at night and the house would buy from grid until
+	 * the next day's PV refills it.
 	 *
 	 * @param production  the production prediction in [W] per quarter-hour
 	 * @param consumption the consumption prediction in [W] per quarter-hour
@@ -625,31 +631,18 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		if (production == null || consumption == null || production.isEmpty() || consumption.isEmpty()) {
 			return null;
 		}
-		final var endOfDay = now.toLocalDate().plusDays(1).atStartOfDay(now.getZone()).toInstant();
 		// include the current quarter-hour
 		final var start = now.toInstant().minusSeconds(15 * 60);
 		final var quarters = new TreeMap<>(production.toMap());
-		Instant lastProduction = null;
-		for (var entry : quarters.entrySet()) {
-			final var time = entry.getKey();
-			final var prod = entry.getValue();
-			if (time.isBefore(start) || !time.isBefore(endOfDay) || prod == null || prod <= 0) {
-				continue;
-			}
-			lastProduction = time;
-		}
 		var energy = storedWh;
-		if (lastProduction == null) {
-			return (int) Math.round(energy);
-		}
-		for (var entry : quarters.entrySet()) {
-			final var time = entry.getKey();
-			if (time.isBefore(start) || time.isAfter(lastProduction)) {
-				continue;
-			}
+		for (var entry : quarters.tailMap(start, true).entrySet()) {
 			final var prod = entry.getValue();
-			final var cons = consumption.getAt(time);
-			if (prod == null || cons == null) {
+			if (prod == null || prod <= 0) {
+				// end of the running PV block; at night already the current quarter-hour
+				break;
+			}
+			final var cons = consumption.getAt(entry.getKey());
+			if (cons == null) {
 				continue;
 			}
 			final var balance = prod - cons;

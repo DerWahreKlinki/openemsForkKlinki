@@ -286,13 +286,12 @@ export namespace EvcsPriceForecast {
         usableWh: number,
         settings: Settings,
     ): number {
-        const day = entries[0]?.timestamp.toDateString();
+        // "Evening" is the end of the running block of quarter-hours with production; at night (no production
+        // in the first quarter-hour) the evening has passed and the next day's PV does not count
         let lastProduction = -1;
-        entries.forEach((e, k) => {
-            if (e.timestamp.toDateString() === day && (e.entry.production ?? 0) > 0) {
-                lastProduction = k;
-            }
-        });
+        while (lastProduction + 1 < entries.length && (entries[lastProduction + 1].entry.production ?? 0) > 0) {
+            lastProduction++;
+        }
         const carPower = settings.priority === "STORAGE" ? 0 : settings.minPower;
         let energy = storedWh;
         for (let k = 0; k <= lastProduction; k++) {

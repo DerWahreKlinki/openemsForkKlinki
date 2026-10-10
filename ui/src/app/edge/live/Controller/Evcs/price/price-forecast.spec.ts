@@ -248,6 +248,20 @@ describe("EvcsPriceForecast", () => {
         expect(EvcsPriceForecast.calculateChargePowerFromPrice(-1, settings)).toBe(11040);
     });
 
+    it("#calculateStorageSurplus ignores the next day's PV at night", () => {
+        const settings: EvcsPriceForecast.Settings = { ...SETTINGS, storageTargetSocNet: 85 };
+        const e = (iso: string, production: number) => ({
+            entry: { timestamp: iso, price: 300, production: production, consumption: 500 },
+            timestamp: new Date(iso),
+        });
+        // 00:00 at night, PV from 08:00 tomorrow: storage 70 % of 14 kWh, target 85 % -> 2100 Wh missing
+        const night = [e("2026-10-11T00:00:00", 0), e("2026-10-11T00:15:00", 0), e("2026-10-11T08:00:00", 9000)];
+        expect(EvcsPriceForecast.calculateStorageSurplus(night, 9800, 14000, settings)).toBe(-2100);
+        // during the day the running PV block counts: priority CAR, 9000 - 500 - 4140 per quarter-hour
+        const day = [e("2026-10-11T10:00:00", 9000), e("2026-10-11T10:15:00", 9000), e("2026-10-11T20:00:00", 0)];
+        expect(EvcsPriceForecast.calculateStorageSurplus(day, 9800, 14000, settings)).toBe(-2100 + 2180);
+    });
+
     it("#applyLive replaces the running quarter-hour by the state of the controller", () => {
         // 07.10.2026 10:15: forecast PV 5.5 kW -> reduced charging; measured: 4.4 kW, controller not charging,
         // blended price 8 ct (below the limit) -> nothing available right now

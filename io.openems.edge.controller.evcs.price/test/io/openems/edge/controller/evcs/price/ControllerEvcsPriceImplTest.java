@@ -849,20 +849,34 @@ public class ControllerEvcsPriceImplTest {
 		assertEquals(3500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
 				500, 20000, now));
 
-		// the projection ends with the last quarter-hour with production of today;
-		// quarters without production in between count, the next day is ignored
+		// the projection ends with the running block of quarter-hours with production
 		final var evening = ZonedDateTime.of(2026, 10, 3, 23, 20, 0, 0, zone);
 		final var eveningStart = evening.withMinute(15).toInstant();
 		final var production2 = Prediction.from(eveningStart, 6000, 0, 6000, 6000, 6000, 6000);
 		final var consumption2 = Prediction.from(eveningStart, 2000, 2000, 2000, 2000, 2000, 2000);
-		// 23:15 -> +1000 Wh; 23:30 no production -> -500 Wh; 23:45 -> +1000 Wh
-		assertEquals(6500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production2, consumption2, 0,
+		// 23:15 -> +1000 Wh; 23:30 no production: end of PV, the rest does not count
+		assertEquals(6000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production2, consumption2, 0,
 				5000, 20000, evening));
 
-		// no production left today: the storage keeps what it has
+		// no production now (after the end of PV production): the storage keeps what
+		// it has, the PV of the next quarter-hours (next morning) does not count
 		final var production3 = Prediction.from(eveningStart, 0, 0, 0, 6000, 6000, 6000);
 		assertEquals(5000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production3, consumption2, 0,
 				5000, 20000, evening));
+
+		// 10.10.2026: at 00:05 the next day's PV must not count; the night is not
+		// covered by tomorrow's production
+		final var midnight = ZonedDateTime.of(2026, 10, 11, 0, 5, 0, 0, zone);
+		final var nightStart = midnight.withMinute(0).toInstant();
+		final var nightProduction = new Integer[96];
+		final var nightConsumption = new Integer[96];
+		for (var i = 0; i < 96; i++) {
+			nightProduction[i] = i >= 32 && i < 72 ? 8000 : 0; // 08:00 - 18:00
+			nightConsumption[i] = 500;
+		}
+		assertEquals(5000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(
+				Prediction.from(nightStart, nightProduction), Prediction.from(nightStart, nightConsumption), 0,
+				5000, 20000, midnight));
 
 		assertNull(ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(Prediction.EMPTY_PREDICTION, consumption,
 				0, 5000, 20000, now));

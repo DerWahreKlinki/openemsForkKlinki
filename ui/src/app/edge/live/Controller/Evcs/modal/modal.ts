@@ -6,11 +6,13 @@ import { TranslateService } from "@ngx-translate/core";
 import { EvcsComponent } from "src/app/shared/components/edge/config-components/evcs/evcsComponent";
 import { AbstractModal } from "src/app/shared/components/modal/abstractModal";
 import { Formatter } from "src/app/shared/components/shared/formatter";
+import { SetChannelValueRequest } from "src/app/shared/jsonrpc/request/setChannelValueRequest";
 import { ChannelAddress, CurrentData, EdgeConfig, Service, Utils, Websocket } from "src/app/shared/shared";
 
 import { FormUtils } from "src/app/shared/utils/form/form.utils";
 import { AdministrationComponent } from "../administration/administration.component";
 import { PopoverComponent } from "../popover/popover";
+
 import { EvcsPriceForecast } from "../price/price-forecast";
 
 type ChargeMode = "FORCE_CHARGE" | "EXCESS_POWER";
@@ -59,6 +61,8 @@ export class ModalComponent extends AbstractModal {
     protected storageSurplusEnergy: number | null = null;
     /** Current state of the price controller for the forecast chart; replaced only when a value changes */
     protected live: EvcsPriceForecast.Live | null = null;
+    /** "Do not charge today" (channel PauseToday of the controller); null if not available */
+    protected pauseToday: boolean | null = null;
     // Controller.Evcs.Price: configuration values used by the forecast chart
     protected pvPrice: number | null = null;
     protected priceChargePower: number | null = null;
@@ -123,6 +127,29 @@ export class ModalComponent extends AbstractModal {
         value == null ? "-" : value + " ct/kWh";
     protected readonly CONVERT_TO_KILO_WATT_HOURS = (value: number | null): string =>
         value == null ? "-" : (value / 1000).toFixed(1) + " kWh";
+
+    /**
+     * "Do not charge today": writes the switch to the controller, which pauses charging until midnight.
+     *
+     * @param event the toggle event
+     */
+    protected setPauseToday(event: CustomEvent): void {
+        if (this.edge == null || this.controller == null) {
+            return;
+        }
+        const checked = event.detail.checked === true;
+        this.pauseToday = checked;
+        this.edge
+            .sendRequest(
+                this.websocket,
+                new SetChannelValueRequest({
+                    componentId: this.controller.id,
+                    channelId: "PauseToday",
+                    value: checked,
+                }),
+            )
+            .catch((reason) => console.warn(reason));
+    }
 
     protected async presentPopover() {
         const popover = await this.popoverctrl.create({
@@ -205,6 +232,7 @@ export class ModalComponent extends AbstractModal {
                 new ChannelAddress(this.controller.id, "StorageTargetReachable"),
                 new ChannelAddress(this.controller.id, "StorageNetSoc"),
                 new ChannelAddress(this.controller.id, "StorageSurplusEnergy"),
+                new ChannelAddress(this.controller.id, "PauseToday"),
                 new ChannelAddress(this.controller.id, "ChargePowerLimit"),
                 new ChannelAddress("_sum", "ProductionActivePower"),
             );
@@ -267,6 +295,8 @@ export class ModalComponent extends AbstractModal {
         this.storageTargetReachable = reachable == null ? null : reachable === 1 || reachable === true;
         this.storageNetSoc = currentData.allComponents[this.controller?.id + "/StorageNetSoc"] ?? null;
         this.storageSurplusEnergy = currentData.allComponents[this.controller?.id + "/StorageSurplusEnergy"] ?? null;
+        const pauseToday = currentData.allComponents[this.controller?.id + "/PauseToday"];
+        this.pauseToday = pauseToday == null ? null : pauseToday === 1 || pauseToday === true;
 
         if (this.controller?.factoryId === "Controller.Evcs.Price") {
             const blendedPrice = currentData.allComponents[this.controller.id + "/BlendedPrice"];

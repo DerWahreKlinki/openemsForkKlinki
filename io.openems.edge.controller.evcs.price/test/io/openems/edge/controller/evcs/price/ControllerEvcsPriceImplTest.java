@@ -9,6 +9,7 @@ import static io.openems.edge.common.sum.Sum.ChannelId.GRID_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PAUSE_TODAY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_ENERGY_TO_TARGET;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_SURPLUS_ENERGY;
@@ -27,6 +28,7 @@ import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.IS_CLUSTERED;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_LIMIT;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_REQUEST;
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_POWER;
+import static java.time.temporal.ChronoUnit.HOURS;
 import static java.time.temporal.ChronoUnit.MINUTES;
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1029,6 +1031,57 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 2000) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void pauseTodayTest() throws Exception {
+		// "Do not charge today": written as true, charging stops at once and stays
+		// off until midnight; from then on the controller decides on its own again
+		final var clock = createDummyClock();
+		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setPriceLimit(0) //
+						.setStartConfirmationTime(0) //
+						.setStopConfirmationTime(120) //
+						.build()) //
+				.next(new TestCase("excess: charging") //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000)) //
+				.next(new TestCase("pause written: stop at once, no stop hysteresis") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(PAUSE_TODAY, true) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase("still paused with excess") //
+						.timeleap(clock, 10, HOURS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase("after midnight: charging again") //
+						.timeleap(clock, 14, HOURS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000)) //
+				.next(new TestCase("pause and end it by hand") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(PAUSE_TODAY, true) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase() //
+						.timeleap(clock, 2, SECONDS) //
+						.input(PAUSE_TODAY, false) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000)) //
 				.deactivate();
 	}
 

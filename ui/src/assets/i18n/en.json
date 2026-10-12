@@ -404,6 +404,8 @@
                         "SHORT_NAME": "Automatically"
                     },
                     "OVERVIEW_CHARGING_STATIONS": "Overview charging stations",
+                    "PAUSE_TODAY": "Do not charge today",
+                    "PAUSE_TODAY_INFO": "No charging until midnight, not even from surplus or at a low price. From 0:00 the controller decides on its own again.",
                     "PHASE_SWITCHING": "Phase Switching",
                     "PHASE_SWITCHING_INFO": "How many phases should the vehicle be loaded with?",
                     "PRICE_FORECAST": {

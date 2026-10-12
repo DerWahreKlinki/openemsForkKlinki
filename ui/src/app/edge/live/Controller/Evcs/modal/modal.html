@@ -34,6 +34,20 @@
             </ion-col>
           </ion-row>
         }
+        @if (pauseToday != null) {
+          <!--"Do not charge today": pauses the price controller until midnight-->
+          <table class="full_width" style="line-height: 1.4; margin-top: 0.5%">
+            <tr>
+              <td class="align_left" style="width: 70%">{{ "EDGE.INDEX.WIDGETS.EVCS.PAUSE_TODAY" | translate }}</td>
+              <td class="align_right" [style]="this.service.isSmartphoneResolution() ? 'transform: scale(0.7)' : ''">
+                <ion-toggle mode="md" tabindex="0" [checked]="pauseToday" (ionChange)="setPauseToday($event)"></ion-toggle>
+              </td>
+            </tr>
+          </table>
+          @if (pauseToday) {
+            <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PAUSE_TODAY_INFO' | translate" style="font-size: small"></oe-modal-info-line>
+          }
+        }
         <oe-modal-horizontal-line></oe-modal-horizontal-line>
         <table class="full_width">
           <tr>

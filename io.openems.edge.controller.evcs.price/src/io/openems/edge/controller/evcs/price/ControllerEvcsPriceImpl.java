@@ -37,6 +37,7 @@ import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
+import io.openems.edge.common.channel.BooleanWriteChannel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
@@ -89,6 +90,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// storage with it); unused without an optimizer
 	private EnergyScheduleHandler energyScheduleHandler = null;
 	private boolean lastPluggedIn = false;
+
+	// "Do not charge today": end of the pause; null if not paused
+	private Instant pausedUntil = null;
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -161,7 +165,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 					this.config.priority(), //
 					this.evcs.getMinimumHardwarePower().orElse(0), //
 					this.evcs.getMaximumHardwarePower().orElse(0), //
-					isPluggedIn(this.evcs.getStatus()), //
+					isPluggedIn(this.evcs.getStatus()) && !this.isPaused(), //
 					this.config.useStorageSurplus() && this.storageSurplusWh != null
 							? Math.max(this.storageSurplusWh, 0)
 							: 0);
@@ -210,9 +214,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var isClustered = this.evcs.getIsClustered().orElse(false);
 
 		/*
-		 * Stop early if charging is disabled
+		 * Stop early if charging is disabled or paused for today
 		 */
-		if (!this.config.enabledCharging()) {
+		this.updatePause();
+		if (!this.config.enabledCharging() || this.isPaused()) {
+			// A new charge process after the pause starts with the start hysteresis
+			this.lastChargePower = 0;
+			this.startWantedSince = null;
+			this.stopWantedSince = null;
 			this.setPriceCharging(false);
 			this.setChargePowerLimit(0);
 			this.evcs.setChargePowerLimit(0);
@@ -523,6 +532,37 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 */
 	protected static int calculateAssumedCarPower(int activePower, Status status, int minimumPower) {
 		return isPluggedIn(status) ? Math.max(activePower, minimumPower) : Math.max(activePower, 0);
+	}
+
+	/**
+	 * Reads the "do not charge today" switch and keeps the pause until midnight.
+	 */
+	private void updatePause() {
+		final var now = ZonedDateTime.now(this.clock);
+		final var before = this.isPaused();
+		final BooleanWriteChannel channel = this.channel(ControllerEvcsPrice.ChannelId.PAUSE_TODAY);
+		final var written = channel.getNextWriteValueAndReset();
+		if (written.isPresent()) {
+			this.pausedUntil = written.get() //
+					? now.toLocalDate().plusDays(1).atStartOfDay(now.getZone()).toInstant()
+					: null;
+		}
+		if (this.pausedUntil != null && !now.toInstant().isBefore(this.pausedUntil)) {
+			// midnight has passed: the controller decides on its own again
+			this.pausedUntil = null;
+		}
+		final var paused = this.isPaused();
+		channel.setNextValue(paused);
+		this.channel(ControllerEvcsPrice.ChannelId.PAUSED_UNTIL)
+				.setNextValue(paused ? this.pausedUntil.getEpochSecond() : null);
+		if (paused != before && this.energyScheduleHandler != null) {
+			this.energyScheduleHandler.triggerReschedule("ControllerEvcsPriceImpl::pause " + paused,
+					RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
+		}
+	}
+
+	private boolean isPaused() {
+		return this.pausedUntil != null;
 	}
 
 	/**

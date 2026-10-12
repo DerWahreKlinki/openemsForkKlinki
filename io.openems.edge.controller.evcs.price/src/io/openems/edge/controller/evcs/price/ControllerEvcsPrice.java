@@ -4,6 +4,7 @@ import static io.openems.common.channel.PersistencePriority.HIGH;
 import static io.openems.common.types.OpenemsType.BOOLEAN;
 import static io.openems.common.types.OpenemsType.DOUBLE;
 import static io.openems.common.types.OpenemsType.INTEGER;
+import static io.openems.common.types.OpenemsType.LONG;
 
 import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.Level;
@@ -97,7 +98,21 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 		 */
 		STORAGE_TARGET_REACHABLE(Doc.of(BOOLEAN) //
 				.persistencePriority(HIGH) //
-				.text("Storage is expected to reach its evening target by PV surplus")); //
+				.text("Storage is expected to reach its evening target by PV surplus")), //
+		/**
+		 * "Do not charge today": written by the UI; true pauses charging until the
+		 * next midnight, false ends the pause. Reads back the current state.
+		 */
+		PAUSE_TODAY(Doc.of(BOOLEAN) //
+				.accessMode(AccessMode.READ_WRITE) //
+				.persistencePriority(HIGH) //
+				.text("Do not charge until midnight")), //
+		/**
+		 * End of the pause as epoch seconds; empty if not paused.
+		 */
+		PAUSED_UNTIL(Doc.of(LONG) //
+				.persistencePriority(HIGH) //
+				.text("Charging is paused until this time (epoch seconds)")); //
 
 		private final Doc doc;
 
@@ -176,6 +191,7 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.channel(14, ChannelId.STORAGE_ENERGY_TO_TARGET, ModbusType.FLOAT32) //
 				.channel(16, ChannelId.STORAGE_TARGET_REACHABLE, ModbusType.UINT16) //
 				.channel(17, ChannelId.STORAGE_NET_SOC, ModbusType.UINT16) //
+				.channel(18, ChannelId.PAUSE_TODAY, ModbusType.UINT16) //
 				.build();
 	}
 

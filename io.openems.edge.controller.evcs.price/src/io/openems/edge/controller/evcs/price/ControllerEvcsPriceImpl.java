@@ -42,6 +42,9 @@ import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.common.sum.Sum;
 import io.openems.edge.controller.api.Controller;
+import io.openems.edge.energy.api.EnergySchedulable;
+import io.openems.edge.energy.api.handler.EnergyScheduleHandler;
+import io.openems.edge.energy.api.handler.RescheduleMode;
 import io.openems.edge.evcs.api.ChargeMode;
 import io.openems.edge.evcs.api.ChargeState;
 import io.openems.edge.evcs.api.ManagedEvcs;
@@ -57,7 +60,7 @@ import io.openems.edge.predictor.api.prediction.Prediction;
 )
 @GenerateTargetsFromReferences("evcs")
 public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
-		implements Controller, ControllerEvcsPrice, OpenemsComponent, ModbusSlave {
+		implements Controller, ControllerEvcsPrice, OpenemsComponent, ModbusSlave, EnergySchedulable {
 
 	private static final int CHARGE_POWER_BUFFER = 200;
 	private static final double DEFAULT_UPPER_TARGET_DIFFERENCE_PERCENT = 0.10; // 10%
@@ -78,6 +81,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// True while the storage is already above its evening target: that surplus
 	// may go to the car even without PV surplus
 	private boolean storageAboveTarget = false;
+	// Expected energy above the evening target at the end of PV production; null
+	// if unknown. Reported to the energy optimizer as what the car may take
+	private Integer storageSurplusWh = null;
+
+	// Forecast of the car for the energy optimizer (Time-of-Use-Tariff plans the
+	// storage with it); unused without an optimizer
+	private EnergyScheduleHandler energyScheduleHandler = null;
+	private boolean lastPluggedIn = false;
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -137,6 +148,29 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 		this.evcs._setChargeMode(config.chargeMode());
 		this.evcs._setMaximumPower(null);
+
+		this.energyScheduleHandler = EnergyScheduler.buildEnergyScheduleHandler(this, () -> {
+			if (!this.config.enabled() || !this.config.enabledCharging() || this.config.chargeMode() != ChargeMode.EXCESS_POWER) {
+				return null;
+			}
+			return new EnergyScheduler.Config(//
+					this.config.enablePriceCharging(), //
+					this.config.priceLimit(), //
+					this.config.priceLimitFullPower(), //
+					this.config.priceChargePower(), //
+					this.config.priority(), //
+					this.evcs.getMinimumHardwarePower().orElse(0), //
+					this.evcs.getMaximumHardwarePower().orElse(0), //
+					isPluggedIn(this.evcs.getStatus()), //
+					this.config.useStorageSurplus() && this.storageSurplusWh != null
+							? Math.max(this.storageSurplusWh, 0)
+							: 0);
+		});
+	}
+
+	@Override
+	public EnergyScheduleHandler getEnergyScheduleHandler() {
+		return this.energyScheduleHandler;
 	}
 
 	@Override
@@ -155,6 +189,16 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.setEvcsActivePower(this.evcs.getActivePower().get());
 		this.setEvcsStatus(this.evcs.getStatus());
 		this.setGridBuyPrice(this.sum.getGridBuyPrice().get());
+
+		// A car plugged in or out changes the forecast for the energy optimizer
+		final var pluggedIn = isPluggedIn(this.evcs.getStatus());
+		if (pluggedIn != this.lastPluggedIn) {
+			this.lastPluggedIn = pluggedIn;
+			if (this.energyScheduleHandler != null) {
+				this.energyScheduleHandler.triggerReschedule("ControllerEvcsPriceImpl::car plugged in/out",
+						RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
+			}
+		}
 
 		if (this.evcs.isReadOnly()) {
 			this.setEvcsIsReadOnlyChannel(true);
@@ -459,6 +503,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var storagePrice = calculateStoragePrice(gridBuyPrice, this.config.pvPrice(),
 				this.config.storageLossSurcharge(), targetReachable);
 
+		this.storageSurplusWh = storageSurplus;
 		this.setStorageSurplusEnergy(storageSurplus);
 		this.setStorageEnergyToTarget(energyToTarget);
 		this.setStorageNetSoc(netSoc);
@@ -477,11 +522,20 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 *         power while a car is plugged in, 0 otherwise
 	 */
 	protected static int calculateAssumedCarPower(int activePower, Status status, int minimumPower) {
-		final var pluggedIn = switch (status) {
+		return isPluggedIn(status) ? Math.max(activePower, minimumPower) : Math.max(activePower, 0);
+	}
+
+	/**
+	 * A car is plugged in.
+	 *
+	 * @param status the EVCS {@link Status}
+	 * @return true if a car is plugged in
+	 */
+	protected static boolean isPluggedIn(Status status) {
+		return switch (status) {
 		case READY_FOR_CHARGING, CHARGING, CHARGING_REJECTED, ENERGY_LIMIT_REACHED -> true;
 		case UNDEFINED, STARTING, NOT_READY_FOR_CHARGING, ERROR -> false;
 		};
-		return pluggedIn ? Math.max(activePower, minimumPower) : Math.max(activePower, 0);
 	}
 
 	/**

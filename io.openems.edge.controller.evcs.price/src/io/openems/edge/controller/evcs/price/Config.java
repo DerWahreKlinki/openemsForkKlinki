@@ -73,6 +73,9 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Storage loss surcharge [Cent/kWh]", description = "Added to the value of surplus power for storage power; covers the conversion losses.")
 	double storageLossSurcharge() default 1;
 
+	@AttributeDefinition(name = "Storage charge efficiency [%]", description = "Share of the PV surplus that arrives in the storage in the projection until the evening; covers the conversion losses.")
+	int storageChargeEfficiency() default 92;
+
 	String webconsole_configurationFactory_nameHint() default "Controller Electric Vehicle Charging Station with Price Limit [{id}]";
 
 }

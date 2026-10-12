@@ -94,11 +94,13 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.persistencePriority(HIGH) //
 				.text("Net state of charge within the usable window")), //
 		/**
-		 * True if the storage is expected to reach its evening target by PV surplus.
+		 * True while the storage reserve is released for the car: the projection ended
+		 * above the evening target by at least one hour of minimum charge power and
+		 * has not dropped to the target since.
 		 */
 		STORAGE_TARGET_REACHABLE(Doc.of(BOOLEAN) //
 				.persistencePriority(HIGH) //
-				.text("Storage is expected to reach its evening target by PV surplus")), //
+				.text("Storage reserve above the evening target is released for the car")), //
 		/**
 		 * "Do not charge today": written by the UI; true pauses charging until the
 		 * next midnight, false ends the pause. Reads back the current state.

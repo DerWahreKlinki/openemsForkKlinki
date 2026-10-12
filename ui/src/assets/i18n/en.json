@@ -431,11 +431,11 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Charging price now",
-                        "INFO": "The energy of the storage is projected until the end of PV production (production minus consumption minus the car, quarter-hour by quarter-hour). If it ends above the evening target, the car may already charge that reserve from the storage now; storage power then counts like surplus power. Otherwise storage power counts like grid power.",
+                        "INFO": "The energy of the storage is projected until the end of PV production (production minus consumption minus the car, quarter-hour by quarter-hour, charging losses included). If it ends above the evening target by at least one hour of minimum charging power, the reserve is released: the car may already charge it from the storage now, until it is used up; storage power then counts like surplus power. Otherwise storage power counts like grid power.",
                         "NAME": "Include storage with foresight",
                         "NET_SOC": "Storage state of charge (net)",
-                        "REASON_GRID": "The storage would miss its evening target at sunset; its power counts like grid power.",
-                        "REASON_PV": "The storage is projected to be above its evening target at sunset; its power counts like surplus power.",
+                        "REASON_GRID": "No released storage reserve: the storage would miss its evening target at sunset or the reserve is below one hour of minimum charging power; its power counts like grid power.",
+                        "REASON_PV": "Storage reserve released: the storage is projected to be above its evening target at sunset; its power counts like surplus power until the reserve is used up.",
                         "SURPLUS": "Storage reserve above the evening target (forecast until sunset)",
                         "TARGET": "Storage target in the evening (net)"
                     },

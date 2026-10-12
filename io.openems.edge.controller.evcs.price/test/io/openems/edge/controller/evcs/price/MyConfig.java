@@ -26,6 +26,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private boolean useStorageSurplus = false;
 		private int storageTargetSocNet = 80;
 		private double storageLossSurcharge = 1;
+		// tests count without losses unless they test the efficiency
+		private int storageChargeEfficiency = 100;
 
 		private Builder() {
 		}
@@ -122,6 +124,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setStorageLossSurcharge(double storageLossSurcharge) {
 			this.storageLossSurcharge = storageLossSurcharge;
+			return this;
+		}
+
+		public Builder setStorageChargeEfficiency(int storageChargeEfficiency) {
+			this.storageChargeEfficiency = storageChargeEfficiency;
 			return this;
 		}
 
@@ -241,5 +248,10 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public double storageLossSurcharge() {
 		return this.builder.storageLossSurcharge;
+	}
+
+	@Override
+	public int storageChargeEfficiency() {
+		return this.builder.storageChargeEfficiency;
 	}
 }

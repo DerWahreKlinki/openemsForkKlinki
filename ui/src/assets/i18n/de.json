@@ -431,11 +431,11 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Ladepreis jetzt",
-                        "INFO": "Der Speicherstand wird bis zum Ende der PV-Erzeugung vorausgerechnet (Erzeugung minus Verbrauch minus Auto, Viertelstunde für Viertelstunde). Liegt er dann über dem Abendziel, darf das Auto diese Reserve schon jetzt aus dem Speicher laden; Speicherstrom zählt dabei wie Überschussstrom. Sonst zählt Speicherstrom wie Netzstrom.",
+                        "INFO": "Der Speicherstand wird bis zum Ende der PV-Erzeugung vorausgerechnet (Erzeugung minus Verbrauch minus Auto, Viertelstunde für Viertelstunde, Ladeverluste berücksichtigt). Liegt er dann um mindestens eine Stunde Mindestladeleistung über dem Abendziel, wird die Reserve freigegeben: Das Auto darf sie schon jetzt aus dem Speicher laden, bis sie aufgebraucht ist; Speicherstrom zählt dabei wie Überschussstrom. Sonst zählt Speicherstrom wie Netzstrom.",
                         "NAME": "Speicher vorausschauend einbeziehen",
                         "NET_SOC": "Speicher-Ladestand (netto)",
-                        "REASON_GRID": "Der Speicher würde sein Abendziel bei Sonnenuntergang verfehlen; sein Strom zählt wie Netzstrom.",
-                        "REASON_PV": "Der Speicher liegt laut Prognose bei Sonnenuntergang über seinem Abendziel; sein Strom zählt wie Überschussstrom.",
+                        "REASON_GRID": "Keine freigegebene Speicher-Reserve: Der Speicher würde sein Abendziel bei Sonnenuntergang verfehlen oder die Reserve ist kleiner als eine Stunde Mindestladeleistung; sein Strom zählt wie Netzstrom.",
+                        "REASON_PV": "Speicher-Reserve freigegeben: Der Speicher liegt laut Prognose bei Sonnenuntergang über seinem Abendziel; sein Strom zählt wie Überschussstrom, bis die Reserve aufgebraucht ist.",
                         "SURPLUS": "Speicher-Reserve über dem Abendziel (Prognose bis Sonnenuntergang)",
                         "TARGET": "Speicher-Ziel abends (netto)"
                     },

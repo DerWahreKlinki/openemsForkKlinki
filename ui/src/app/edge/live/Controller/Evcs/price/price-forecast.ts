@@ -34,10 +34,17 @@ export namespace EvcsPriceForecast {
          * when the storage price cannot be calculated per quarter-hour; null prices storage power like grid power
          */
         storagePrice: number | null;
+        /**
+         * True while the controller has released the storage reserve right now (channel StorageTargetReachable);
+         * the start of the hysteresis for the running quarter-hour; null if unknown
+         */
+        storageReleased: boolean | null;
         /** Evening target of the storage in [%] of the usable capacity */
         storageTargetSocNet: number;
         /** Loss surcharge on the PV price for storage power in [Cent/kWh] */
         storageLossSurcharge: number;
+        /** Share of a PV surplus that arrives in the storage in the projection in [%] (conversion losses) */
+        storageChargeEfficiency: number;
         /** Total storage capacity in [Wh]; null if unknown */
         storageCapacity: number | null;
         /** Lower border of the usable SoC window in [%] (ChargeDischargeLimiter) */
@@ -133,6 +140,9 @@ export namespace EvcsPriceForecast {
      * @param minPower The minimum hardware power of the EVCS in [W]
      * @param maxPower The maximum hardware power of the EVCS in [W]
      * @param storagePrice The current replacement cost of storage power in [Cent/kWh]; null if unknown
+     * @param storageCapacity The total storage capacity in [Wh]; null if unknown
+     * @param config The EdgeConfig for the SoC window of the limiters; null for 0..100 %
+     * @param storageReleased True if the controller has released the storage reserve right now; null if unknown
      * @returns The settings
      */
     export function getSettings(
@@ -142,6 +152,7 @@ export namespace EvcsPriceForecast {
         storagePrice: number | null = null,
         storageCapacity: number | null = null,
         config: EdgeConfig | null = null,
+        storageReleased: boolean | null = null,
     ): Settings {
         const properties = controller.properties;
         const window = getStorageWindow(config);
@@ -149,8 +160,10 @@ export namespace EvcsPriceForecast {
             priority: properties["priority"] === "STORAGE" ? "STORAGE" : "CAR",
             useStorageSurplus: properties["useStorageSurplus"] === true || properties["useStorageSurplus"] === "true",
             storagePrice: storagePrice,
+            storageReleased: storageReleased,
             storageTargetSocNet: toNumber(properties["storageTargetSocNet"], 80),
             storageLossSurcharge: toNumber(properties["storageLossSurcharge"], 1),
+            storageChargeEfficiency: toNumber(properties["storageChargeEfficiency"], 92),
             storageCapacity: storageCapacity,
             storageMinSoc: window.min,
             storageMaxSoc: window.max,
@@ -293,14 +306,29 @@ export namespace EvcsPriceForecast {
             lastProduction++;
         }
         const carPower = settings.priority === "STORAGE" ? 0 : settings.minPower;
+        // of a positive balance only the charge efficiency arrives in the storage (conversion losses)
+        const efficiency = settings.storageChargeEfficiency / 100;
         let energy = storedWh;
         for (let k = 0; k <= lastProduction; k++) {
             const e = entries[k].entry;
             const balance = Math.max(e.production ?? 0, 0) - Math.max(e.consumption ?? 0, 0);
-            energy += (balance > 0 ? Math.max(balance - carPower, 0) : balance) / 4;
+            energy += (balance > 0 ? Math.max(balance - carPower, 0) * efficiency : balance) / 4;
             energy = Math.min(Math.max(energy, 0), usableWh);
         }
         return Math.round(energy - (settings.storageTargetSocNet / 100) * usableWh);
+    }
+
+    /**
+     * Decides if the storage reserve is released for the car, mirroring the hysteresis of the controller:
+     * released from one hour of minimum power above the evening target on, and until the surplus is used up.
+     *
+     * @param storageSurplus The energy above the evening target in [Wh]; negative if missing
+     * @param released True if the reserve was released in the quarter-hour before
+     * @param settings The settings
+     * @returns True if the reserve is released
+     */
+    export function isStorageReleased(storageSurplus: number, released: boolean, settings: Settings): boolean {
+        return released ? storageSurplus > 0 : storageSurplus >= Math.max(settings.minPower, 1);
     }
 
     /**
@@ -398,6 +426,10 @@ export namespace EvcsPriceForecast {
                 ? (settings.storageCapacity * (settings.storageMaxSoc - settings.storageMinSoc)) / 100
                 : null;
 
+        // The release of the storage reserve has a hysteresis; the running quarter-hour starts with the
+        // state of the controller, the quarter-hours after with the state of the one before
+        let released = settings.storageReleased ?? false;
+
         for (let i = 0; i < entries.length; i++) {
             const { entry, timestamp } = entries[i];
             const price = entry.price! / 10; // [Currency/MWh] to [Cent/kWh]
@@ -407,19 +439,20 @@ export namespace EvcsPriceForecast {
 
             // Storage price of this quarter-hour, mirroring the controller: the energy of the
             // storage is projected until the last quarter-hour with PV of the day; PV price plus
-            // loss surcharge if it ends above the evening target, otherwise grid price
+            // loss surcharge while the reserve above the evening target is released, otherwise grid price
             let storageSurplus: number | null = null;
             let storagePrice: number | null = settings.useStorageSurplus ? settings.storagePrice : null;
             if (settings.useStorageSurplus && entry.soc != null && usable != null) {
                 const netSoc = toNetSoc(entry.soc, settings.storageMinSoc, settings.storageMaxSoc);
                 storageSurplus = calculateStorageSurplus(entries.slice(i), (netSoc / 100) * usable, usable, settings);
-                // storage power counts like PV only while a reserve is actually there
-                storagePrice = storageSurplus > 0 ? settings.pvPrice + settings.storageLossSurcharge : price;
+                released = isStorageReleased(storageSurplus, released, settings);
+                // storage power counts like PV only while the reserve is released
+                storagePrice = released ? settings.pvPrice + settings.storageLossSurcharge : price;
             }
-            // A storage reserve is available while the projection ends above the target; without a
-            // projection, while the controller itself prices the storage below grid
+            // A storage reserve is available while it is released; without a projection, while the
+            // controller itself prices the storage below grid
             const storageAboveTarget =
-                storageSurplus != null ? storageSurplus > 0 : storagePrice != null && storagePrice < price;
+                storageSurplus != null ? released : storagePrice != null && storagePrice < price;
             // While the storage is above its target the car may charge from it without PV
             const available = surplus > 0 || (settings.useStorageSurplus && storageAboveTarget);
 

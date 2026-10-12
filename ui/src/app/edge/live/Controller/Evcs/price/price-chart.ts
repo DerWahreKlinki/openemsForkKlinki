@@ -38,6 +38,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     @Input() public maxPower: number | null = null;
     /** Current replacement cost of storage power in [Cent/kWh]; null if unknown */
     @Input() public storagePrice: number | null = null;
+    /** True while the controller has released the storage reserve (channel StorageTargetReachable); null if unknown */
+    @Input() public storageReleased: boolean | null = null;
     /** Priority as currently selected in the form; falls back to the configuration */
     @Input() public priority: "CAR" | "STORAGE" | null = null;
     /** Total storage capacity in [Wh] (channel _sum/EssCapacity); null if unknown */
@@ -147,6 +149,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 this.storagePrice,
                 this.storageCapacity,
                 this.config,
+                this.storageReleased,
             );
             const settings: EvcsPriceForecast.Settings = {
                 ...base,

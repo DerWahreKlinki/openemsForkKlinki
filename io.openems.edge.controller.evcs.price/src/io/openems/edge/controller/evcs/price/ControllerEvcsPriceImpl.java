@@ -79,8 +79,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private Instant startWantedSince = null;
 	private Instant stopWantedSince = null;
 
-	// True while the storage is already above its evening target: that surplus
-	// may go to the car even without PV surplus
+	// True while the storage reserve is released: the projection ended above the
+	// evening target by at least one hour of minimum power (start) and has not
+	// dropped to zero since (stop). That reserve may go to the car even without
+	// PV surplus. The hysteresis keeps a reserve of a few hundred Wh - forecast
+	// noise - from starting and stopping the car every few minutes (12.10.2026)
 	private boolean storageAboveTarget = false;
 	// Expected energy above the evening target at the end of PV production; null
 	// if unknown. Reported to the energy optimizer as what the car may take
@@ -146,6 +149,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		if (config.defaultChargeMinPower() < 0) {
 			throw new OpenemsException(
 					"Default-Charge Min-Power [" + config.defaultChargeMinPower() + "] must be >= 0");
+		}
+
+		if (config.storageChargeEfficiency() < 50 || config.storageChargeEfficiency() > 100) {
+			throw new OpenemsException("Storage charge efficiency [" + config.storageChargeEfficiency()
+					+ "] must be between 50 and 100 %");
 		}
 
 		this.config = config;
@@ -451,12 +459,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * The energy of the storage is projected until the end of PV production
 	 * today: the current energy plus production minus consumption, minus what the
 	 * car takes from the surplus, quarter-hour by quarter-hour, within the usable
-	 * capacity. If the projection
-	 * ends above the evening target, the storage will have that surplus anyway and
-	 * power taken from it now is replaced by PV: it costs the PV price plus the
-	 * loss surcharge, and the car may take the surplus even without PV. Otherwise
-	 * the energy is missing in the evening and has to be bought from grid: it
-	 * costs the grid buy price. Without predictions the grid buy price is used.
+	 * capacity; charging counts with the storage charge efficiency. If the
+	 * projection ends above the evening target by at least one hour of the
+	 * minimum charge power, the storage reserve is released: the storage will have
+	 * that surplus anyway and power taken from it now is replaced by PV: it costs
+	 * the PV price plus the loss surcharge, and the car may take the surplus even
+	 * without PV. The reserve stays released until the projection drops to the
+	 * target. Otherwise the energy is missing in the evening and has to be bought
+	 * from grid: it costs the grid buy price. Without predictions the grid buy
+	 * price is used.
 	 *
 	 * @param gridBuyPrice the grid buy price in [Currency/MWh]; possibly null
 	 * @return the storage price in [Cent/kWh]; null if no grid buy price is known
@@ -495,7 +506,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				final var consumption = predictorManager
 						.getPrediction(new ChannelAddress("_sum", "ConsumptionActivePower"));
 				final var expected = calculateExpectedStorageEnergy(production, consumption, carPower,
-						energy.storedWh(), energy.usableWh(), ZonedDateTime.now(this.clock));
+						energy.storedWh(), energy.usableWh(), this.config.storageChargeEfficiency(),
+						ZonedDateTime.now(this.clock));
 				if (expected != null) {
 					storageSurplus = (int) Math
 							.round(expected - energy.usableWh() * this.config.storageTargetSocNet() / 100.);
@@ -505,10 +517,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			}
 		}
 
-		final var targetReachable = isStorageTargetReachable(storageSurplus);
-		// The car may take energy from the storage only while a surplus is left; every
-		// kWh it takes lowers the SoC and with it the surplus, so this ends by itself
-		this.storageAboveTarget = storageSurplus != null && storageSurplus > 0;
+		// Release the reserve only from one hour of minimum charge power on; the car
+		// may then take energy from the storage while a surplus is left: every kWh it
+		// takes lowers the SoC and with it the surplus, so this ends by itself
+		final var reserveStartWh = this.evcs.getMinimumHardwarePower().orElse(0);
+		this.storageAboveTarget = isStorageReserveReleased(storageSurplus, this.storageAboveTarget, reserveStartWh);
+		final var targetReachable = this.storageAboveTarget;
 		final var storagePrice = calculateStoragePrice(gridBuyPrice, this.config.pvPrice(),
 				this.config.storageLossSurcharge(), targetReachable);
 
@@ -701,7 +715,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * quarter-hour by quarter-hour, production minus consumption is added,
 	 * negative balances included, and the energy is kept within the usable
 	 * capacity. The car takes from a positive balance up to its assumed power; it
-	 * charges from PV surplus only, so it never makes the balance negative.
+	 * charges from PV surplus only, so it never makes the balance negative. Of a
+	 * positive balance only the charge efficiency arrives in the storage (the
+	 * conversion losses); a negative balance is taken in full.
 	 *
 	 * <p>
 	 * "Evening" is the end of the running block of quarter-hours with predicted
@@ -711,23 +727,27 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * could empty the storage at night and the house would buy from grid until
 	 * the next day's PV refills it.
 	 *
-	 * @param production  the production prediction in [W] per quarter-hour
-	 * @param consumption the consumption prediction in [W] per quarter-hour
-	 * @param carPower    the power the car is assumed to draw from PV surplus in [W]
-	 * @param storedWh    the energy stored now within the SoC windows in [Wh]
-	 * @param usableWh    the usable capacity within the SoC windows in [Wh]
-	 * @param now         the current time
+	 * @param production        the production prediction in [W] per quarter-hour
+	 * @param consumption       the consumption prediction in [W] per quarter-hour
+	 * @param carPower          the power the car is assumed to draw from PV
+	 *                          surplus in [W]
+	 * @param storedWh          the energy stored now within the SoC windows in
+	 *                          [Wh]
+	 * @param usableWh          the usable capacity within the SoC windows in [Wh]
+	 * @param efficiencyPercent the storage charge efficiency in [%]
+	 * @param now               the current time
 	 * @return the expected energy at the end of PV production in [Wh]; null if
 	 *         there is no prediction
 	 */
 	protected static Integer calculateExpectedStorageEnergy(Prediction production, Prediction consumption,
-			int carPower, double storedWh, double usableWh, ZonedDateTime now) {
+			int carPower, double storedWh, double usableWh, int efficiencyPercent, ZonedDateTime now) {
 		if (production == null || consumption == null || production.isEmpty() || consumption.isEmpty()) {
 			return null;
 		}
 		// include the current quarter-hour
 		final var start = now.toInstant().minusSeconds(15 * 60);
 		final var quarters = new TreeMap<>(production.toMap());
+		final var efficiency = efficiencyPercent / 100.;
 		var energy = storedWh;
 		for (var entry : quarters.tailMap(start, true).entrySet()) {
 			final var prod = entry.getValue();
@@ -740,7 +760,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				continue;
 			}
 			final var balance = prod - cons;
-			energy += (balance > 0 ? Math.max(balance - carPower, 0) : balance) / 4.;
+			energy += (balance > 0 ? Math.max(balance - carPower, 0) * efficiency : balance) / 4.;
 			// the storage can neither hold more than its usable capacity nor less than nothing
 			energy = Math.min(Math.max(energy, 0), usableWh);
 		}
@@ -748,15 +768,27 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
-	 * Decides if the storage is expected to reach its evening target.
+	 * Decides if the storage reserve is released for the car, with hysteresis:
+	 * released from one hour of minimum charge power above the evening target on,
+	 * and until the projection drops to the target. In between the previous state
+	 * is kept, so that forecast noise of a few hundred Wh does not start and stop
+	 * the car every few minutes.
 	 *
 	 * @param storageSurplusWh the expected energy above the target at the end of PV
 	 *                         production in [Wh], negative if missing; possibly
 	 *                         null
-	 * @return true if nothing is missing; false if unknown
+	 * @param released         true if the reserve was released before
+	 * @param startWh          the surplus that releases the reserve in [Wh]: one
+	 *                         hour of minimum charge power
+	 * @return true if the reserve is released; false if unknown
 	 */
-	protected static boolean isStorageTargetReachable(Integer storageSurplusWh) {
-		return storageSurplusWh != null && storageSurplusWh >= 0;
+	protected static boolean isStorageReserveReleased(Integer storageSurplusWh, boolean released, int startWh) {
+		if (storageSurplusWh == null) {
+			return false;
+		}
+		return released //
+				? storageSurplusWh > 0
+				: storageSurplusWh >= Math.max(startWh, 1);
 	}
 
 	/**

@@ -1,15 +1,17 @@
 package io.openems.edge.controller.evcs.price;
 
 import static io.openems.common.test.TestUtils.createDummyClock;
+import static io.openems.edge.common.sum.Sum.ChannelId.CONSUMPTION_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.ESS_CAPACITY;
 import static io.openems.edge.common.sum.Sum.ChannelId.ESS_DISCHARGE_POWER;
-import static io.openems.edge.common.sum.Sum.ChannelId.ESS_MAX_DISCHARGE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.ESS_SOC;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PAUSE_TODAY;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_DISCHARGE_BLOCKED;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_POWER_FOR_CAR;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_ENERGY_TO_TARGET;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_SURPLUS_ENERGY;
@@ -46,6 +48,10 @@ import org.junit.jupiter.api.Test;
 import io.openems.common.test.DummyConfigurationAdmin;
 import io.openems.common.test.TimeLeapClock;
 import io.openems.common.types.ChannelAddress;
+import io.openems.common.types.OptionsEnum;
+import io.openems.edge.common.channel.Doc;
+import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.test.AbstractDummyOpenemsComponent;
 import io.openems.edge.common.test.DummyComponentManager;
 import io.openems.edge.common.sum.DummySum;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
@@ -674,8 +680,18 @@ public class ControllerEvcsPriceImplTest {
 	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
 			boolean enablePriceCharging, Priority priority, int productionW, int consumptionW, int quarters)
 			throws Exception {
+		return prepareStoragePriceTest(clock, useStorageSurplus, enablePriceCharging, priority, null, productionW,
+				consumptionW, quarters);
+	}
+
+	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
+			boolean enablePriceCharging, Priority priority, OpenemsComponent timeOfUseTariff, int productionW,
+			int consumptionW, int quarters) throws Exception {
 		final var now = Instant.now(clock);
 		final var cm = new DummyComponentManager(clock);
+		if (timeOfUseTariff != null) {
+			cm.addComponent(timeOfUseTariff);
+		}
 		final var sum = new DummySum();
 		final var production = new Integer[quarters];
 		final var consumption = new Integer[quarters];
@@ -688,13 +704,16 @@ public class ControllerEvcsPriceImplTest {
 						SUM_PRODUCTION),
 				new DummyPredictor("predictor1", cm, Prediction.from(sum, SUM_CONSUMPTION, now, consumption),
 						SUM_CONSUMPTION));
-		return new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+		final var test = new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("componentManager", cm) //
 				.addReference("sum", sum) //
 				.addReference("predictorManager", predictorManager) //
-				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
-				.activate(MyConfig.create() //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0"));
+		if (timeOfUseTariff != null) {
+			test.addComponent(timeOfUseTariff);
+		}
+		return test.activate(MyConfig.create() //
 						.setId("ctrlEvcs0") //
 						.setEvcsId("evcs0") //
 						.setEnableCharging(true) //
@@ -710,7 +729,66 @@ public class ControllerEvcsPriceImplTest {
 						.setUseStorageSurplus(useStorageSurplus) //
 						.setStorageTargetSocNet(80) //
 						.setStorageLossSurcharge(1) //
+						.setTimeOfUseTariffId(timeOfUseTariff == null ? "" : timeOfUseTariff.id()) //
 						.build());
+	}
+
+	/**
+	 * Stands in for the Time-of-Use-Tariff controller: only its StateMachine
+	 * channel is read, by name.
+	 */
+	private static class DummyTimeOfUseTariff extends AbstractDummyOpenemsComponent<DummyTimeOfUseTariff> {
+
+		public enum State implements OptionsEnum {
+			BALANCING(1, "Balancing"), DELAY_DISCHARGE(0, "Delay discharge"), CHARGE_GRID(3, "Charge from grid");
+
+			private final int value;
+			private final String name;
+
+			private State(int value, String name) {
+				this.value = value;
+				this.name = name;
+			}
+
+			@Override
+			public int getValue() {
+				return this.value;
+			}
+
+			@Override
+			public String getName() {
+				return this.name;
+			}
+
+			@Override
+			public OptionsEnum getUndefined() {
+				return BALANCING;
+			}
+		}
+
+		public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
+			STATE_MACHINE(Doc.of(State.values()));
+
+			private final Doc doc;
+
+			private ChannelId(Doc doc) {
+				this.doc = doc;
+			}
+
+			@Override
+			public Doc doc() {
+				return this.doc;
+			}
+		}
+
+		public DummyTimeOfUseTariff(String id) {
+			super(id, OpenemsComponent.ChannelId.values(), ChannelId.values());
+		}
+
+		@Override
+		protected DummyTimeOfUseTariff self() {
+			return this;
+		}
 	}
 
 	@Test
@@ -720,13 +798,13 @@ public class ControllerEvcsPriceImplTest {
 		// 11 quarters and full at the end of PV production. Storage 30 kWh at 50 %,
 		// target 80 % -> 9 kWh missing now, 6 kWh above the target in the evening
 		// (more than one hour of minimum power: released)
-		// -> storage like PV (8 ct): 2130 W PV at 7 ct + 2010 W storage at 8 ct
+		// -> storage like PV (8 ct): the car draws 4033 W, 2130 W PV at 7 ct and
+		// the measured 1903 W storage at 8 ct
 		prepareStoragePriceTest(createDummyClock(), true, 12000, 2000, 96) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_CAPACITY, 30000) //
 						.input(ESS_SOC, 50) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 1903) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.CHARGING) //
@@ -737,7 +815,9 @@ public class ControllerEvcsPriceImplTest {
 						.output(STORAGE_ENERGY_TO_TARGET, 9000) //
 						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output(STORAGE_PRICE, 80.) //
-						.output(BLENDED_PRICE, 74.85507246376811) //
+						.output(STORAGE_POWER_FOR_CAR, 1903) //
+						.output(STORAGE_DISCHARGE_BLOCKED, false) //
+						.output(BLENDED_PRICE, 74.71857178279197) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
 						.output(PRICE_CHARGING, true)) //
 				.deactivate();
@@ -747,15 +827,14 @@ public class ControllerEvcsPriceImplTest {
 	public void storageTargetNotReachableTest() throws Exception {
 		// Production 6 kW, consumption 2 kW, car 4140 W -> the car takes the whole
 		// 4 kW surplus, nothing left for the storage: 10 kWh in the evening, 6 kWh
-		// below the target -> storage like grid (43.1 ct): 24.5 ct blended -> still
-		// below the 30 ct limit -> charging
+		// below the target -> storage like grid (43.1 ct): 2130 W PV, 1903 W storage
+		// at 43.1 ct -> 24.0 ct blended -> still below the 30 ct limit -> charging
 		final var clock = createDummyClock();
 		prepareStoragePriceTest(clock, true, 6000, 2000, 96) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_CAPACITY, 20000) //
 						.input(ESS_SOC, 50) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 1903) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.CHARGING) //
@@ -769,7 +848,7 @@ public class ControllerEvcsPriceImplTest {
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
 						.output(PRICE_CHARGING, true)) //
 				.next(new TestCase() //
-						// less PV: 1000 W PV, 3140 W storage at 43.1 ct -> 34.4 ct -> no charging
+						// less PV: 1000 W PV, 3033 W storage at 43.1 ct -> 34.2 ct -> no charging
 						.timeleap(clock, 5, MINUTES) //
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_DISCHARGE_POWER, 3033) //
@@ -790,7 +869,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_CAPACITY, 30000) //
 						.input(ESS_SOC, 50) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.CHARGING) //
@@ -813,7 +891,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_CAPACITY, 30000) //
 						.input(ESS_SOC, 50) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 3033) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.CHARGING) //
@@ -825,6 +902,120 @@ public class ControllerEvcsPriceImplTest {
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();
+	}
+
+	@Test
+	public void storageBlockedByTimeOfUseTariffTest() throws Exception {
+		// Priority STORAGE, 12 kW production, 2 kW consumption: the storage (30 kWh at
+		// 50 %, target 80 %) is full in the evening, 6 kWh reserve -> released. The
+		// Time-of-Use-Tariff controller decides whether the storage delivers.
+		final var clock = createDummyClock();
+		final var tou = new DummyTimeOfUseTariff("ctrlToU0");
+		prepareStoragePriceTest(clock, true, true, STORAGE, tou, 12000, 2000, 96) //
+				// Charging, but the discharge is delayed: the car draws 4140 W from grid.
+				// Storage share 0, blended price = grid price 43.1 ct -> stop
+				.next(new TestCase("delayed discharge while charging") //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.DELAY_DISCHARGE) //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 30000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input(CONSUMPTION_ACTIVE_POWER, 5140) //
+						.input(GRID_ACTIVE_POWER, 4140) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 4140) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_SURPLUS_ENERGY, 6000) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_PRICE, 80.) //
+						.output(STORAGE_DISCHARGE_BLOCKED, true) //
+						.output(STORAGE_POWER_FOR_CAR, 0) //
+						.output(BLENDED_PRICE, 431.0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(PRICE_CHARGING, false)) //
+				// Balancing: the storage discharges 5140 W, 1000 W for the house, 4140 W
+				// for the car -> 8 ct -> charging with the minimum power
+				.next(new TestCase("balancing while charging") //
+						.timeleap(clock, 5, MINUTES) //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.BALANCING) //
+						.input(ESS_DISCHARGE_POWER, 5140) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.output(STORAGE_DISCHARGE_BLOCKED, false) //
+						.output(STORAGE_POWER_FOR_CAR, 4140) //
+						.output(BLENDED_PRICE, 80.0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				// Charging from grid: the storage charges, the car draws from grid -> stop
+				.next(new TestCase("charge from grid while charging") //
+						.timeleap(clock, 5, MINUTES) //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.CHARGE_GRID) //
+						.input(ESS_DISCHARGE_POWER, -3000) //
+						.input(GRID_ACTIVE_POWER, 7140) //
+						.output(STORAGE_DISCHARGE_BLOCKED, true) //
+						.output(STORAGE_POWER_FOR_CAR, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				// Before the start nothing is measured: with balancing the storage is
+				// assumed to cover the minimum power -> start
+				.next(new TestCase("balancing before the start") //
+						.timeleap(clock, 5, MINUTES) //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.BALANCING) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input(CONSUMPTION_ACTIVE_POWER, 1000) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.output(STORAGE_DISCHARGE_BLOCKED, false) //
+						.output(STORAGE_POWER_FOR_CAR, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				// Delayed discharge before the start: no start
+				.next(new TestCase("delayed discharge before the start") //
+						.timeleap(clock, 5, MINUTES) //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.DELAY_DISCHARGE) //
+						.output(STORAGE_DISCHARGE_BLOCKED, true) //
+						.output(STORAGE_POWER_FOR_CAR, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.deactivate();
+	}
+
+	@Test
+	public void calculateStoragePowerForCarTest() {
+		// blocked: nothing, whatever is measured
+		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 5140, 5140, 0, true, true, 4140));
+		// charging: the house (1000 W) is served first, the rest goes to the car
+		assertEquals(4140,
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 5140, 5140, 0, false, true, 4140));
+		assertEquals(1000,
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 2000, 5140, 0, false, true, 4140));
+		// PV covers the house: the whole discharge goes to the car, released or not
+		assertEquals(1903,
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4033, 1903, 4033, 2130, false, false, 4140));
+		// the storage charges: nothing for the car
+		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, -3000, 5140, 0, false, true, 4140));
+		// not more than the car draws
+		assertEquals(4033,
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4033, 9000, 5033, 0, false, true, 4140));
+		// before the start: the minimum power while the reserve is released
+		assertEquals(4140, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, true, 4140));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, false, 4140));
+	}
+
+	@Test
+	public void isDischargeBlockingStateTest() {
+		assertTrue(ControllerEvcsPriceImpl.isDischargeBlockingState("DELAY_DISCHARGE"));
+		assertTrue(ControllerEvcsPriceImpl.isDischargeBlockingState("CHARGE_GRID"));
+		assertTrue(ControllerEvcsPriceImpl.isDischargeBlockingState("PEAK_SHAVING"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState("BALANCING"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState("DELAY_CHARGE"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState("LIMIT_CHARGE"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState("DISCHARGE_CONSUMPTION"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState("DISCHARGE_GRID"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState("AVOID_GRID_SELL_LIMIT"));
+		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState(null));
 	}
 
 	@Test
@@ -976,7 +1167,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_BUY_PRICE, 443.) //
 						.input(ESS_SOC, 60) //
 						.input(ESS_DISCHARGE_POWER, 4740) //
-						.input(ESS_MAX_DISCHARGE_POWER, 10000) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input(GRID_ACTIVE_POWER, 54) //
 						.input("evcs0", ACTIVE_POWER, 5405) //
@@ -1153,7 +1343,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_BUY_PRICE, 500.) //
 						.input(ESS_CAPACITY, 30000) //
 						.input(ESS_SOC, 95) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 2000) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
@@ -1163,9 +1352,13 @@ public class ControllerEvcsPriceImplTest {
 						.output(STORAGE_SURPLUS_ENERGY, 4500) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
 						.output(PRICE_CHARGING, false)) //
-				.next(new TestCase("storage cannot deliver the minimum power: no fill-up from grid") //
+				.next(new TestCase("storage delivers only 3000 W to the car: no fill-up from grid") //
 						.timeleap(clock, 5, MINUTES) //
-						.input(ESS_MAX_DISCHARGE_POWER, 3000) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 4140) //
+						.input(ESS_DISCHARGE_POWER, 3000) //
+						.input(GRID_ACTIVE_POWER, 1140) //
+						.output(STORAGE_POWER_FOR_CAR, 3000) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();
@@ -1182,7 +1375,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_BUY_PRICE, 500.) //
 						.input(ESS_CAPACITY, 30000) //
 						.input(ESS_SOC, 95) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 2000) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
@@ -1239,7 +1431,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_BUY_PRICE, 500.) //
 						.input(ESS_CAPACITY, 30000) //
 						.input(ESS_SOC, 93) //
-						.input(ESS_MAX_DISCHARGE_POWER, 5000) //
 						.input(ESS_DISCHARGE_POWER, 2000) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //

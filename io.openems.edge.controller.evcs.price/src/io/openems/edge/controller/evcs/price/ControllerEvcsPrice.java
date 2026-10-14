@@ -102,6 +102,24 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.persistencePriority(HIGH) //
 				.text("Storage reserve above the evening target is released for the car")), //
 		/**
+		 * Power the storage delivers to the car: measured while the car charges (the
+		 * storage discharge after the house), assumed as the minimum charge power
+		 * before the start while the reserve is released; 0 while the storage is
+		 * blocked.
+		 */
+		STORAGE_POWER_FOR_CAR(Doc.of(INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(HIGH) //
+				.text("Power the storage delivers to the car")), //
+		/**
+		 * The Time-of-Use-Tariff controller blocks the storage discharge: it delays
+		 * the discharge or charges from grid. Storage power then counts like grid
+		 * power.
+		 */
+		STORAGE_DISCHARGE_BLOCKED(Doc.of(BOOLEAN) //
+				.persistencePriority(HIGH) //
+				.text("Storage discharge blocked by the Time-of-Use-Tariff controller")), //
+		/**
 		 * "Do not charge today": written by the UI; true pauses charging until the
 		 * next midnight, false ends the pause. Reads back the current state.
 		 */
@@ -170,6 +188,14 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 
 	public default void setStorageTargetReachable(Boolean val) {
 		this.channel(ChannelId.STORAGE_TARGET_REACHABLE).setNextValue(val);
+	}
+
+	public default void setStoragePowerForCar(Integer val) {
+		this.channel(ChannelId.STORAGE_POWER_FOR_CAR).setNextValue(val);
+	}
+
+	public default void setStorageDischargeBlocked(Boolean val) {
+		this.channel(ChannelId.STORAGE_DISCHARGE_BLOCKED).setNextValue(val);
 	}
 
 	/**

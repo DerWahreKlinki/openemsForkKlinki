@@ -431,9 +431,11 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Ladepreis jetzt",
-                        "INFO": "Der Speicherstand wird bis zum Ende der PV-Erzeugung vorausgerechnet (Erzeugung minus Verbrauch minus Auto, Viertelstunde für Viertelstunde, Ladeverluste berücksichtigt). Liegt er dann um mindestens eine Stunde Mindestladeleistung über dem Abendziel, wird die Reserve freigegeben: Das Auto darf sie schon jetzt aus dem Speicher laden, bis sie aufgebraucht ist; Speicherstrom zählt dabei wie Überschussstrom. Sonst zählt Speicherstrom wie Netzstrom.",
+                        "INFO": "Der Speicherstand wird bis zum Ende der PV-Erzeugung vorausgerechnet (Erzeugung minus Verbrauch minus Auto, Viertelstunde für Viertelstunde, Ladeverluste berücksichtigt). Liegt er dann um mindestens eine Stunde Mindestladeleistung über dem Abendziel, wird die Reserve freigegeben: Das Auto darf sie schon jetzt aus dem Speicher laden, bis sie aufgebraucht ist; Speicherstrom zählt dabei wie Überschussstrom. Sonst zählt Speicherstrom wie Netzstrom. Während des Ladens zählt nur, was der Speicher nach dem Haus tatsächlich ans Auto liefert; sperrt der Speicher-Fahrplan die Entladung, liefert er nichts.",
                         "NAME": "Speicher vorausschauend einbeziehen",
                         "NET_SOC": "Speicher-Ladestand (netto)",
+                        "POWER_FOR_CAR": "Speicherleistung für das Auto",
+                        "REASON_BLOCKED": "Speicher gesperrt: Der Speicher-Fahrplan verzögert gerade die Entladung oder lädt aus dem Netz; Speicherstrom zählt wie Netzstrom.",
                         "REASON_GRID": "Keine freigegebene Speicher-Reserve: Der Speicher würde sein Abendziel bei Sonnenuntergang verfehlen oder die Reserve ist kleiner als eine Stunde Mindestladeleistung; sein Strom zählt wie Netzstrom.",
                         "REASON_PV": "Speicher-Reserve freigegeben: Der Speicher liegt laut Prognose bei Sonnenuntergang über seinem Abendziel; sein Strom zählt wie Überschussstrom, bis die Reserve aufgebraucht ist.",
                         "SURPLUS": "Speicher-Reserve über dem Abendziel (Prognose bis Sonnenuntergang)",

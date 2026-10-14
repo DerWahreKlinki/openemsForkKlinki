@@ -28,6 +28,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private double storageLossSurcharge = 1;
 		// tests count without losses unless they test the efficiency
 		private int storageChargeEfficiency = 100;
+		private String timeOfUseTariffId = "";
 
 		private Builder() {
 		}
@@ -129,6 +130,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setStorageChargeEfficiency(int storageChargeEfficiency) {
 			this.storageChargeEfficiency = storageChargeEfficiency;
+			return this;
+		}
+
+		public Builder setTimeOfUseTariffId(String timeOfUseTariffId) {
+			this.timeOfUseTariffId = timeOfUseTariffId;
 			return this;
 		}
 
@@ -253,5 +259,10 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int storageChargeEfficiency() {
 		return this.builder.storageChargeEfficiency;
+	}
+
+	@Override
+	public String timeOfUseTariff_id() {
+		return this.builder.timeOfUseTariffId;
 	}
 }

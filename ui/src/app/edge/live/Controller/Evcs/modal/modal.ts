@@ -59,6 +59,10 @@ export class ModalComponent extends AbstractModal {
     protected storageNetSoc: number | null = null;
     /** Projected energy above the evening target at the end of PV production in [Wh] */
     protected storageSurplusEnergy: number | null = null;
+    /** Power the storage delivers to the car in [W]: measured while charging, assumed before the start */
+    protected storagePowerForCar: number | null = null;
+    /** The Time-of-Use-Tariff controller blocks the storage discharge right now */
+    protected storageDischargeBlocked: boolean | null = null;
     /** Current state of the price controller for the forecast chart; replaced only when a value changes */
     protected live: EvcsPriceForecast.Live | null = null;
     /** "Do not charge today" (channel PauseToday of the controller); null if not available */
@@ -232,6 +236,8 @@ export class ModalComponent extends AbstractModal {
                 new ChannelAddress(this.controller.id, "StorageTargetReachable"),
                 new ChannelAddress(this.controller.id, "StorageNetSoc"),
                 new ChannelAddress(this.controller.id, "StorageSurplusEnergy"),
+                new ChannelAddress(this.controller.id, "StoragePowerForCar"),
+                new ChannelAddress(this.controller.id, "StorageDischargeBlocked"),
                 new ChannelAddress(this.controller.id, "PauseToday"),
                 new ChannelAddress(this.controller.id, "ChargePowerLimit"),
                 new ChannelAddress("_sum", "ProductionActivePower"),
@@ -295,6 +301,9 @@ export class ModalComponent extends AbstractModal {
         this.storageTargetReachable = reachable == null ? null : reachable === 1 || reachable === true;
         this.storageNetSoc = currentData.allComponents[this.controller?.id + "/StorageNetSoc"] ?? null;
         this.storageSurplusEnergy = currentData.allComponents[this.controller?.id + "/StorageSurplusEnergy"] ?? null;
+        this.storagePowerForCar = currentData.allComponents[this.controller?.id + "/StoragePowerForCar"] ?? null;
+        const blocked = currentData.allComponents[this.controller?.id + "/StorageDischargeBlocked"];
+        this.storageDischargeBlocked = blocked == null ? null : blocked === 1 || blocked === true;
         const pauseToday = currentData.allComponents[this.controller?.id + "/PauseToday"];
         this.pauseToday = pauseToday == null ? null : pauseToday === 1 || pauseToday === true;
 

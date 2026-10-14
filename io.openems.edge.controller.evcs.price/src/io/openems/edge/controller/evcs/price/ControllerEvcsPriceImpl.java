@@ -33,6 +33,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.ChannelAddress;
+import io.openems.common.types.OptionsEnum;
 import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
@@ -88,6 +89,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Expected energy above the evening target at the end of PV production; null
 	// if unknown. Reported to the energy optimizer as what the car may take
 	private Integer storageSurplusWh = null;
+	// The Time-of-Use-Tariff controller blocks the storage discharge right now:
+	// it delays the discharge or charges from grid
+	private boolean storageDischargeBlocked = false;
 
 	// Forecast of the car for the energy optimizer (Time-of-Use-Tariff plans the
 	// storage with it); unused without an optimizer
@@ -324,19 +328,25 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				}
 			}
 
-			// Blended price of filling up to the minimum hardware power from PV surplus,
-			// storage (at its replacement cost) and grid
+			// Blended price of the power the car draws now - or of the minimum hardware
+			// power before the start - from PV surplus, storage (at its replacement
+			// cost) and grid. The storage share is measured while the car charges: what
+			// the storage discharges after the house. A blocked storage delivers nothing
 			final var storagePrice = this.updateStoragePrice(gridBuyPrice);
-			final var storagePower = this.sum.getEssMaxDischargePower().orElse(0);
+			final var carPower = Math.max(this.evcs.getActivePower().orElse(0), 0);
+			final var storagePower = calculateStoragePowerForCar(carPower, this.sum.getEssDischargePower().orElse(0),
+					this.sum.getConsumptionActivePower().orElse(0), this.sum.getProductionActivePower().orElse(0),
+					this.storageDischargeBlocked, this.storageAboveTarget, minimumHardwarePower);
+			this.setStoragePowerForCar(storagePower);
 			final var blendedPrice = calculateBlendedPrice(gridBuyPrice, excessPower, storagePower,
-					minimumHardwarePower, this.config.pvPrice(), storagePrice);
+					carPower > 0 ? carPower : minimumHardwarePower, this.config.pvPrice(), storagePrice);
 			this.setBlendedPrice(blendedPrice == null ? null : blendedPrice * 10);
 
 			// Not enough excess power for the minimum hardware power: take the missing
 			// power from the storage reserve and, with price-based charging, from grid
 			if (nextChargePower == 0) {
 				// With storage pricing the missing power may also come from the storage
-				// alone, as long as the storage is above its evening target right now
+				// alone, as long as the reserve is released and the storage delivers
 				final var storageAvailable = this.config.useStorageSurplus() && this.storageAboveTarget
 						&& storagePower > 0;
 				final var available = excessPower > 0 || storageAvailable;
@@ -359,6 +369,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		} else {
 			this.setStoragePrice(null);
 			this.setBlendedPrice(null);
+			this.setStoragePowerForCar(null);
+			this.setStorageDischargeBlocked(null);
 		}
 		this.setPriceCharging(priceCharging);
 
@@ -526,8 +538,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var storagePrice = calculateStoragePrice(gridBuyPrice, this.config.pvPrice(),
 				this.config.storageLossSurcharge(), targetReachable);
 
+		this.storageDischargeBlocked = this.readStorageDischargeBlocked();
+
 		this.storageSurplusWh = storageSurplus;
 		this.setStorageSurplusEnergy(storageSurplus);
+		this.setStorageDischargeBlocked(this.storageDischargeBlocked);
 		this.setStorageEnergyToTarget(energyToTarget);
 		this.setStorageNetSoc(netSoc);
 		this.setStorageTargetReachable(targetReachable);
@@ -546,6 +561,81 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 */
 	protected static int calculateAssumedCarPower(int activePower, Status status, int minimumPower) {
 		return isPluggedIn(status) ? Math.max(activePower, minimumPower) : Math.max(activePower, 0);
+	}
+
+	/**
+	 * Reads the state of the configured Time-of-Use-Tariff controller.
+	 *
+	 * @return true while it blocks the storage discharge; false if unknown or if
+	 *         no controller is configured
+	 */
+	private boolean readStorageDischargeBlocked() {
+		final var id = this.config.timeOfUseTariff_id();
+		if (id == null || id.isBlank()) {
+			return false;
+		}
+		try {
+			final var value = this.componentManager.getComponent(id).channel("StateMachine").value();
+			if (!value.isDefined()) {
+				return false;
+			}
+			final OptionsEnum state = value.asEnum();
+			return isDischargeBlockingState(state instanceof Enum<?> e ? e.name() : null);
+		} catch (OpenemsNamedException | RuntimeException e) {
+			this.logDebug(this.log, "Unable to read the Time-of-Use-Tariff state: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Decides from the state of the Time-of-Use-Tariff controller whether the
+	 * storage discharge is blocked: while the discharge is delayed or the storage
+	 * charges from grid, the storage delivers nothing to the car. The other states
+	 * limit the charging only or discharge anyway.
+	 *
+	 * @param state the name of the {@code StateMachine} value; possibly null
+	 * @return true if the discharge is blocked
+	 */
+	protected static boolean isDischargeBlockingState(String state) {
+		if (state == null) {
+			return false;
+		}
+		return switch (state) {
+		case "DELAY_DISCHARGE", "CHARGE_GRID", "PEAK_SHAVING" -> true;
+		default -> false;
+		};
+	}
+
+	/**
+	 * Calculates the power the storage delivers to the car.
+	 *
+	 * <p>
+	 * While the car charges, the storage discharge is measured: the house is
+	 * served first (consumption without the car, minus production), the rest up to
+	 * the car power goes to the car. Before the start nothing can be measured: the
+	 * storage is assumed to cover the minimum charge power while the reserve is
+	 * released. A blocked storage delivers nothing.
+	 *
+	 * @param carPower          the measured charge power of the car in [W]
+	 * @param essDischargePower the measured storage discharge in [W]; negative
+	 *                          while the storage charges
+	 * @param consumptionPower  the total consumption including the car in [W]
+	 * @param productionPower   the production in [W]
+	 * @param blocked           the storage discharge is blocked
+	 * @param released          the storage reserve is released
+	 * @param minPower          the minimum hardware power in [W]
+	 * @return the power for the car in [W]
+	 */
+	protected static int calculateStoragePowerForCar(int carPower, int essDischargePower, int consumptionPower,
+			int productionPower, boolean blocked, boolean released, int minPower) {
+		if (blocked) {
+			return 0;
+		}
+		if (carPower <= 0) {
+			return released ? Math.max(minPower, 0) : 0;
+		}
+		final var houseDeficit = Math.max(consumptionPower - carPower - productionPower, 0);
+		return Math.min(Math.max(essDischargePower - houseDeficit, 0), carPower);
 	}
 
 	/**
@@ -872,7 +962,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 *
 	 * @param gridBuyPrice the grid buy price in [Currency/MWh]; possibly null
 	 * @param excessPower  the available excess power in [W]
-	 * @param storagePower the power the storage is able to discharge in [W]
+	 * @param storagePower the power the storage delivers to the car in [W]
 	 * @param power        the charge power in [W]
 	 * @param pvPrice      the value of PV power in [Cent/kWh]
 	 * @param storagePrice the replacement cost of storage power in [Cent/kWh];

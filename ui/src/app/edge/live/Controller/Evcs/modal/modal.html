@@ -155,12 +155,15 @@
               @if (storageSurplusEnergy != null) {
                 <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.SURPLUS' | translate" [value]="storageSurplusEnergy" [converter]="CONVERT_TO_KILO_WATT_HOURS"></oe-modal-line>
               }
+              @if (storagePowerForCar != null) {
+                <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.POWER_FOR_CAR' | translate" [value]="storagePowerForCar" [converter]="Utils.CONVERT_TO_WATT"></oe-modal-line>
+              }
             }
             <!--Current blended price of charging with minimum power-->
             @if (blendedPrice != null) {
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.CURRENT_PRICE' | translate" [value]="blendedPrice" [converter]="CONVERT_PRICE_TO_CENT_PER_KWH"></oe-modal-line>
               @if (formGroup.controls["useStorageSurplus"].value === true && storageTargetReachable != null) {
-                <oe-modal-info-line [info]="(storageTargetReachable ? 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_PV' : 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_GRID') | translate" style="font-size: small"></oe-modal-info-line>
+                <oe-modal-info-line [info]="(storageDischargeBlocked ? 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_BLOCKED' : storageTargetReachable ? 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_PV' : 'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.REASON_GRID') | translate" style="font-size: small"></oe-modal-info-line>
               }
             }
             <!--Forecast needs the schedule of the Time-of-Use-Tariff controller-->

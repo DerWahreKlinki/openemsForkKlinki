@@ -76,6 +76,9 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Storage charge efficiency [%]", description = "Share of the PV surplus that arrives in the storage in the projection until the evening; covers the conversion losses.")
 	int storageChargeEfficiency() default 92;
 
+	@AttributeDefinition(name = "Time-of-Use-Tariff controller ID", description = "Its state tells whether the storage may discharge: while it delays the discharge or charges from grid, storage power counts like grid power. Empty = not checked.")
+	String timeOfUseTariff_id() default "";
+
 	String webconsole_configurationFactory_nameHint() default "Controller Electric Vehicle Charging Station with Price Limit [{id}]";
 
 }

@@ -268,16 +268,27 @@ public final class ChargingPlan {
 		return result;
 	}
 
+	/** Production below this share of the predicted peak does not count as PV. */
+	protected static final double PV_BLOCK_THRESHOLD = 0.03;
+
 	/*
-	 * Finds the PV blocks: runs of quarter-hours with production, as pairs of
-	 * first and last index.
+	 * Finds the PV blocks: runs of quarter-hours with production of at least 3 % of
+	 * the predicted peak (a forecast may show a few Watt long after sunset), as
+	 * pairs of first and last index.
 	 */
 	private static List<int[]> findPvBlocks(List<Input> inputs) {
 		final var result = new ArrayList<int[]>();
+		var peak = 0;
+		for (var in : inputs) {
+			if (in.production() != null) {
+				peak = max(peak, in.production());
+			}
+		}
+		final var threshold = max((int) Math.ceil(peak * PV_BLOCK_THRESHOLD), 1);
 		int start = -1;
 		for (var i = 0; i < inputs.size(); i++) {
 			final var prod = inputs.get(i).production();
-			final var pv = prod != null && prod > 0;
+			final var pv = prod != null && prod >= threshold;
 			if (pv && start < 0) {
 				start = i;
 			} else if (!pv && start >= 0) {

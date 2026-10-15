@@ -228,6 +228,25 @@ public class ChargingPlanTest {
 	}
 
 	@Test
+	public void pvBlockEndsBelowThreePercentOfThePeak() {
+		// Live 15.10.2026: the weather forecast shows a few Watt until 20:15; the PV
+		// block must end at 18:30 (398 W, above 3 % of 8500 W = 255 W), not at 20:15,
+		// otherwise the evening target is checked after two hours of house load
+		final var inputs = new ArrayList<Input>();
+		final var pv = new int[] { 8500, 6000, 2350, 1177, 726, 398, 185, 67, 18, 6, 2, 1, 1, 0, 0, 0 };
+		for (var i = 0; i < pv.length; i++) {
+			inputs.add(new Input(START.plusMinutes(15L * i), 45., pv[i], 3500));
+		}
+		final var r = ChargingPlan.calculate(rules(Priority.STORAGE), storage(22000), new Car(true, null), inputs);
+		// the storage at the end of the PV block is the one after the 398 W quarter-hour
+		assertEquals(r.quarters().get(5).storageWh(), r.storageAtPvEndWh(), 0.5);
+		// no storage share for the car in the twilight
+		for (var i = 6; i < pv.length; i++) {
+			assertEquals(0, r.quarters().get(i).fromStorage(), "quarter " + i);
+		}
+	}
+
+	@Test
 	public void storageModeFromState() {
 		assertEquals(StorageMode.BALANCING, StorageMode.fromState(null));
 		assertEquals(StorageMode.BALANCING, StorageMode.fromState("BALANCING"));

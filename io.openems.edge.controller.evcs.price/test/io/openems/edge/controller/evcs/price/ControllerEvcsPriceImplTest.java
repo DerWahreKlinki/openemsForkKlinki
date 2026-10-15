@@ -882,6 +882,32 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void storagePriorityNoCreepWhileChargingTest() throws Exception {
+		// Priority STORAGE, the car charges 4404 W, grid 0, the storage charges: the
+		// car's own draw looks like 4204 W surplus, but the plan would feed in nothing
+		// (the storage takes the whole 10 kW surplus) and allows 4140 W storage power
+		// -> the car is held at the minimum power instead of ramping up
+		prepareStoragePriceTest(createDummyClock(), true, true, STORAGE, 12000, 2000, 96) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 30000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, -7596) //
+						.input(CONSUMPTION_ACTIVE_POWER, 6404) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 4404) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_PRICE, 80.) //
+						.output(STORAGE_POWER_FOR_CAR, 4204) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
+
+	@Test
 	public void storageSurplusDisabledTest() throws Exception {
 		// Disabled: the storage is priced like grid: 1000 W PV at 7 ct + 3140 W at
 		// 43.1 ct = 34.4 ct -> no charging (priority CAR: the plan gives the surplus

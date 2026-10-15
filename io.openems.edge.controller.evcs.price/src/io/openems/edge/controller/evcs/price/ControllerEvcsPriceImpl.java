@@ -369,6 +369,16 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 					carPower > 0 ? carPower : minimumHardwarePower, this.config.pvPrice(), storagePrice);
 			this.setBlendedPrice(blendedPrice == null ? null : blendedPrice * 10);
 
+			// With priority STORAGE the car may not take more than PV would feed in plus
+			// the storage power the plan allows; otherwise its own draw would ramp it up
+			// step by step while the storage just charges less
+			if (quarterPlan != null && carPower > 0 && priority == Priority.STORAGE && !priceCharging) {
+				final var allowed = pvPower + plannedStoragePower;
+				if (nextChargePower > allowed) {
+					nextChargePower = allowed >= minimumHardwarePower ? allowed : 0;
+				}
+			}
+
 			// Not enough excess power for the minimum hardware power: take the missing
 			// power from the storage as far as the plan allows it and, with price-based
 			// charging, from grid

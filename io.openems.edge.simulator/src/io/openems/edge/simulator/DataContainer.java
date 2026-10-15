@@ -120,4 +120,26 @@ public class DataContainer {
 	public void rewind() {
 		this.currentIndex = -1;
 	}
+
+	/**
+	 * Jumps to the given record; wraps around at the end.
+	 *
+	 * @param index the record index
+	 */
+	public void setCurrentIndex(int index) {
+		if (this.records.isEmpty()) {
+			this.currentIndex = -1;
+			return;
+		}
+		this.currentIndex = Math.floorMod(index, this.records.size());
+	}
+
+	/**
+	 * Gets the number of records.
+	 *
+	 * @return the number of records
+	 */
+	public int getRecordCount() {
+		return this.records.size();
+	}
 }

@@ -93,4 +93,22 @@ public abstract class AbstractDatasource extends AbstractOpenemsComponent implem
 	public int getTimeDelta() {
 		return this.timeDelta;
 	}
+
+	/**
+	 * Jumps to the given record; wraps around at the end.
+	 *
+	 * @param index the record index
+	 */
+	protected void setRecordIndex(int index) {
+		this.data.setCurrentIndex(index);
+	}
+
+	/**
+	 * Gets the number of records.
+	 *
+	 * @return the number of records
+	 */
+	protected int getRecordCount() {
+		return this.data.getRecordCount();
+	}
 }

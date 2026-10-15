@@ -431,14 +431,14 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Ladepreis jetzt",
-                        "INFO": "Der Speicherstand wird bis zum Ende der PV-Erzeugung vorausgerechnet (Erzeugung minus Verbrauch minus Auto, Viertelstunde für Viertelstunde, Ladeverluste berücksichtigt). Liegt er dann um mindestens eine Stunde Mindestladeleistung über dem Abendziel, wird die Reserve freigegeben: Das Auto darf sie schon jetzt aus dem Speicher laden, bis sie aufgebraucht ist; Speicherstrom zählt dabei wie Überschussstrom. Sonst zählt Speicherstrom wie Netzstrom. Während des Ladens zählt nur, was der Speicher nach dem Haus tatsächlich ans Auto liefert; sperrt der Speicher-Fahrplan die Entladung, liefert er nichts.",
+                        "INFO": "Jede Viertelstunde wird ein Ladeplan bis zum Ende des Tages gerechnet: Speicher und Auto zusammen, mit Preisen, PV- und Verbrauchsprognose und dem Fahrplan des Speichers. Der Speicher wird zuerst gefüllt, das Auto bekommt, was der Speicher nicht aufnehmen kann, und darf zum Auffüllen auf die Mindestleistung Speicherstrom nehmen, solange der Speicher abends sein Ziel noch erreicht. Dieser Speicherstrom wird von der Sonne nachgeladen und zählt wie Überschussstrom plus Verlustaufschlag; aller andere Speicherstrom zählt wie Netzstrom. Während des Ladens zählt, was der Speicher nach dem Haus tatsächlich ans Auto liefert; sperrt der Speicher-Fahrplan die Entladung, liefert er nichts.",
                         "NAME": "Speicher vorausschauend einbeziehen",
                         "NET_SOC": "Speicher-Ladestand (netto)",
                         "POWER_FOR_CAR": "Speicherleistung für das Auto",
                         "REASON_BLOCKED": "Speicher gesperrt: Der Speicher-Fahrplan verzögert gerade die Entladung oder lädt aus dem Netz; Speicherstrom zählt wie Netzstrom.",
-                        "REASON_GRID": "Keine freigegebene Speicher-Reserve: Der Speicher würde sein Abendziel bei Sonnenuntergang verfehlen oder die Reserve ist kleiner als eine Stunde Mindestladeleistung; sein Strom zählt wie Netzstrom.",
-                        "REASON_PV": "Speicher-Reserve freigegeben: Der Speicher liegt laut Prognose bei Sonnenuntergang über seinem Abendziel; sein Strom zählt wie Überschussstrom, bis die Reserve aufgebraucht ist.",
-                        "SURPLUS": "Speicher-Reserve über dem Abendziel (Prognose bis Sonnenuntergang)",
+                        "REASON_GRID": "Kein Speicherstrom im Ladeplan: Der Speicher würde sonst sein Abendziel verfehlen, oder es gibt keinen Plan (Preise oder Prognose fehlen); sein Strom zählt wie Netzstrom.",
+                        "REASON_PV": "Ladeplan hält das Abendziel: Der Speicherstrom, den der Plan für das Auto vorsieht, wird von der Sonne nachgeladen und zählt wie Überschussstrom plus Verlustaufschlag.",
+                        "SURPLUS": "Speicher über dem Abendziel am Ende der PV-Erzeugung (Plan mit Auto)",
                         "TARGET": "Speicher-Ziel abends (netto)"
                     },
                     "TOTAL_CHARGE": "Gesamte Beladung",

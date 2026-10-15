@@ -314,6 +314,10 @@ export class ModalComponent extends AbstractModal {
                 chargePower: currentData.allComponents[this.controller.id + "/ChargePowerLimit"] ?? null,
                 blendedPrice: blendedPrice == null ? null : Math.round(blendedPrice) / 10, // [Currency/MWh] to [Cent/kWh]
                 production: production == null ? null : Math.round(production / 100) * 100,
+                awaitingHysteresis: (() => {
+                    const value = currentData.allComponents[this.controller.id + "/AwaitingHysteresis"];
+                    return value == null ? null : value === 1 || value === true;
+                })(),
             };
             // Keep the same object unless a value changed, so the chart is not redrawn every second
             if (JSON.stringify(live) !== JSON.stringify(this.live)) {

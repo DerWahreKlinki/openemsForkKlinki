@@ -120,6 +120,8 @@ export namespace EvcsPriceForecast {
         blendedPrice: number | null;
         /** Current production in [W]; null if unknown */
         production: number | null;
+        /** True while the controller wants to start but waits for the start hysteresis */
+        awaitingHysteresis?: boolean | null;
     };
 
     /**
@@ -355,7 +357,12 @@ export namespace EvcsPriceForecast {
             return slots;
         }
         const slot = slots[index];
-        const chargePower = live.chargePower ?? slot.chargePower;
+        // While the start hysteresis runs the limit is still 0, but the controller wants to charge:
+        // show the wanted power, at least the minimum power
+        let chargePower = live.chargePower ?? slot.chargePower;
+        if (live.awaitingHysteresis && chargePower <= 0) {
+            chargePower = Math.max(slot.chargePower, settings.minPower);
+        }
         const effectivePrice = live.blendedPrice ?? slot.effectivePrice;
         const zone = getZone(chargePower, effectivePrice, settings);
         const result = [...slots];
@@ -636,9 +643,11 @@ export namespace EvcsPriceForecast {
             const referencePower = q.power > 0 ? q.power : settings.minPower;
             const effectivePrice = q.blendedPrice != null ? q.blendedPrice / 10 : price;
             const storageAboveTarget = q.storageBudget > 0;
+            // TARGET: the plan keeps the storage for the evening, the forecast gives no surplus for the
+            // minimum power without it -> "no surplus"; TOO_EXPENSIVE -> "too expensive"
             const zone =
                 q.power <= 0
-                    ? q.reason === "TOO_EXPENSIVE" || q.reason === "TARGET"
+                    ? q.reason === "TOO_EXPENSIVE"
                         ? Zone.NONE
                         : Zone.NO_SURPLUS
                     : getZone(q.power, effectivePrice, settings);

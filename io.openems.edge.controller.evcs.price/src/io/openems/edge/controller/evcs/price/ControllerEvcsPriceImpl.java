@@ -348,12 +348,24 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// nothing
 			final var storagePrice = this.updateStoragePrice(gridBuyPrice);
 			final var carPower = Math.max(this.evcs.getActivePower().orElse(0), 0);
-			final var storagePower = calculateStoragePowerForCar(carPower, this.sum.getEssDischargePower().orElse(0),
+			var storagePower = calculateStoragePowerForCar(carPower, this.sum.getEssDischargePower().orElse(0),
 					this.sum.getConsumptionActivePower().orElse(0), this.sum.getProductionActivePower().orElse(0),
 					this.storageDischargeBlocked, this.planStoragePower, minimumHardwarePower);
+
+			// While the car charges with priority STORAGE and the grid stays at zero, its
+			// own draw looks like surplus, although the storage may just charge less. The
+			// plan knows how much of this quarter-hour would be fed in: only that much
+			// is PV, the rest is storage power the car displaces
+			var pvPower = excessPower;
+			final var quarterPlan = this.plan.getAt(ZonedDateTime.now(this.clock));
+			if (quarterPlan != null && carPower > 0 && priority == Priority.STORAGE) {
+				final var feedIn = Math.max(-this.sum.getGridActivePower().orElse(0), 0);
+				pvPower = Math.min(excessPower, quarterPlan.fromPv() + feedIn);
+				storagePower += Math.max(excessPower - pvPower, 0);
+			}
 			this.setStoragePowerForCar(storagePower);
 			final var plannedStoragePower = Math.min(storagePower, this.planStoragePower);
-			final var blendedPrice = calculateBlendedPrice(gridBuyPrice, excessPower, plannedStoragePower,
+			final var blendedPrice = calculateBlendedPrice(gridBuyPrice, pvPower, plannedStoragePower,
 					carPower > 0 ? carPower : minimumHardwarePower, this.config.pvPrice(), storagePrice);
 			this.setBlendedPrice(blendedPrice == null ? null : blendedPrice * 10);
 
@@ -362,17 +374,17 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// charging, from grid
 			if (nextChargePower == 0) {
 				final var storageAvailable = this.config.useStorageSurplus() && plannedStoragePower > 0;
-				final var available = excessPower > 0 || storageAvailable;
+				final var available = pvPower > 0 || storageAvailable;
 				final boolean fillUp;
 				if (priceChargingEnabled) {
 					fillUp = this.config.useStorageSurplus() //
 							? available && blendedPrice != null && blendedPrice < this.config.priceLimit()
-							: isBlendedPriceBelowLimit(gridBuyPrice, excessPower, minimumHardwarePower,
+							: isBlendedPriceBelowLimit(gridBuyPrice, pvPower, minimumHardwarePower,
 									this.config.pvPrice(), this.config.priceLimit());
 				} else {
-					// Without price-based charging no grid power at all: excess power and the
-					// planned storage power have to cover the minimum power by themselves
-					fillUp = Math.max(excessPower, 0)
+					// Without price-based charging no grid power at all: PV and the planned
+					// storage power have to cover the minimum power by themselves
+					fillUp = Math.max(pvPower, 0)
 							+ (storageAvailable ? plannedStoragePower : 0) >= minimumHardwarePower;
 				}
 				if (fillUp) {

@@ -606,6 +606,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.plan = ChargingPlan.Result.EMPTY;
 		}
 		if (this.plan.quarters().isEmpty()) {
+			// right after a restart prices and predictions arrive a little later than
+			// the first cycle: try again next cycle instead of waiting a quarter-hour
+			this.planDirty = true;
 			this.logDebug(this.log, "No charging plan: prices or predictions missing");
 		} else {
 			this.logDebug(this.log, "Charging plan: start " + this.plan.start() + ", " + this.plan.energyWh()

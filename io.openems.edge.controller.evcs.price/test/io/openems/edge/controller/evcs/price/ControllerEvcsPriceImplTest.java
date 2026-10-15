@@ -63,6 +63,7 @@ import io.openems.edge.evcs.api.Status;
 import io.openems.edge.predictor.api.prediction.Prediction;
 import io.openems.edge.predictor.api.test.DummyPredictor;
 import io.openems.edge.predictor.api.test.DummyPredictorManager;
+import io.openems.edge.timeofusetariff.test.DummyTimeOfUseTariffProvider;
 import io.openems.edge.evcs.test.DummyManagedEvcs;
 
 public class ControllerEvcsPriceImplTest {
@@ -695,9 +696,11 @@ public class ControllerEvcsPriceImplTest {
 		final var sum = new DummySum();
 		final var production = new Integer[quarters];
 		final var consumption = new Integer[quarters];
+		final var prices = new Double[quarters];
 		for (var i = 0; i < quarters; i++) {
 			production[i] = productionW;
 			consumption[i] = consumptionW;
+			prices[i] = 431.;
 		}
 		final var predictorManager = new DummyPredictorManager(
 				new DummyPredictor("predictor0", cm, Prediction.from(sum, SUM_PRODUCTION, now, production),
@@ -709,6 +712,7 @@ public class ControllerEvcsPriceImplTest {
 				.addReference("componentManager", cm) //
 				.addReference("sum", sum) //
 				.addReference("predictorManager", predictorManager) //
+				.addReference("timeOfUseTariff", DummyTimeOfUseTariffProvider.fromQuarterlyPrices(clock, prices)) //
 				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0"));
 		if (timeOfUseTariff != null) {
 			test.addComponent(timeOfUseTariff);
@@ -792,14 +796,12 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
-	public void storageTargetReachableTest() throws Exception {
+	public void carPriorityPlanTest() throws Exception {
 		// Dummy clock starts at midnight: 96 quarters, production 12 kW, consumption
-		// 2 kW, car (plugged: at least 4140 W) -> 5860 W for the storage: full after
-		// 11 quarters and full at the end of PV production. Storage 30 kWh at 50 %,
-		// target 80 % -> 9 kWh missing now, 6 kWh above the target in the evening
-		// (more than one hour of minimum power: released)
-		// -> storage like PV (8 ct): the car draws 4033 W, 2130 W PV at 7 ct and
-		// the measured 1903 W storage at 8 ct
+		// 2 kW, priority CAR: the plan gives the whole 10 kW surplus to the car, the
+		// storage (30 kWh at 50 %, target 80 %) gets nothing and misses its target by
+		// 9 kWh -> storage like grid (43.1 ct): the car draws 4033 W, 2130 W PV at
+		// 7 ct and the measured 1903 W storage at 43.1 ct -> 24.0 ct -> charging
 		prepareStoragePriceTest(createDummyClock(), true, 12000, 2000, 96) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 431.) //
@@ -811,24 +813,24 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, 6000) //
+						.output(STORAGE_SURPLUS_ENERGY, -9000) //
 						.output(STORAGE_ENERGY_TO_TARGET, 9000) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
-						.output(STORAGE_PRICE, 80.) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
+						.output(STORAGE_PRICE, 431.) //
 						.output(STORAGE_POWER_FOR_CAR, 1903) //
 						.output(STORAGE_DISCHARGE_BLOCKED, false) //
-						.output(BLENDED_PRICE, 74.71857178279197) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
 						.output(PRICE_CHARGING, true)) //
 				.deactivate();
 	}
 
 	@Test
-	public void storageTargetNotReachableTest() throws Exception {
-		// Production 6 kW, consumption 2 kW, car 4140 W -> the car takes the whole
-		// 4 kW surplus, nothing left for the storage: 10 kWh in the evening, 6 kWh
-		// below the target -> storage like grid (43.1 ct): 2130 W PV, 1903 W storage
-		// at 43.1 ct -> 24.0 ct blended -> still below the 30 ct limit -> charging
+	public void planKeepsTheTargetTest() throws Exception {
+		// Production 6 kW, consumption 2 kW: the 4 kW surplus is below the minimum
+		// power, the car would fill up from the storage. The plan drops those
+		// quarter-hours until the storage (20 kWh at 50 %, target 80 %) reaches its
+		// target -> target reachable. Live: 2130 W PV at 7 ct, the measured 1903 W
+		// storage mostly at 43.1 ct -> below the 30 ct limit -> charging
 		final var clock = createDummyClock();
 		prepareStoragePriceTest(clock, true, 6000, 2000, 96) //
 				.next(new TestCase() //
@@ -841,29 +843,28 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, -6000) //
 						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
-						.output(STORAGE_TARGET_REACHABLE, false) //
-						.output(STORAGE_PRICE, 431.) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
 						.output(PRICE_CHARGING, true)) //
 				.next(new TestCase() //
-						// less PV: 1000 W PV, 3033 W storage at 43.1 ct -> 34.2 ct -> no charging
+						// less PV: 1000 W PV, 3033 W storage mostly at 43.1 ct -> above 30 ct
 						.timeleap(clock, 5, MINUTES) //
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_DISCHARGE_POWER, 3033) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
-						.output(STORAGE_TARGET_REACHABLE, false) //
+						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();
 	}
 
 	@Test
-	public void storagePriorityIgnoresCarInProjectionTest() throws Exception {
-		// Same as storageTargetNotReachableTest, but with priority STORAGE: the storage
-		// is filled first, so the 4 kW surplus goes to the storage in the projection
-		// -> full in the evening, 6 kWh above the target -> storage like PV (8 ct)
+	public void storagePriorityPlanTest() throws Exception {
+		// Priority STORAGE: the storage is filled first, the car fills up from the
+		// storage charging only as far as the storage still reaches its target in
+		// the evening; the plan contains that share for the running quarter-hour ->
+		// storage like PV (8 ct), the storage ends at its target
 		prepareStoragePriceTest(createDummyClock(), true, true, STORAGE, 6000, 2000, 96) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 431.) //
@@ -875,7 +876,6 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, 6000) //
 						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output(STORAGE_PRICE, 80.)) //
 				.deactivate();
@@ -883,9 +883,9 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void storageSurplusDisabledTest() throws Exception {
-		// Disabled: channels are written, but the decision uses the grid price for
-		// the missing power: 1000 W PV at 7 ct + 3140 W at 43.1 ct = 34.4 ct -> no
-		// charging, although the target would be reachable
+		// Disabled: the storage is priced like grid: 1000 W PV at 7 ct + 3140 W at
+		// 43.1 ct = 34.4 ct -> no charging (priority CAR: the plan gives the surplus
+		// to the car, the storage misses its target)
 		prepareStoragePriceTest(createDummyClock(), false, 12000, 2000, 96) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 431.) //
@@ -897,8 +897,8 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 0) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
-						.output(STORAGE_PRICE, 80.) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
+						.output(STORAGE_PRICE, 431.) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();
@@ -906,9 +906,10 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void storageBlockedByTimeOfUseTariffTest() throws Exception {
-		// Priority STORAGE, 12 kW production, 2 kW consumption: the storage (30 kWh at
-		// 50 %, target 80 %) is full in the evening, 6 kWh reserve -> released. The
-		// Time-of-Use-Tariff controller decides whether the storage delivers.
+		// Priority STORAGE, 12 kW production, 2 kW consumption: the plan lets the car
+		// fill up from the storage charging while the storage still reaches its
+		// target. The Time-of-Use-Tariff controller decides whether the storage
+		// delivers at all.
 		final var clock = createDummyClock();
 		final var tou = new DummyTimeOfUseTariff("ctrlToU0");
 		prepareStoragePriceTest(clock, true, true, STORAGE, tou, 12000, 2000, 96) //
@@ -927,9 +928,8 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", STATUS, Status.CHARGING) //
 						.input("evcs0", ACTIVE_POWER, 4140) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, 6000) //
 						.output(STORAGE_TARGET_REACHABLE, true) //
-						.output(STORAGE_PRICE, 80.) //
+						.output(STORAGE_PRICE, 431.) //
 						.output(STORAGE_DISCHARGE_BLOCKED, true) //
 						.output(STORAGE_POWER_FOR_CAR, 0) //
 						.output(BLENDED_PRICE, 431.0) //
@@ -944,6 +944,7 @@ public class ControllerEvcsPriceImplTest {
 						.input(ESS_DISCHARGE_POWER, 5140) //
 						.input(GRID_ACTIVE_POWER, 0) //
 						.output(STORAGE_DISCHARGE_BLOCKED, false) //
+						.output(STORAGE_PRICE, 80.) //
 						.output(STORAGE_POWER_FOR_CAR, 4140) //
 						.output(BLENDED_PRICE, 80.0) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
@@ -957,8 +958,8 @@ public class ControllerEvcsPriceImplTest {
 						.output(STORAGE_DISCHARGE_BLOCKED, true) //
 						.output(STORAGE_POWER_FOR_CAR, 0) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
-				// Before the start nothing is measured: with balancing the storage is
-				// assumed to cover the minimum power -> start
+				// Before the start nothing is measured: with balancing the plan's storage
+				// share covers the minimum power -> start
 				.next(new TestCase("balancing before the start") //
 						.timeleap(clock, 5, MINUTES) //
 						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
@@ -985,23 +986,24 @@ public class ControllerEvcsPriceImplTest {
 	@Test
 	public void calculateStoragePowerForCarTest() {
 		// blocked: nothing, whatever is measured
-		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 5140, 5140, 0, true, true, 4140));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 5140, 5140, 0, true, 4140, 4140));
 		// charging: the house (1000 W) is served first, the rest goes to the car
 		assertEquals(4140,
-				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 5140, 5140, 0, false, true, 4140));
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 5140, 5140, 0, false, 4140, 4140));
 		assertEquals(1000,
-				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 2000, 5140, 0, false, true, 4140));
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, 2000, 5140, 0, false, 4140, 4140));
 		// PV covers the house: the whole discharge goes to the car, released or not
 		assertEquals(1903,
-				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4033, 1903, 4033, 2130, false, false, 4140));
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4033, 1903, 4033, 2130, false, 0, 4140));
 		// the storage charges: nothing for the car
-		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, -3000, 5140, 0, false, true, 4140));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(4140, -3000, 5140, 0, false, 4140, 4140));
 		// not more than the car draws
 		assertEquals(4033,
-				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4033, 9000, 5033, 0, false, true, 4140));
-		// before the start: the minimum power while the reserve is released
-		assertEquals(4140, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, true, 4140));
-		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, false, 4140));
+				ControllerEvcsPriceImpl.calculateStoragePowerForCar(4033, 9000, 5033, 0, false, 4140, 4140));
+		// before the start: what the plan contains, up to the minimum power
+		assertEquals(4140, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, 5000, 4140));
+		assertEquals(2000, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, 2000, 4140));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateStoragePowerForCar(0, 0, 1000, 0, false, 0, 4140));
 	}
 
 	@Test
@@ -1018,97 +1020,10 @@ public class ControllerEvcsPriceImplTest {
 		assertFalse(ControllerEvcsPriceImpl.isDischargeBlockingState(null));
 	}
 
-	@Test
-	public void calculateExpectedStorageEnergyTest() {
-		final var zone = ZoneId.of("Europe/Berlin");
-		final var now = ZonedDateTime.of(2026, 10, 3, 10, 7, 0, 0, zone);
-		final var start = now.withMinute(0).toInstant();
-		// 8 quarters from 10:00; car 1000 W takes from the surplus only: balance
-		// +3000, +3000, -1000, -1000, +2000 x 4
-		final var production = Prediction.from(start, 6000, 6000, 1000, 1000, 5000, 5000, 5000, 5000);
-		final var consumption = Prediction.from(start, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000);
-		// 5000 + (3000 + 3000 - 1000 - 1000 + 2000 * 4) / 4 = 8000 Wh
-		assertEquals(8000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
-				5000, 20000, 100, now));
-		// a car drawing more than the surplus takes the whole surplus, nothing more
-		assertEquals(4500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 9000,
-				5000, 20000, 100, now));
-		// without car: 5000 + (4000 + 4000 - 1000 - 1000 + 3000 * 4) / 4 = 9500 Wh
-		assertEquals(9500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 0,
-				5000, 20000, 100, now));
-		// nearly full: 19000 -> 19750 -> 20000 (capped) -> 19750 -> 19500 -> 20000 ...
-		assertEquals(20000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
-				19000, 20000, 100, now));
-		// nearly empty: 500 -> 1250 -> 2000 -> 1750 -> 1500 -> 3500
-		assertEquals(3500, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production, consumption, 1000,
-				500, 20000, 100, now));
 
-		// the projection ends with the running block of quarter-hours with production
-		final var evening = ZonedDateTime.of(2026, 10, 3, 23, 20, 0, 0, zone);
-		final var eveningStart = evening.withMinute(15).toInstant();
-		final var production2 = Prediction.from(eveningStart, 6000, 0, 6000, 6000, 6000, 6000);
-		final var consumption2 = Prediction.from(eveningStart, 2000, 2000, 2000, 2000, 2000, 2000);
-		// 23:15 -> +1000 Wh; 23:30 no production: end of PV, the rest does not count
-		assertEquals(6000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production2, consumption2, 0,
-				5000, 20000, 100, evening));
-
-		// no production now (after the end of PV production): the storage keeps what
-		// it has, the PV of the next quarter-hours (next morning) does not count
-		final var production3 = Prediction.from(eveningStart, 0, 0, 0, 6000, 6000, 6000);
-		assertEquals(5000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production3, consumption2, 0,
-				5000, 20000, 100, evening));
-
-		// 10.10.2026: at 00:05 the next day's PV must not count; the night is not
-		// covered by tomorrow's production
-		final var midnight = ZonedDateTime.of(2026, 10, 11, 0, 5, 0, 0, zone);
-		final var nightStart = midnight.withMinute(0).toInstant();
-		final var nightProduction = new Integer[96];
-		final var nightConsumption = new Integer[96];
-		for (var i = 0; i < 96; i++) {
-			nightProduction[i] = i >= 32 && i < 72 ? 8000 : 0; // 08:00 - 18:00
-			nightConsumption[i] = 500;
-		}
-		assertEquals(5000, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(
-				Prediction.from(nightStart, nightProduction), Prediction.from(nightStart, nightConsumption), 0,
-				5000, 20000, 100, midnight));
-
-		assertNull(ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(Prediction.EMPTY_PREDICTION, consumption,
-				0, 5000, 20000, 100, now));
-		assertNull(ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(null, consumption, 0, 5000, 20000, 100, now));
-	}
 
 	@Test
-	public void calculateAssumedCarPowerTest() {
-		assertEquals(4033, ControllerEvcsPriceImpl.calculateAssumedCarPower(4033, Status.CHARGING, 4140 - 1000));
-		// plugged in but not drawing: at least the minimum power
-		assertEquals(4140, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.READY_FOR_CHARGING, 4140));
-		assertEquals(4140, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.ENERGY_LIMIT_REACHED, 4140));
-		// not plugged in
-		assertEquals(0, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.NOT_READY_FOR_CHARGING, 4140));
-		assertEquals(0, ControllerEvcsPriceImpl.calculateAssumedCarPower(0, Status.UNDEFINED, 4140));
-	}
-
-	@Test
-	public void calculateStoragePriceTest() {
-		// not released yet: from one hour of minimum power (4140 Wh) on
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(1000, false, 4140));
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(4139, false, 4140));
-		assertTrue(ControllerEvcsPriceImpl.isStorageReserveReleased(4140, false, 4140));
-		// released: until the surplus is used up
-		assertTrue(ControllerEvcsPriceImpl.isStorageReserveReleased(1000, true, 4140));
-		assertTrue(ControllerEvcsPriceImpl.isStorageReserveReleased(1, true, 4140));
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(0, true, 4140));
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(-1, true, 4140));
-		// unknown minimum power: any positive surplus releases
-		assertTrue(ControllerEvcsPriceImpl.isStorageReserveReleased(1, false, 0));
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(0, false, 0));
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(null, true, 4140));
-		assertFalse(ControllerEvcsPriceImpl.isStorageReserveReleased(null, false, 4140));
-
-		assertEquals(8., ControllerEvcsPriceImpl.calculateStoragePrice(431., 7, 1, true), 0.01);
-		assertEquals(43.1, ControllerEvcsPriceImpl.calculateStoragePrice(431., 7, 1, false), 0.01);
-		assertNull(ControllerEvcsPriceImpl.calculateStoragePrice(null, 7, 1, true));
-
+	public void calculateBlendedPriceWithStorageTest() {
 		// PV 2130 W at 7 ct, storage 2010 W at 8 ct
 		assertEquals(7.49, ControllerEvcsPriceImpl.calculateBlendedPrice(431., 2130, 5000, 4140, 7, 8.), 0.01);
 		// storage limited to 1000 W, rest 1010 W from grid at 43.1 ct
@@ -1332,152 +1247,7 @@ public class ControllerEvcsPriceImplTest {
 				.deactivate();
 	}
 
-	@Test
-	public void storageReserveWithoutPriceChargingTest() throws Exception {
-		// Price-based charging off, storage included: the reserve above the target
-		// (4.5 kWh at 95 % of 30 kWh) may feed the car, as long as the storage can
-		// deliver the minimum power by itself; the price (50 ct) does not matter
-		final var clock = createDummyClock();
-		prepareStoragePriceTest(clock, true, false, 0, 2000, 96) //
-				.next(new TestCase("storage reserve covers the minimum power") //
-						.input(GRID_BUY_PRICE, 500.) //
-						.input(ESS_CAPACITY, 30000) //
-						.input(ESS_SOC, 95) //
-						.input(ESS_DISCHARGE_POWER, 2000) //
-						.input("evcs0", IS_CLUSTERED, false) //
-						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
-						.input(GRID_ACTIVE_POWER, 0) //
-						.input("evcs0", ACTIVE_POWER, 0) //
-						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, 4500) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
-						.output(PRICE_CHARGING, false)) //
-				.next(new TestCase("storage delivers only 3000 W to the car: no fill-up from grid") //
-						.timeleap(clock, 5, MINUTES) //
-						.input("evcs0", STATUS, Status.CHARGING) //
-						.input("evcs0", ACTIVE_POWER, 4140) //
-						.input(ESS_DISCHARGE_POWER, 3000) //
-						.input(GRID_ACTIVE_POWER, 1140) //
-						.output(STORAGE_POWER_FOR_CAR, 3000) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
-						.output(PRICE_CHARGING, false)) //
-				.deactivate();
-	}
 
-	@Test
-	public void storageAboveTargetChargesWithoutPvTest() throws Exception {
-		// Evening, no PV: storage 30 kWh at 95 % (net 95 % > target 80 %) -> the
-		// 4.5 kWh above the target may go to the car at 8 ct, grid 50 ct.
-		// After the storage dropped below the target: priced like grid -> stop.
-		final var clock = createDummyClock();
-		prepareStoragePriceTest(clock, true, 0, 2000, 96) //
-				.next(new TestCase("storage above target, no PV") //
-						.input(GRID_BUY_PRICE, 500.) //
-						.input(ESS_CAPACITY, 30000) //
-						.input(ESS_SOC, 95) //
-						.input(ESS_DISCHARGE_POWER, 2000) //
-						.input("evcs0", IS_CLUSTERED, false) //
-						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
-						.input(GRID_ACTIVE_POWER, 0) //
-						.input("evcs0", ACTIVE_POWER, 0) //
-						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_ENERGY_TO_TARGET, 0) //
-						.output(STORAGE_SURPLUS_ENERGY, 4500) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
-						.output(STORAGE_PRICE, 80.) //
-						.output(BLENDED_PRICE, 80.) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
-						.output(PRICE_CHARGING, true)) //
-				.next(new TestCase("storage at target: no PV, storage like grid -> stop") //
-						.timeleap(clock, 5, MINUTES) //
-						.input(ESS_SOC, 79) //
-						.input(ESS_DISCHARGE_POWER, 6000) //
-						.input("evcs0", ACTIVE_POWER, 4000) //
-						.output(STORAGE_SURPLUS_ENERGY, -300) //
-						.output(STORAGE_TARGET_REACHABLE, false) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
-						.output(PRICE_CHARGING, false)) //
-				.deactivate();
-	}
 
-	@Test
-	public void calculateExpectedStorageEnergyEfficiencyTest() {
-		final var zone = ZoneId.of("Europe/Berlin");
-		final var now = ZonedDateTime.of(2026, 10, 12, 10, 7, 0, 0, zone);
-		final var start = now.withMinute(0).toInstant();
-		// 4 quarters: balance +4000 W each -> 1000 Wh per quarter, 920 Wh with 92 %
-		final var production = Prediction.from(start, 6000, 6000, 6000, 6000);
-		final var consumption = Prediction.from(start, 2000, 2000, 2000, 2000);
-		assertEquals(5000 + 4 * 920, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production,
-				consumption, 0, 5000, 20000, 92, now));
-		// the car takes from the surplus before the losses: (4000 - 1000) * 0.92 / 4
-		assertEquals(5000 + 4 * 690, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(production,
-				consumption, 1000, 5000, 20000, 92, now));
-		// a negative balance leaves the storage in full, no efficiency applied
-		final var lowProduction = Prediction.from(start, 1000, 1000, 1000, 1000);
-		assertEquals(5000 - 4 * 250, ControllerEvcsPriceImpl.calculateExpectedStorageEnergy(lowProduction,
-				consumption, 0, 5000, 20000, 92, now));
-	}
 
-	@Test
-	public void storageReserveHysteresisTest() throws Exception {
-		// 12.10.2026: forecast noise of a few hundred Wh around the target started
-		// and stopped the car. Night, no PV, storage 30 kWh, target 80 % = 24 kWh:
-		// the reserve is released from one hour of minimum power (4140 Wh) on and
-		// stays released until it is used up
-		final var clock = createDummyClock();
-		prepareStoragePriceTest(clock, true, 0, 2000, 96) //
-				.next(new TestCase("3.9 kWh above the target: not enough to release") //
-						.input(GRID_BUY_PRICE, 500.) //
-						.input(ESS_CAPACITY, 30000) //
-						.input(ESS_SOC, 93) //
-						.input(ESS_DISCHARGE_POWER, 2000) //
-						.input("evcs0", IS_CLUSTERED, false) //
-						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
-						.input(GRID_ACTIVE_POWER, 0) //
-						.input("evcs0", ACTIVE_POWER, 0) //
-						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
-						.output(STORAGE_SURPLUS_ENERGY, 3900) //
-						.output(STORAGE_TARGET_REACHABLE, false) //
-						.output(STORAGE_PRICE, 500.) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
-						.output(PRICE_CHARGING, false)) //
-				.next(new TestCase("4.5 kWh above the target: released") //
-						.timeleap(clock, 5, MINUTES) //
-						.input(ESS_SOC, 95) //
-						.output(STORAGE_SURPLUS_ENERGY, 4500) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
-						.output(STORAGE_PRICE, 80.) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
-						.output(PRICE_CHARGING, true)) //
-				.next(new TestCase("0.3 kWh left: stays released") //
-						.timeleap(clock, 5, MINUTES) //
-						.input(ESS_SOC, 81) //
-						// the storage feeds house and car: no excess power
-						.input(ESS_DISCHARGE_POWER, 6000) //
-						.input("evcs0", STATUS, Status.CHARGING) //
-						.input("evcs0", ACTIVE_POWER, 4000) //
-						.output(STORAGE_SURPLUS_ENERGY, 300) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
-						.output(PRICE_CHARGING, true)) //
-				.next(new TestCase("reserve used up: stop") //
-						.timeleap(clock, 5, MINUTES) //
-						.input(ESS_SOC, 80) //
-						.output(STORAGE_SURPLUS_ENERGY, 0) //
-						.output(STORAGE_TARGET_REACHABLE, false) //
-						.output(STORAGE_PRICE, 500.) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
-						.output(PRICE_CHARGING, false)) //
-				.next(new TestCase("3.9 kWh again: no restart below the start threshold") //
-						.timeleap(clock, 5, MINUTES) //
-						.input(ESS_SOC, 93) //
-						.input(ESS_DISCHARGE_POWER, 2000) //
-						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
-						.input("evcs0", ACTIVE_POWER, 0) //
-						.output(STORAGE_SURPLUS_ENERGY, 3900) //
-						.output(STORAGE_TARGET_REACHABLE, false) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
-				.deactivate();
-	}
 }

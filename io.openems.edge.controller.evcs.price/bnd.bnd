@@ -12,6 +12,7 @@ Bundle-Version: 1.0.0.${tstamp}
 	io.openems.edge.evcs.api,\
 	io.openems.edge.meter.api,\
 	io.openems.edge.predictor.api,\
+	io.openems.edge.timeofusetariff.api,\
 
 -testpath: \
 	${testpath},\

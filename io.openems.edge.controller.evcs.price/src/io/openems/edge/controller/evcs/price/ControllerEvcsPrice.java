@@ -5,6 +5,7 @@ import static io.openems.common.types.OpenemsType.BOOLEAN;
 import static io.openems.common.types.OpenemsType.DOUBLE;
 import static io.openems.common.types.OpenemsType.INTEGER;
 import static io.openems.common.types.OpenemsType.LONG;
+import static io.openems.common.types.OpenemsType.STRING;
 
 import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.Level;
@@ -94,23 +95,56 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.persistencePriority(HIGH) //
 				.text("Net state of charge within the usable window")), //
 		/**
-		 * True while the storage reserve is released for the car: the projection ended
-		 * above the evening target by at least one hour of minimum charge power and
-		 * has not dropped to the target since.
+		 * True while the charging plan keeps the storage at or above its evening
+		 * target at the end of every PV block; the storage power the plan contains is
+		 * then valued at the storage price.
 		 */
 		STORAGE_TARGET_REACHABLE(Doc.of(BOOLEAN) //
 				.persistencePriority(HIGH) //
-				.text("Storage reserve above the evening target is released for the car")), //
+				.text("The charging plan keeps the storage at its evening target")), //
 		/**
 		 * Power the storage delivers to the car: measured while the car charges (the
-		 * storage discharge after the house), assumed as the minimum charge power
-		 * before the start while the reserve is released; 0 while the storage is
-		 * blocked.
+		 * storage discharge after the house), the share of the charging plan for the
+		 * running quarter-hour before the start; 0 while the storage is blocked.
 		 */
 		STORAGE_POWER_FOR_CAR(Doc.of(INTEGER) //
 				.unit(Unit.WATT) //
 				.persistencePriority(HIGH) //
 				.text("Power the storage delivers to the car")), //
+		/**
+		 * Start of the planned charging as epoch seconds; empty if the plan contains
+		 * no charging.
+		 */
+		PLAN_START(Doc.of(LONG) //
+				.persistencePriority(HIGH) //
+				.text("Planned start of charging (epoch seconds)")), //
+		/**
+		 * Energy the charging plan contains for the price horizon.
+		 */
+		PLAN_ENERGY(Doc.of(INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Planned charging energy")), //
+		/**
+		 * Part of the planned energy the storage delivers or charges less.
+		 */
+		PLAN_ENERGY_FROM_STORAGE(Doc.of(INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Planned charging energy from the storage")), //
+		/**
+		 * Planned charge power of the running quarter-hour.
+		 */
+		PLAN_POWER(Doc.of(INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(HIGH) //
+				.text("Planned charge power of the running quarter-hour")), //
+		/**
+		 * Why the plan charges or does not charge in the running quarter-hour.
+		 */
+		PLAN_REASON(Doc.of(STRING) //
+				.persistencePriority(HIGH) //
+				.text("Reason of the plan for the running quarter-hour")), //
 		/**
 		 * The Time-of-Use-Tariff controller blocks the storage discharge: it delays
 		 * the discharge or charges from grid. Storage power then counts like grid
@@ -196,6 +230,26 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 
 	public default void setStorageDischargeBlocked(Boolean val) {
 		this.channel(ChannelId.STORAGE_DISCHARGE_BLOCKED).setNextValue(val);
+	}
+
+	public default void setPlanStart(Long val) {
+		this.channel(ChannelId.PLAN_START).setNextValue(val);
+	}
+
+	public default void setPlanEnergy(Integer val) {
+		this.channel(ChannelId.PLAN_ENERGY).setNextValue(val);
+	}
+
+	public default void setPlanEnergyFromStorage(Integer val) {
+		this.channel(ChannelId.PLAN_ENERGY_FROM_STORAGE).setNextValue(val);
+	}
+
+	public default void setPlanPower(Integer val) {
+		this.channel(ChannelId.PLAN_POWER).setNextValue(val);
+	}
+
+	public default void setPlanReason(String val) {
+		this.channel(ChannelId.PLAN_REASON).setNextValue(val);
 	}
 
 	/**

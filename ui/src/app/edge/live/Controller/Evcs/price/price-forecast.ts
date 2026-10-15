@@ -1,5 +1,7 @@
 import { ComponentJsonApiRequest } from "src/app/shared/jsonrpc/request/componentJsonApiRequest";
+import { GetChargingPlanRequest } from "src/app/shared/jsonrpc/request/getChargingPlanRequest";
 import { GetScheduleRequest } from "src/app/shared/jsonrpc/request/getScheduleRequest";
+import { GetChargingPlanResponse } from "src/app/shared/jsonrpc/response/getChargingPlanResponse";
 import { GetScheduleResponse } from "src/app/shared/jsonrpc/response/getScheduleResponse";
 import { Edge, EdgeConfig, Websocket } from "src/app/shared/shared";
 
@@ -557,20 +559,42 @@ export namespace EvcsPriceForecast {
     }
 
     /**
-     * Loads the schedule of the Time-of-Use-Tariff controller and calculates the forecast.
+     * Loads the forecast: the charging plan of the controller itself, if it provides one (Edge from 15.10.2026 on);
+     * otherwise the schedule of the Time-of-Use-Tariff controller, from which the behaviour of the controller is
+     * estimated with the rules of its former storage reserve.
      *
      * @param edge The Edge
      * @param websocket The Websocket
      * @param config The EdgeConfig
      * @param settings The settings
-     * @returns The slots; empty if there is no Time-of-Use-Tariff controller or no schedule
+     * @param componentId The ID of the controller; null skips the charging plan
+     * @returns The slots; empty if there is neither a charging plan nor a schedule
      */
     export async function load(
         edge: Edge,
         websocket: Websocket,
         config: EdgeConfig,
         settings: Settings,
+        componentId: string | null = null,
     ): Promise<Slot[]> {
+        if (componentId != null) {
+            try {
+                const plan = (await edge.sendRequest(
+                    websocket,
+                    new ComponentJsonApiRequest({
+                        componentId: componentId,
+                        payload: new GetChargingPlanRequest(),
+                    }),
+                )) as GetChargingPlanResponse;
+                const quarters = plan?.result?.quarters ?? [];
+                if (quarters.length > 0) {
+                    return fromPlan(quarters, plan.result.usableWh, settings, new Date());
+                }
+            } catch (e) {
+                // older Edge without charging plan: fall through to the estimate
+                console.debug("EvcsPriceForecast: no charging plan, using the estimate", e);
+            }
+        }
         const timeOfUseTariff = getTimeOfUseTariffController(config);
         if (timeOfUseTariff == null) {
             return [];
@@ -583,6 +607,58 @@ export namespace EvcsPriceForecast {
             }),
         )) as GetScheduleResponse;
         return calculate(response?.result?.schedule ?? [], settings, new Date());
+    }
+
+    /**
+     * Converts the charging plan of the controller into slots: the plan already contains the decision of the
+     * controller per quarter-hour, nothing is estimated here.
+     *
+     * @param quarters The quarter-hours of the plan
+     * @param usableWh The usable capacity of the storage in [Wh]; 0 if unknown
+     * @param settings The settings
+     * @param now The current time; quarter-hours that ended before are ignored
+     * @returns The slots
+     */
+    export function fromPlan(
+        quarters: GetChargingPlanResponse.Quarter[],
+        usableWh: number,
+        settings: Settings,
+        now: Date,
+    ): Slot[] {
+        const quarter = 15 * 60 * 1000;
+        const result: Slot[] = [];
+        for (const q of quarters) {
+            const timestamp = new Date(q.timestamp);
+            if (q.price == null || Number.isNaN(timestamp.getTime()) || timestamp.getTime() + quarter <= now.getTime()) {
+                continue;
+            }
+            const price = q.price / 10; // [Currency/MWh] to [Cent/kWh]
+            const referencePower = q.power > 0 ? q.power : settings.minPower;
+            const effectivePrice = q.blendedPrice != null ? q.blendedPrice / 10 : price;
+            const storageAboveTarget = q.storageBudget > 0;
+            const zone =
+                q.power <= 0
+                    ? q.reason === "TOO_EXPENSIVE" || q.reason === "TARGET"
+                        ? Zone.NONE
+                        : Zone.NO_SURPLUS
+                    : getZone(q.power, effectivePrice, settings);
+            result.push({
+                timestamp: timestamp,
+                price: price,
+                production: Math.max(q.production ?? 0, 0),
+                surplus: q.fromPv,
+                storageCharge: 0,
+                chargePower: q.power,
+                pvShare: referencePower > 0 ? Math.round((Math.min(q.fromPv, referencePower) / referencePower) * 100) : 0,
+                effectivePrice: effectivePrice,
+                storagePrice: storageAboveTarget ? settings.pvPrice + settings.storageLossSurcharge : price,
+                storageAboveTarget: storageAboveTarget,
+                storageSurplus: null,
+                soc: usableWh > 0 ? Math.round((q.storageWh / usableWh) * 100) : null,
+                zone: zone,
+            });
+        }
+        return result;
     }
 
     function toNumber(value: unknown, fallback: number): number {

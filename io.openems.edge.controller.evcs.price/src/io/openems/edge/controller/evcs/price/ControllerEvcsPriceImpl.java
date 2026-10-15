@@ -42,6 +42,10 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.channel.BooleanWriteChannel;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.jsonapi.ComponentJsonApi;
+import io.openems.edge.common.jsonapi.JsonApiBuilder;
+import io.openems.edge.controller.evcs.price.jsonrpc.GetChargingPlanRequest;
+import io.openems.edge.controller.evcs.price.jsonrpc.GetChargingPlanResponse;
 import io.openems.edge.common.meta.Meta;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
@@ -66,7 +70,7 @@ import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 )
 @GenerateTargetsFromReferences("evcs")
 public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
-		implements Controller, ControllerEvcsPrice, OpenemsComponent, ModbusSlave, EnergySchedulable {
+		implements Controller, ControllerEvcsPrice, OpenemsComponent, ModbusSlave, EnergySchedulable, ComponentJsonApi {
 
 	private static final int CHARGE_POWER_BUFFER = 200;
 	private static final double DEFAULT_UPPER_TARGET_DIFFERENCE_PERCENT = 0.10; // 10%
@@ -96,6 +100,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Storage power the plan allows for the car at the storage price in the
 	// running quarter-hour; 0 while the storage is blocked
 	private int planStoragePower = 0;
+	// Evening target and usable capacity the plan was calculated with, for the UI
+	private int planTargetWh = 0;
+	private double planUsableWh = 0;
 	// True while the car charges; a change is reported to the energy optimizer
 	private boolean lastCharging = false;
 
@@ -197,6 +204,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	@Override
 	public EnergyScheduleHandler getEnergyScheduleHandler() {
 		return this.energyScheduleHandler;
+	}
+
+	@Override
+	public void buildJsonApiRoutes(JsonApiBuilder builder) {
+		builder.handleRequest(GetChargingPlanRequest.METHOD, call -> GetChargingPlanResponse
+				.from(call.getRequest().getId(), this.plan, this.planTargetWh, this.planUsableWh));
 	}
 
 	@Override
@@ -559,6 +572,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var plan = this.plan;
 		final var quarter = plan.getAt(ZonedDateTime.now(this.clock));
 		final var targetWh = energy == null ? 0. : energy.usableWh() * this.config.storageTargetSocNet() / 100.;
+		this.planTargetWh = (int) Math.round(targetWh);
+		this.planUsableWh = energy == null ? 0 : energy.usableWh();
 		final Integer storageSurplus = plan.storageAtPvEndWh() == null //
 				? null
 				: (int) Math.round(plan.storageAtPvEndWh() - targetWh);

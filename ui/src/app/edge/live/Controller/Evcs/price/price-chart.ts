@@ -162,7 +162,13 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 maxPower: this.maxPower,
             };
             this.settings = settings;
-            this.forecastSlots = await EvcsPriceForecast.load(this.edge, this.websocket, this.config, settings);
+            this.forecastSlots = await EvcsPriceForecast.load(
+                this.edge,
+                this.websocket,
+                this.config,
+                settings,
+                this.component.id,
+            );
             this.slots = EvcsPriceForecast.applyLive(this.forecastSlots, this.live, settings, new Date());
 
             if (this.slots.length === 0) {

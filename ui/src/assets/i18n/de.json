@@ -431,10 +431,10 @@
                     "STATUS": "Status",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Ladepreis jetzt",
-                        "INFO": "Jede Viertelstunde wird ein Ladeplan bis zum Ende des Tages gerechnet: Speicher und Auto zusammen, mit Preisen, PV- und Verbrauchsprognose und dem Fahrplan des Speichers. Der Speicher wird zuerst gefüllt, das Auto bekommt, was der Speicher nicht aufnehmen kann, und darf zum Auffüllen auf die Mindestleistung Speicherstrom nehmen, solange der Speicher abends sein Ziel noch erreicht. Dieser Speicherstrom wird von der Sonne nachgeladen und zählt wie Überschussstrom plus Verlustaufschlag; aller andere Speicherstrom zählt wie Netzstrom. Während des Ladens zählt, was der Speicher nach dem Haus tatsächlich ans Auto liefert; sperrt der Speicher-Fahrplan die Entladung, liefert er nichts.",
+                        "INFO": "Jede Viertelstunde wird ein Ladeplan bis zum Ende des Tages gerechnet: Speicher und Auto zusammen, mit Preisen, PV- und Verbrauchsprognose und dem Fahrplan des Speichers. Der Speicher wird zuerst gefüllt, das Auto bekommt, was der Speicher nicht aufnehmen kann, und darf zum Auffüllen auf die Mindestleistung Speicherstrom nehmen, solange der Speicher abends sein Ziel noch erreicht. Dieser Speicherstrom wird von der Sonne nachgeladen und zählt wie Überschussstrom plus Verlustaufschlag; aller andere Speicherstrom zählt wie Netzstrom. „Dem Speicher entzogen“ ist, was das Auto dem Speicher wegnimmt: seine Entladung über den Hausbedarf hinaus oder Sonnenstrom, den der Speicher sonst geladen hätte. Sperrt der Speicher-Fahrplan die Entladung, liefert der Speicher nichts.",
                         "NAME": "Speicher vorausschauend einbeziehen",
                         "NET_SOC": "Speicher-Ladestand (netto)",
-                        "POWER_FOR_CAR": "Speicherleistung für das Auto",
+                        "POWER_FOR_CAR": "Dem Speicher entzogen",
                         "REASON_BLOCKED": "Speicher gesperrt: Der Speicher-Fahrplan verzögert gerade die Entladung oder lädt aus dem Netz; Speicherstrom zählt wie Netzstrom.",
                         "REASON_GRID": "Kein Speicherstrom im Ladeplan: Der Speicher würde sonst sein Abendziel verfehlen, oder es gibt keinen Plan (Preise oder Prognose fehlen); sein Strom zählt wie Netzstrom.",
                         "REASON_PV": "Ladeplan hält das Abendziel: Der Speicherstrom, den der Plan für das Auto vorsieht, wird von der Sonne nachgeladen und zählt wie Überschussstrom plus Verlustaufschlag.",

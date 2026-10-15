@@ -882,6 +882,20 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void calculateChargeHeadroomTest() {
+		// Victron at 87 % of 90 %, allowed -4000 W, charging 2510 W -> 1490 W more
+		assertEquals(1490, ControllerEvcsPriceImpl.calculateChargeHeadroom(87, 90, -4000, -2510));
+		// SolarEdge at the top of its window: nothing, whatever it reports
+		assertEquals(0, ControllerEvcsPriceImpl.calculateChargeHeadroom(90, 90, -4000, 0));
+		// discharging: the whole allowed power
+		assertEquals(4000, ControllerEvcsPriceImpl.calculateChargeHeadroom(50, 90, 4000, 1200));
+		// unknown
+		assertEquals(0, ControllerEvcsPriceImpl.calculateChargeHeadroom(null, 90, -4000, 0));
+		assertEquals(0, ControllerEvcsPriceImpl.calculateChargeHeadroom(50, 90, null, 0));
+		assertEquals(4000, ControllerEvcsPriceImpl.calculateChargeHeadroom(50, null, -4000, null));
+	}
+
+	@Test
 	public void storagePriorityNoCreepWhileChargingTest() throws Exception {
 		// Priority STORAGE, the car charges 4404 W, grid 0, the storage charges: the
 		// car's own draw looks like 4204 W surplus, but the plan would feed in nothing

@@ -881,26 +881,13 @@ public class ControllerEvcsPriceImplTest {
 				.deactivate();
 	}
 
-	@Test
-	public void calculateChargeHeadroomTest() {
-		// Victron at 87 % of 90 %, allowed -4000 W, charging 2510 W -> 1490 W more
-		assertEquals(1490, ControllerEvcsPriceImpl.calculateChargeHeadroom(87, 90, -4000, -2510));
-		// SolarEdge at the top of its window: nothing, whatever it reports
-		assertEquals(0, ControllerEvcsPriceImpl.calculateChargeHeadroom(90, 90, -4000, 0));
-		// discharging: the whole allowed power
-		assertEquals(4000, ControllerEvcsPriceImpl.calculateChargeHeadroom(50, 90, 4000, 1200));
-		// unknown
-		assertEquals(0, ControllerEvcsPriceImpl.calculateChargeHeadroom(null, 90, -4000, 0));
-		assertEquals(0, ControllerEvcsPriceImpl.calculateChargeHeadroom(50, 90, null, 0));
-		assertEquals(4000, ControllerEvcsPriceImpl.calculateChargeHeadroom(50, null, -4000, null));
-	}
 
 	@Test
-	public void storagePriorityNoCreepWhileChargingTest() throws Exception {
-		// Priority STORAGE, the car charges 4404 W, grid 0, the storage charges: the
-		// car's own draw looks like 4204 W surplus, but the plan would feed in nothing
-		// (the storage takes the whole 10 kW surplus) and allows 4140 W storage power
-		// -> the car is held at the minimum power instead of ramping up
+	public void storagePriorityFollowsMeasuredSurplusTest() throws Exception {
+		// Priority STORAGE, the car charges 4404 W, grid 0, the storage charges: surplus
+		// is what goes to grid plus what the car draws, minus the buffer -> 4204 W.
+		// The car follows the measured surplus; what the storage charges less because
+		// of it is not estimated live, the plan protects the evening target
 		prepareStoragePriceTest(createDummyClock(), true, true, STORAGE, 12000, 2000, 96) //
 				.next(new TestCase() //
 						.input(GRID_BUY_PRICE, 431.) //
@@ -915,11 +902,12 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output(STORAGE_TARGET_REACHABLE, true) //
 						.output(STORAGE_PRICE, 80.) //
-						.output(STORAGE_POWER_FOR_CAR, 4204) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(STORAGE_POWER_FOR_CAR, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4204) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();
 	}
+
 
 	@Test
 	public void storageSurplusDisabledTest() throws Exception {

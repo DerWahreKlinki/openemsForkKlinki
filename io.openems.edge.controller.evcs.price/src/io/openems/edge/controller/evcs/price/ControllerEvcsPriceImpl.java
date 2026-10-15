@@ -362,46 +362,18 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// nothing
 			final var storagePrice = this.updateStoragePrice(gridBuyPrice);
 			final var carPower = Math.max(this.evcs.getActivePower().orElse(0), 0);
-			var storagePower = calculateStoragePowerForCar(carPower, this.sum.getEssDischargePower().orElse(0),
+			// Surplus is what goes to grid, plus what the car draws right now (the
+			// measured excess power); the storage share is what the storage discharges
+			// after the house. Nothing is estimated here
+			final var storagePower = calculateStoragePowerForCar(carPower, this.sum.getEssDischargePower().orElse(0),
 					this.sum.getConsumptionActivePower().orElse(0), this.sum.getProductionActivePower().orElse(0),
 					this.storageDischargeBlocked, this.planStoragePower, minimumHardwarePower);
-
-			// While the car charges with priority STORAGE and the grid stays at zero, its
-			// own draw looks like surplus, although the storage may just charge less.
-			// Measured: what the storages could still take on top of what they charge
-			// right now is power the car displaces, the rest is PV. Without storage
-			// limiters the plan's estimate of the feed-in in this quarter-hour is used
-			var pvPower = excessPower;
-			final var quarterPlan = this.plan.getAt(ZonedDateTime.now(this.clock));
-			if (carPower > 0 && priority == Priority.STORAGE) {
-				final var headroom = this.readStorageChargeHeadroom();
-				final int displaced;
-				if (headroom != null) {
-					displaced = Math.min(headroom, Math.max(excessPower, 0));
-				} else if (quarterPlan != null) {
-					final var feedIn = Math.max(-this.sum.getGridActivePower().orElse(0), 0);
-					displaced = Math.max(excessPower - quarterPlan.fromPv() - feedIn, 0);
-				} else {
-					displaced = 0;
-				}
-				pvPower = excessPower - displaced;
-				storagePower += displaced;
-			}
+			final var pvPower = excessPower;
 			this.setStoragePowerForCar(storagePower);
 			final var plannedStoragePower = Math.min(storagePower, this.planStoragePower);
 			final var blendedPrice = calculateBlendedPrice(gridBuyPrice, pvPower, plannedStoragePower,
 					carPower > 0 ? carPower : minimumHardwarePower, this.config.pvPrice(), storagePrice);
 			this.setBlendedPrice(blendedPrice == null ? null : blendedPrice * 10);
-
-			// With priority STORAGE the car may not take more than PV would feed in plus
-			// the storage power the plan allows; otherwise its own draw would ramp it up
-			// step by step while the storage just charges less
-			if (quarterPlan != null && carPower > 0 && priority == Priority.STORAGE && !priceCharging) {
-				final var allowed = pvPower + plannedStoragePower;
-				if (nextChargePower > allowed) {
-					nextChargePower = allowed >= minimumHardwarePower ? allowed : 0;
-				}
-			}
 
 			// Not enough excess power for the minimum hardware power: take the missing
 			// power from the storage as far as the plan allows it and, with price-based
@@ -749,62 +721,6 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		} catch (OpenemsNamedException | RuntimeException e) {
 			return 0;
 		}
-	}
-
-	/**
-	 * Reads how much more the storages behind the ChargeDischargeLimiters could
-	 * charge right now: the allowed charge power minus the actual charge power of
-	 * every storage below the top of its SoC window. While the car charges with
-	 * priority STORAGE this is the power it displaces.
-	 *
-	 * @return the headroom in [W]; null without limiters
-	 */
-	private Integer readStorageChargeHeadroom() {
-		Integer result = null;
-		try {
-			for (var component : this.componentManager.getEnabledComponents()) {
-				if (!LIMITER_FACTORY_PID.equals(component.serviceFactoryPid())) {
-					continue;
-				}
-				final var essId = this.<String>readChannelValue(component, "_PropertyEssId");
-				final var maxSoc = this.<Integer>readChannelValue(component, "_PropertyMaxSoc");
-				if (essId == null) {
-					continue;
-				}
-				final var ess = this.componentManager.getComponent(essId);
-				final Integer soc = this.readChannelValue(ess, "Soc");
-				final Integer allowedCharge = this.readChannelValue(ess, "AllowedChargePower");
-				// a hybrid storage reports the battery power separately from its AC power,
-				// which includes the DC production
-				final Integer dcPower = this.readChannelValue(ess, "DcDischargePower");
-				final Integer batteryPower = dcPower != null ? dcPower : this.readChannelValue(ess, "ActivePower");
-				result = (result == null ? 0 : result)
-						+ calculateChargeHeadroom(soc, maxSoc, allowedCharge, batteryPower);
-			}
-		} catch (OpenemsNamedException | RuntimeException e) {
-			this.logDebug(this.log, "Unable to read the storage charge headroom: " + e.getMessage());
-		}
-		return result;
-	}
-
-	/**
-	 * Calculates how much more a storage could charge right now.
-	 *
-	 * @param soc                the SoC in [%]; null if unknown
-	 * @param maxSoc             the top of the SoC window in [%]; null for 100
-	 * @param allowedChargePower the allowed charge power in [W], negative or
-	 *                           positive; null if unknown
-	 * @param batteryPower       the battery power in [W], negative while charging;
-	 *                           null if unknown
-	 * @return the headroom in [W]; 0 if unknown or full
-	 */
-	protected static int calculateChargeHeadroom(Integer soc, Integer maxSoc, Integer allowedChargePower,
-			Integer batteryPower) {
-		if (soc == null || allowedChargePower == null || soc >= (maxSoc == null ? 100 : maxSoc)) {
-			return 0;
-		}
-		final var charging = batteryPower == null ? 0 : Math.max(-batteryPower, 0);
-		return Math.max(Math.abs(allowedChargePower) - charging, 0);
 	}
 
 	/**

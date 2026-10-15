@@ -429,6 +429,8 @@
                     "READY_FOR_CHARGING": "Bereit zur Beladung",
                     "STARTING": "Startet",
                     "STATUS": "Status",
+                    "HYSTERESIS_START": "Start-Hysterese, noch {{time}}",
+                    "HYSTERESIS_STOP": "Stopp-Hysterese, noch {{time}}",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Ladepreis jetzt",
                         "INFO": "Jede Viertelstunde wird ein Ladeplan bis zum Ende des Tages gerechnet: Speicher und Auto zusammen, mit Preisen, PV- und Verbrauchsprognose und dem Fahrplan des Speichers. Der Speicher wird zuerst gefüllt, das Auto bekommt, was der Speicher nicht aufnehmen kann, und darf zum Auffüllen auf die Mindestleistung Speicherstrom nehmen, solange der Speicher abends sein Ziel noch erreicht. Dieser Speicherstrom wird von der Sonne nachgeladen und zählt wie Überschussstrom plus Verlustaufschlag; aller andere Speicherstrom zählt wie Netzstrom. „Dem Speicher entzogen“ ist, was das Auto dem Speicher wegnimmt: seine Entladung über den Hausbedarf hinaus oder Sonnenstrom, den der Speicher sonst geladen hätte. Sperrt der Speicher-Fahrplan die Entladung, liefert der Speicher nichts.",

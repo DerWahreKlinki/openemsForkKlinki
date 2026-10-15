@@ -429,6 +429,8 @@
                     "READY_FOR_CHARGING": "Ready for charging",
                     "STARTING": "Starting",
                     "STATUS": "Status",
+                    "HYSTERESIS_START": "Start hysteresis, {{time}} left",
+                    "HYSTERESIS_STOP": "Stop hysteresis, {{time}} left",
                     "STORAGE_PRICING": {
                         "CURRENT_PRICE": "Charging price now",
                         "INFO": "Every quarter-hour a charging plan is calculated until the end of the day: storage and car together, with prices, PV and consumption forecast and the storage schedule. The storage is filled first, the car gets what the storage cannot take and may use storage power to fill up to the minimum power as long as the storage still reaches its evening target. That storage power is refilled by the sun and counts like surplus power plus the loss surcharge; all other storage power counts like grid power. 'Taken from the storage' is what the car takes away from the storage: its discharge beyond the house, or solar power the storage would have charged otherwise. While the storage schedule blocks the discharge, the storage delivers nothing.",

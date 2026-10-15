@@ -97,6 +97,9 @@ export class FlatComponent extends AbstractFlatWidget {
                 result.push(new ChannelAddress(controller.id, "_PropertyEnabledCharging"));
                 if (controller.factoryId === EvcsPriceForecast.FACTORY_ID) {
                     result.push(new ChannelAddress(controller.id, "StoragePrice"));
+                    result.push(new ChannelAddress(controller.id, "AwaitingHysteresis"));
+                    result.push(new ChannelAddress(controller.id, "HysteresisRemaining"));
+                    result.push(new ChannelAddress(controller.id, "ChargePowerLimit"));
                     result.push(new ChannelAddress("_sum", "EssCapacity"));
                 }
             }
@@ -167,6 +170,22 @@ export class FlatComponent extends AbstractFlatWidget {
             currentData.allComponents[this.component.id + "/Status"],
             currentData.allComponents[this.component.id + "/Plug"],
         );
+        // Price controller: while a start or stop hysteresis runs, show it with the remaining time
+        if (this.isPriceController && this.isChargingEnabled && this.controller != null) {
+            const awaiting = currentData.allComponents[this.controller.id + "/AwaitingHysteresis"];
+            if (awaiting === 1 || awaiting === true) {
+                const remaining = currentData.allComponents[this.controller.id + "/HysteresisRemaining"];
+                const limit = currentData.allComponents[this.controller.id + "/ChargePowerLimit"] ?? 0;
+                const time =
+                    remaining == null
+                        ? ""
+                        : Math.floor(remaining / 60) + ":" + String(remaining % 60).padStart(2, "0") + " min";
+                this.status = this.translate.instant(
+                    limit > 0 ? "EDGE.INDEX.WIDGETS.EVCS.HYSTERESIS_STOP" : "EDGE.INDEX.WIDGETS.EVCS.HYSTERESIS_START",
+                    { time: time },
+                );
+            }
+        }
         // Phases
         this.phases = currentData.allComponents[this.componentId + "/Phases"];
 

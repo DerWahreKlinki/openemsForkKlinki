@@ -258,6 +258,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.lastChargePower = 0;
 			this.startWantedSince = null;
 			this.stopWantedSince = null;
+			this.setHysteresisRemaining(null);
 			this.setPriceCharging(false);
 			this.setChargePowerLimit(0);
 			this.evcs.setChargePowerLimit(0);
@@ -1263,14 +1264,17 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// Start charging: the charge power has to stay above zero for the start
 		// hysteresis; a short burst of sun or a single wrong measurement must not
 		// start the car (every start is a contactor cycle)
+		Integer remaining = null;
 		if (this.lastChargePower <= 0 && nextChargePower > 0) {
 			if (this.startWantedSince == null) {
 				this.startWantedSince = now;
 			}
 			var hysteresis = Duration.ofSeconds(this.config.startConfirmationTime());
-			if (this.startWantedSince.plus(hysteresis).isAfter(now)) {
+			final var until = this.startWantedSince.plus(hysteresis);
+			if (until.isAfter(now)) {
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
+				remaining = (int) Duration.between(now, until).getSeconds();
 			}
 		} else {
 			this.startWantedSince = null;
@@ -1284,9 +1288,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				this.stopWantedSince = now;
 			}
 			var hysteresis = Duration.ofSeconds(this.config.stopConfirmationTime());
-			if (this.stopWantedSince.plus(hysteresis).isAfter(now)) {
+			final var until = this.stopWantedSince.plus(hysteresis);
+			if (until.isAfter(now)) {
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
+				remaining = (int) Duration.between(now, until).getSeconds();
 			} else {
 				targetChargePower = 0;
 			}
@@ -1297,6 +1303,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// Apply results
 		this.lastChargePower = targetChargePower;
 		this.channel(ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS).setNextValue(showWarning);
+		this.setHysteresisRemaining(remaining);
 
 		return targetChargePower;
 	}

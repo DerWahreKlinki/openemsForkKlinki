@@ -112,6 +112,13 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.persistencePriority(HIGH) //
 				.text("Power the storage delivers to the car")), //
 		/**
+		 * Seconds until the running start or stop hysteresis elapses; empty while no
+		 * hysteresis is running.
+		 */
+		HYSTERESIS_REMAINING(Doc.of(INTEGER) //
+				.unit(Unit.SECONDS) //
+				.text("Seconds until the start or stop hysteresis elapses")), //
+		/**
 		 * Start of the planned charging as epoch seconds; empty if the plan contains
 		 * no charging.
 		 */
@@ -230,6 +237,10 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 
 	public default void setStorageDischargeBlocked(Boolean val) {
 		this.channel(ChannelId.STORAGE_DISCHARGE_BLOCKED).setNextValue(val);
+	}
+
+	public default void setHysteresisRemaining(Integer val) {
+		this.channel(ChannelId.HYSTERESIS_REMAINING).setNextValue(val);
 	}
 
 	public default void setPlanStart(Long val) {

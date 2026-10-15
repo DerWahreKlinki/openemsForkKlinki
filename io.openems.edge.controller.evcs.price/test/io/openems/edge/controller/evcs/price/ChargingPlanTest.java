@@ -211,6 +211,23 @@ public class ChargingPlanTest {
 	}
 
 	@Test
+	public void horizonEndsBeforeTheNextPvBlock() {
+		// two days: the plan stops where the PV of the second day starts
+		final var inputs = new ArrayList<Input>();
+		inputs.addAll(day(2500));
+		for (var i = 0; i < 7 * 4; i++) {
+			inputs.add(new Input(START.plusDays(1).minusHours(7).plusMinutes(15L * i), 45., 0, 1000));
+		}
+		inputs.addAll(day(2500).stream()
+				.map(in -> new Input(in.time().plusDays(1), in.price(), in.production(), in.consumption())).toList());
+		final var r = ChargingPlan.calculate(rules(Priority.STORAGE), storage(10847), new Car(true, null), inputs);
+		// 24 hours plus the second day from 07:00 until 09:00 (the first PV at 09:15)
+		assertEquals(24 * 4 + 9, r.quarters().size());
+		assertTrue(r.quarters().get(r.quarters().size() - 1).time().isBefore(START.plusDays(1).withHour(9).plusMinutes(15)));
+		assertTrue(r.targetReached());
+	}
+
+	@Test
 	public void storageModeFromState() {
 		assertEquals(StorageMode.BALANCING, StorageMode.fromState(null));
 		assertEquals(StorageMode.BALANCING, StorageMode.fromState("BALANCING"));

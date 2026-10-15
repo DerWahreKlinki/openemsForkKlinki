@@ -247,7 +247,14 @@ public final class ChargingPlan {
 		if (inputs.isEmpty()) {
 			return Result.EMPTY;
 		}
-		final var blocks = findPvBlocks(inputs);
+		// The plan covers the running (or next) PV block and the night after it; the
+		// PV of the day after is nobody's business today, the plan is recalculated
+		// every quarter-hour anyway
+		var blocks = findPvBlocks(inputs);
+		if (blocks.size() > 1) {
+			inputs = inputs.subList(0, blocks.get(1)[0]);
+			blocks = blocks.subList(0, 1);
+		}
 		final var dropped = new HashSet<Integer>();
 		Result result;
 		while (true) {

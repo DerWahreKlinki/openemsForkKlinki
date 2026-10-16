@@ -125,7 +125,7 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
                 this.storageCapacity,
                 config,
             );
-            const slots = await EvcsPriceForecast.load(this.edge, this.websocket, config, settings);
+            const slots = await EvcsPriceForecast.load(this.edge, this.websocket, config, settings, this.controllerId);
             this.update(slots, settings);
         } catch (error) {
             console.warn(error);

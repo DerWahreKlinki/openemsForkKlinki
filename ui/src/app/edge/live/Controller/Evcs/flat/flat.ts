@@ -100,6 +100,7 @@ export class FlatComponent extends AbstractFlatWidget {
                     result.push(new ChannelAddress(controller.id, "AwaitingHysteresis"));
                     result.push(new ChannelAddress(controller.id, "HysteresisRemaining"));
                     result.push(new ChannelAddress(controller.id, "ChargePowerLimit"));
+                    result.push(new ChannelAddress(controller.id, "PauseToday"));
                     result.push(new ChannelAddress("_sum", "EssCapacity"));
                 }
             }
@@ -170,10 +171,14 @@ export class FlatComponent extends AbstractFlatWidget {
             currentData.allComponents[this.component.id + "/Status"],
             currentData.allComponents[this.component.id + "/Plug"],
         );
-        // Price controller: while a start or stop hysteresis runs, show it with the remaining time
+        // Price controller: "Do not charge today" replaces the state; while a start or stop
+        // hysteresis runs, show it with the remaining time
         if (this.isPriceController && this.isChargingEnabled && this.controller != null) {
+            const pauseToday = currentData.allComponents[this.controller.id + "/PauseToday"];
             const awaiting = currentData.allComponents[this.controller.id + "/AwaitingHysteresis"];
-            if (awaiting === 1 || awaiting === true) {
+            if (pauseToday === 1 || pauseToday === true) {
+                this.status = this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PAUSE_TODAY");
+            } else if (awaiting === 1 || awaiting === true) {
                 const remaining = currentData.allComponents[this.controller.id + "/HysteresisRemaining"];
                 const limit = currentData.allComponents[this.controller.id + "/ChargePowerLimit"] ?? 0;
                 const time =

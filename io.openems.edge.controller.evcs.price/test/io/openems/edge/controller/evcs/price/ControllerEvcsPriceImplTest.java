@@ -1210,10 +1210,19 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000)) //
+				.next(new TestCase("excess gone: stop hysteresis running") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, 2000) //
+						.input("evcs0", ACTIVE_POWER, 4000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, true)) //
 				.next(new TestCase("pause written: stop at once, no stop hysteresis") //
 						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
 						.input(PAUSE_TODAY, true) //
-						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, false)) //
 				.next(new TestCase("still paused with excess") //
 						.timeleap(clock, 10, HOURS) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //

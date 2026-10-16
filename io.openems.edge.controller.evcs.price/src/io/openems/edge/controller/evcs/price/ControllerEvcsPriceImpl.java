@@ -259,6 +259,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.startWantedSince = null;
 			this.stopWantedSince = null;
 			this.setHysteresisRemaining(null);
+			this.channel(ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS).setNextValue(false);
 			this.setPriceCharging(false);
 			this.setChargePowerLimit(0);
 			this.evcs.setChargePowerLimit(0);

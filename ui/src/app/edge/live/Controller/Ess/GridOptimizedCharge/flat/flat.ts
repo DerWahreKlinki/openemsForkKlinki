@@ -1,11 +1,12 @@
 // @ts-strict-ignore
-import { Component, ChangeDetectionStrategy, OnDestroy } from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { AbstractFlatWidget } from "src/app/shared/components/flat/abstract-flat-widget";
 import { Modal } from "src/app/shared/components/flat/flat";
 import { ChannelAddress, CurrentData, EdgeConfig, Utils } from "src/app/shared/shared";
 
+import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 import { ModalComponent } from "../modal/modal";
-import { GridOptimizedChargePlan } from "../shared/energy-scheduler-plan";
+import { SharedGridOptimizedCharge } from "../shared/shared";
 
 @Component({
     selector: "Controller_Ess_GridOptimizedCharge",
@@ -13,13 +14,8 @@ import { GridOptimizedChargePlan } from "../shared/energy-scheduler-plan";
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false,
 })
-export class FlatComponent extends AbstractFlatWidget implements OnDestroy {
-    private static readonly PLAN_REFRESH_INTERVAL = 60 * 1000;
-
+export class FlatComponent extends AbstractFlatWidget {
     public override component: EdgeConfig.Component | null = null;
-    /** Energy Scheduler V2: the controller's logic is part of the Time-of-Use-Tariff schedule */
-    public isEnergySchedulerV2: boolean = false;
-    public planText: string = "-";
     public mode: string = "-";
     public state: string = "-";
     public isSellToGridLimitAvoided: boolean = false;
@@ -27,25 +23,15 @@ export class FlatComponent extends AbstractFlatWidget implements OnDestroy {
     public delayChargeMaximumChargeLimit: number | null = null;
     public readonly CONVERT_MODE_TO_MANUAL_OFF_AUTOMATIC = Utils.CONVERT_MODE_TO_MANUAL_OFF_AUTOMATIC(this.translate);
     public readonly CONVERT_WATT_TO_KILOWATT = Utils.CONVERT_WATT_TO_KILOWATT;
+    public isDisabledByTimeOfUse: boolean = false;
 
     protected modalComponent: Modal | null = null;
-    private planTimer: ReturnType<typeof setInterval> | null = null;
-
-    public override ngOnDestroy(): void {
-        if (this.planTimer != null) {
-            clearInterval(this.planTimer);
-            this.planTimer = null;
-        }
-        super.ngOnDestroy();
-    }
-
     protected override afterIsInitialized(): void {
         this.modalComponent = this.getModalComponent();
-        this.isEnergySchedulerV2 = GridOptimizedChargePlan.isEnergySchedulerV2(this.config);
-        if (this.isEnergySchedulerV2) {
-            this.loadPlan();
-            this.planTimer = setInterval(() => this.loadPlan(), FlatComponent.PLAN_REFRESH_INTERVAL);
-        }
+
+        const config = this.edge.getCurrentConfig();
+        AssertionUtils.assertIsDefined(config);
+        this.isDisabledByTimeOfUse = SharedGridOptimizedCharge.isDisabledByTimeOfUse(config, this.component);
     }
 
     protected getModalComponent(): Modal {
@@ -53,6 +39,7 @@ export class FlatComponent extends AbstractFlatWidget implements OnDestroy {
             component: ModalComponent,
             componentProps: {
                 component: this.component,
+                edge: this.edge,
             },
         };
     }
@@ -119,17 +106,5 @@ export class FlatComponent extends AbstractFlatWidget implements OnDestroy {
 
         this.delayChargeMaximumChargeLimit =
             currentData.allComponents[this.component.id + "/DelayChargeMaximumChargeLimit"];
-    }
-
-    private async loadPlan(): Promise<void> {
-        if (this.edge == null || this.config == null) {
-            return;
-        }
-        try {
-            const plan = await GridOptimizedChargePlan.load(this.edge, this.websocket, this.config);
-            this.planText = GridOptimizedChargePlan.describe(plan, this.translate);
-        } catch {
-            this.planText = GridOptimizedChargePlan.describe(null, this.translate);
-        }
     }
 }

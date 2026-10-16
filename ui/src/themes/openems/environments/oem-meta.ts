@@ -1,4 +1,4 @@
-import { alertCircleOutline, bagCheckOutline, calendarOutline, checkmarkDoneCircleOutline, flame, heart, heartOutline, informationCircleOutline, removeOutline, reorderThreeOutline, timerOutline, warningOutline, } from "ionicons/icons";
+import { analyticsOutline, alertCircleOutline, bagCheckOutline, calendarOutline, checkmarkDoneCircleOutline, flame, heart, heartOutline, informationCircleOutline, removeOutline, reorderThreeOutline, timerOutline, warningOutline, } from "ionicons/icons";
 import { BaseMeta } from "src/environments";
 
 export const OemMeta: BaseMeta = {
@@ -21,6 +21,7 @@ export const OemMeta: BaseMeta = {
             OFFGRID: "assets/img/icon/offgrid.svg",
             PRODUCTION: "assets/img/icon/production.svg",
             STORAGE: "assets/img/icon/storage.svg",
+            SCHEDULE: analyticsOutline,
             WEATHER: {
                 CLEAR_DAY: "assets/img/icon/clear_day.svg",
                 CLEAR_NIGHT: "assets/img/icon/clear_night.svg",
@@ -145,7 +146,10 @@ export const OemMeta: BaseMeta = {
                 },
             },
         },
-        DATA_PROTECTION: null,
+        DATA_PROTECTION: "https://openems.io/",
+        GTC: (): string | null => {
+            return "https://openems.io/";
+        },
         REDIRECT: {
             BETA_SURVEY: null,
             BETA_CHANGE_LOG: null,
@@ -227,14 +231,8 @@ export const OemMeta: BaseMeta = {
             SYSTEM: {
                 HOME: {
                     HOME_10: "#",
-                    HOME_20_30: {
-                        DE: "#",
-                        EN: "#",
-                    },
-                    HOME_GEN_2: {
-                        DE: "#",
-                        EN: "#",
-                    },
+                    HOME_20_30: "#",
+                    HOME_GEN_2: "#",
                 },
                 COMMERCIAL: {
                     COMMERCIAL_30: "#",
@@ -242,15 +240,13 @@ export const OemMeta: BaseMeta = {
                     COMMERCIAL_50_GEN_3: "#",
                     COMMERCIAL_92: "#",
                     COMMERCIAL_92_CLUSTER: "#",
-                    COMMERCIAL_92_OVERVIEW: "#",
                     COMMERCIAL_100: "#",
                 },
             },
 
-            RUNDSTEUER: {
-                HOME: "#",
+            RIPPLE_CONTROL: {
+                HOME_10_GEN_1: "#",
                 HOME_GEN_2: "#",
-                HOME_6_10_15: "#",
                 HOME_20_30: "#",
                 COMMERCIAL_50_GEN_3: "#",
             },

@@ -11,7 +11,6 @@ import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
 import io.openems.edge.common.modbusslave.ModbusType;
 import io.openems.edge.controller.api.Controller;
-import io.openems.edge.controller.ess.timeofusetariff.v1.EnergyScheduleHandlerV1;
 import io.openems.edge.energy.api.EnergySchedulable;
 
 public interface TimeOfUseTariffController extends Controller, EnergySchedulable, OpenemsComponent {
@@ -20,27 +19,27 @@ public interface TimeOfUseTariffController extends Controller, EnergySchedulable
 		/**
 		 * Current state of the Time of use tariff controller.
 		 */
-		STATE_MACHINE(Doc.of(StateMachine.values()) //
-				.persistencePriority(PersistencePriority.HIGH) //
+		STATE_MACHINE(Doc.of(StateMachine.values())//
+				.persistencePriority(PersistencePriority.HIGH)//
 				.text("Current state of the Controller")),
 
-		QUARTERLY_PRICES(Doc.of(OpenemsType.DOUBLE) //
-				.unit(Unit.MONEY_PER_MEGAWATT_HOUR) //
+		QUARTERLY_PRICES(Doc.of(OpenemsType.DOUBLE)//
+				.unit(Unit.MONEY_PER_MEGAWATT_HOUR)//
 				.text("Price for buying electricity from the grid in the current quarter-hour")//
 				.persistencePriority(PersistencePriority.HIGH)), //
 
 		/**
 		 * Aggregated seconds when storage is being force charged from the grid.
 		 */
-		CHARGED_TIME(Doc.of(OpenemsType.LONG) //
-				.unit(Unit.CUMULATED_SECONDS) //
+		CHARGED_TIME(Doc.of(OpenemsType.LONG)//
+				.unit(Unit.CUMULATED_SECONDS)//
 				.persistencePriority(PersistencePriority.HIGH)), //
 
 		/**
 		 * Aggregated seconds when storage is blocked for discharge.
 		 */
-		DELAYED_TIME(Doc.of(OpenemsType.LONG) //
-				.unit(Unit.CUMULATED_SECONDS) //
+		DELAYED_TIME(Doc.of(OpenemsType.LONG)//
+				.unit(Unit.CUMULATED_SECONDS)//
 				.persistencePriority(PersistencePriority.HIGH)); //
 
 		private final Doc doc;
@@ -54,14 +53,6 @@ public interface TimeOfUseTariffController extends Controller, EnergySchedulable
 			return this.doc;
 		}
 	}
-
-	/**
-	 * Get the {@link EnergyScheduleHandlerV1}.
-	 *
-	 * @return {@link EnergyScheduleHandlerV1}
-	 */
-	@Deprecated
-	public EnergyScheduleHandlerV1 getEnergyScheduleHandlerV1();
 
 	/**
 	 * Gets the Channel for {@link ChannelId#QUARTERLY_PRICES}.

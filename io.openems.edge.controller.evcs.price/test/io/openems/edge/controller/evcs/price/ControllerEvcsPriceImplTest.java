@@ -825,12 +825,14 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
-	public void planKeepsTheTargetTest() throws Exception {
-		// Production 6 kW, consumption 2 kW: the 4 kW surplus is below the minimum
-		// power, the car would fill up from the storage. The plan drops those
-		// quarter-hours until the storage (20 kWh at 50 %, target 80 %) reaches its
-		// target -> target reachable. Live: 2130 W PV at 7 ct, the measured 1903 W
-		// storage mostly at 43.1 ct -> below the 30 ct limit -> charging
+	public void planWithoutStorageBudgetTest() throws Exception {
+		// Priority CAR, production 6 kW, consumption 2 kW: the 4 kW surplus is below
+		// the minimum power, the car fills up from the storage. The storage (20 kWh at
+		// 50 %, target 80 %) misses its target, so the plan withdraws the storage
+		// budget: the 140 W storage share costs the grid price, the blend of 4 kW PV
+		// at 7 ct stays far below the limit, the car charges all day -> target not
+		// reachable. Live: 2130 W PV at 7 ct, the measured 1903 W storage at 43.1 ct
+		// -> below the 30 ct limit -> charging
 		final var clock = createDummyClock();
 		prepareStoragePriceTest(clock, true, 6000, 2000, 96) //
 				.next(new TestCase() //
@@ -844,16 +846,16 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", ACTIVE_POWER, 4033) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output(STORAGE_ENERGY_TO_TARGET, 6000) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
 						.output(PRICE_CHARGING, true)) //
 				.next(new TestCase() //
-						// less PV: 1000 W PV, 3033 W storage mostly at 43.1 ct -> above 30 ct
+						// less PV: 1000 W PV, 3033 W storage at 43.1 ct -> above 30 ct
 						.timeleap(clock, 5, MINUTES) //
 						.input(GRID_BUY_PRICE, 431.) //
 						.input(ESS_DISCHARGE_POWER, 3033) //
 						.input("evcs0", ACTIVE_POWER, 4033) //
-						.output(STORAGE_TARGET_REACHABLE, true) //
+						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
 				.deactivate();

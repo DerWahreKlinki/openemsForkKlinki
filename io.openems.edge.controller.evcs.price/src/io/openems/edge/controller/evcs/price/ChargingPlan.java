@@ -21,9 +21,13 @@ import java.util.Set;
  * stays below the price limit. Storage power for the car costs the storage
  * price while PV can refill it before the end of the running PV block, and it
  * is only allowed as long as the storage still reaches its evening target at the
- * end of that block. Where it does not, the quarter-hours with the smallest PV
- * share are dropped first until the target holds. Outside of PV blocks the
- * storage is reserved for the house.
+ * end of that block. Where it does not, the storage price is withdrawn from the
+ * charging quarter-hours with the smallest PV share first until the target
+ * holds: such a quarter-hour keeps no storage budget, its storage share costs
+ * the grid price, and it still charges if the blended price stays below the
+ * limit, like the controller does live. Surplus the storage cannot take is
+ * always the car's, whether the target is reached or not. Outside of PV blocks
+ * the storage is reserved for the house.
  *
  * <p>
  * The schedule of the Time-of-Use-Tariff controller is respected per
@@ -160,7 +164,7 @@ public final class ChargingPlan {
 		FILL_UP,
 		/** Blended price above the limit. */
 		TOO_EXPENSIVE,
-		/** Dropped: the storage would miss its evening target. */
+		/** No storage budget, the storage would miss its evening target: too expensive at the grid price. */
 		TARGET,
 		/** The energy limit of the session is reached. */
 		LIMIT,
@@ -338,6 +342,8 @@ public final class ChargingPlan {
 				reason = Reason.UNKNOWN;
 			} else {
 				final var inPvBlock = isInPvBlock(blocks, i);
+				// without storage budget the storage share costs the grid price
+				final var budget = !dropped.contains(i);
 				final var surplus = prod - cons;
 				final var roomPower = max(storage.usableWh() - stored, 0) * QUARTERS_PER_HOUR / storage.efficiency();
 				final var gridCharge = mode == StorageMode.CHARGE_GRID ? max(in.storageGridChargePower(), 0) : 0;
@@ -361,8 +367,6 @@ public final class ChargingPlan {
 					reason = Reason.NOT_PLUGGED;
 				} else if (remaining != null && remaining <= 0) {
 					reason = Reason.LIMIT;
-				} else if (dropped.contains(i)) {
-					reason = Reason.TARGET;
 				} else if (excess >= rules.minPower()) {
 					power = min(max(excess, pricePower), rules.maxPower());
 					reason = Reason.SURPLUS;
@@ -383,10 +387,9 @@ public final class ChargingPlan {
 							: 0;
 					final var reductionShare = min(missing, storageUsable ? charge - gridCharge : 0);
 					final var dischargeShare = min(missing - reductionShare, dischargeAvailable);
-					final var reductionPrice = rules.useStorageSurplus() ? rules.storagePrice() : price;
-					final var dischargePrice = rules.useStorageSurplus() && stored >= rules.targetWh()
-							? rules.storagePrice()
-							: price;
+					final var priced = rules.useStorageSurplus() && budget;
+					final var reductionPrice = priced ? rules.storagePrice() : price;
+					final var dischargePrice = priced && stored >= rules.targetWh() ? rules.storagePrice() : price;
 					final var essShare = reductionShare + dischargeShare;
 					blended = (excess * rules.pvPrice() + reductionShare * reductionPrice
 							+ dischargeShare * dischargePrice + (missing - essShare) * price) / rules.minPower();
@@ -394,7 +397,7 @@ public final class ChargingPlan {
 						power = rules.minPower();
 						reason = Reason.FILL_UP;
 					} else {
-						reason = Reason.TOO_EXPENSIVE;
+						reason = budget ? Reason.TOO_EXPENSIVE : Reason.TARGET;
 					}
 				}
 				if (power > 0 && remaining != null) {
@@ -441,7 +444,8 @@ public final class ChargingPlan {
 					// target, below the target the house buys from grid instead
 					final var reduction = min(storageShare, max(charge - chargeWith, 0));
 					final var extraDischarge = storageShare - reduction;
-					final var storageUsable = rules.useStorageSurplus() && inPvBlock && mode == StorageMode.BALANCING;
+					final var storageUsable = rules.useStorageSurplus() && budget && inPvBlock
+							&& mode == StorageMode.BALANCING;
 					final var reductionPrice = storageUsable ? rules.storagePrice() : price;
 					final var dischargePrice = storageUsable && stored >= rules.targetWh() ? rules.storagePrice() : price;
 					storageBudget = (storageUsable ? reduction : 0)
@@ -482,8 +486,9 @@ public final class ChargingPlan {
 	}
 
 	/*
-	 * Finds the quarter-hour to drop: in the first PV block that misses the target,
-	 * the charging quarter-hour with storage share and the smallest PV share.
+	 * Finds the quarter-hour to withdraw the storage budget from: in the first PV
+	 * block that misses the target, the charging quarter-hour with storage budget
+	 * and the smallest PV share.
 	 */
 	private static Integer findQuarterToDrop(Result result, Rules rules, List<int[]> blocks, Set<Integer> dropped) {
 		for (var b : blocks) {
@@ -494,7 +499,7 @@ public final class ChargingPlan {
 			var bestRatio = Double.MAX_VALUE;
 			for (var i = b[0]; i <= b[1]; i++) {
 				final var q = result.quarters().get(i);
-				if (q.power() <= 0 || q.fromStorage() <= 0 || dropped.contains(i)) {
+				if (q.power() <= 0 || q.storageBudget() <= 0 || dropped.contains(i)) {
 					continue;
 				}
 				// the smallest PV share first; among equals the latest, so that the car

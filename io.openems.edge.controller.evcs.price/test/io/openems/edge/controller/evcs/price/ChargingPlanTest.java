@@ -112,12 +112,50 @@ public class ChargingPlanTest {
 	}
 
 	@Test
-	public void targetMissedWithoutCarDropsAllStorageShares() {
-		// house 6 kW: the storage cannot reach its target even without the car
+	public void targetMissedWithoutCarWithdrawsAllStorageBudgets() {
+		// house 6 kW: the storage cannot reach its target even without the car, so no
+		// quarter-hour keeps a storage budget; the storage share costs the grid price
+		// and the car still fills up where PV and grid power blend below the limit
 		final var r = ChargingPlan.calculate(rules(Priority.STORAGE), storage(2000), new Car(true, null), day(6000));
 		assertFalse(r.targetReached());
-		assertEquals(0, r.fromStorageWh());
-		assertTrue(r.quarters().stream().noneMatch(q -> q.fromStorage() > 0));
+		assertTrue(r.quarters().stream().allMatch(q -> q.storageBudget() == 0));
+		for (var q : r.quarters()) {
+			if (q.power() > 0) {
+				assertEquals(Reason.FILL_UP, q.reason(), "at " + q.time());
+				assertTrue(q.blendedPrice() < 30, "blended " + q.blendedPrice() + " at " + q.time());
+				// the storage share is priced like grid power
+				final var expected = (q.fromPv() * 7. + (q.fromStorage() + q.fromGrid()) * q.price()) / q.power();
+				assertEquals(expected, q.blendedPrice(), 0.01, "at " + q.time());
+			}
+		}
+	}
+
+	@Test
+	public void surplusOfTheFullStorageIsTheCarsWhenTheTargetIsMissed() {
+		// full storage, PV bell, house 1 kW until 16:00 and 7 kW after: the storage
+		// misses its target at PV end whatever the car does, but the surplus it cannot
+		// take at noon goes to the car anyway
+		final var inputs = new ArrayList<Input>();
+		for (var i = 0; i < 17 * 4; i++) {
+			final var time = START.plusMinutes(15L * i);
+			final var hour = time.getHour() + time.getMinute() / 60.;
+			final var pv = hour < 9 || hour >= 18 ? 0 : (int) Math.round(8000 * Math.sin(Math.PI * (hour - 9) / 9));
+			inputs.add(new Input(time, 45., pv, hour < 16 ? 1000 : 7000));
+		}
+		final var r = ChargingPlan.calculate(rules(Priority.STORAGE), storage(USABLE), new Car(true, null), inputs);
+		assertFalse(r.targetReached());
+		assertTrue(r.storageAtPvEndWh() < TARGET, "at PV end " + r.storageAtPvEndWh());
+		for (var hour = 12; hour < 16; hour++) {
+			final var q = r.getAt(START.withHour(hour));
+			assertEquals(Reason.SURPLUS, q.reason(), "at " + q.time());
+			assertTrue(q.power() >= 4140, "power " + q.power() + " at " + q.time());
+			assertEquals(0, q.fromStorage(), "at " + q.time());
+			assertEquals(0, q.storageBudget(), "at " + q.time());
+		}
+		// no storage budget anywhere, the storage price is withdrawn
+		assertTrue(r.quarters().stream().allMatch(q -> q.storageBudget() == 0));
+		// the evening: the house takes everything, too expensive
+		assertEquals(Reason.TOO_EXPENSIVE, r.getAt(START.withHour(19)).reason());
 	}
 
 	@Test
@@ -125,10 +163,21 @@ public class ChargingPlanTest {
 		final var r = ChargingPlan.calculate(rules(Priority.CAR), storage(10847), new Car(true, null), day(2500));
 		assertNotNull(r.start());
 		// the car takes the surplus as soon as it covers the minimum power (12:00), the
-		// storage only gets the rest; fill-ups from the storage before that are dropped
-		// because the storage would miss its target
-		assertEquals(12, r.start().getHour(), "start " + r.start());
+		// storage only gets the rest and misses its target. Before 12:00 the car fills
+		// up from the storage without storage budget: the storage share costs the grid
+		// price, from 10:45 on the blend of PV at 7 ct and grid at 45 ct is below 30 ct
+		assertEquals(10, r.start().getHour(), "start " + r.start());
+		assertEquals(45, r.start().getMinute(), "start " + r.start());
+		assertFalse(r.targetReached());
 		assertTrue(r.energyWh() > 15000, "energy " + r.energyWh());
+		assertTrue(r.quarters().stream().allMatch(q -> q.storageBudget() == 0));
+		for (var q : r.quarters()) {
+			if (q.time().getHour() < 12 && q.power() > 0) {
+				assertEquals(Reason.FILL_UP, q.reason(), "at " + q.time());
+				assertTrue(q.blendedPrice() < 30, "blended " + q.blendedPrice() + " at " + q.time());
+			}
+		}
+		assertEquals(Reason.SURPLUS, r.getAt(START.withHour(12)).reason());
 		assertTrue(r.quarters().stream().filter(q -> q.reason() == Reason.SURPLUS).allMatch(q -> q.fromStorage() == 0));
 	}
 

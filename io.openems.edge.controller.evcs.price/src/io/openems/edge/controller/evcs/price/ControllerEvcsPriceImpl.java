@@ -97,6 +97,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private ChargingPlan.Result plan = ChargingPlan.Result.EMPTY;
 	private ZonedDateTime planQuarter = null;
 	private boolean planDirty = true;
+	// Quarter-hour in which the missing prediction was logged, once per quarter-hour
+	private ZonedDateTime planWarnedQuarter = null;
 	// Storage power the plan allows for the car at the storage price in the
 	// running quarter-hour; 0 while the storage is blocked
 	private int planStoragePower = 0;
@@ -642,6 +644,17 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		var consumption = predictorManager.getPrediction(new ChannelAddress("_sum", "UnmanagedConsumptionActivePower"));
 		if (consumption.isEmpty()) {
 			consumption = predictorManager.getPrediction(new ChannelAddress("_sum", "ConsumptionActivePower"));
+		}
+		if (production.isEmpty() || consumption.isEmpty()) {
+			// e.g. the weather forecast fails to load right at the start of the
+			// quarter-hour: no plan instead of a plan of unknown quarter-hours; the
+			// caller tries again next cycle
+			if (!quarter.equals(this.planWarnedQuarter)) {
+				this.planWarnedQuarter = quarter;
+				this.logWarn(this.log, "No charging plan: prediction of "
+						+ (production.isEmpty() ? "production" : "consumption") + " is missing, trying again");
+			}
+			return ChargingPlan.Result.EMPTY;
 		}
 		final var modes = this.readStorageModes();
 		final var gridChargePower = this.readStorageGridChargePower();

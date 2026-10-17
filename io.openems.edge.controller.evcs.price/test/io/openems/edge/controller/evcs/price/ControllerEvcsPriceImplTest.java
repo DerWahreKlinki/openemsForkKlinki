@@ -10,6 +10,8 @@ import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PAUSE_TODAY;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PLAN_ENERGY;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PLAN_REASON;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_DISCHARGE_BLOCKED;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_POWER_FOR_CAR;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_PRICE;
@@ -858,6 +860,84 @@ public class ControllerEvcsPriceImplTest {
 						.output(STORAGE_TARGET_REACHABLE, false) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(PRICE_CHARGING, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void planWithoutProductionForecastTest() throws Exception {
+		// The weather forecast fails to load right at the start of the quarter-hour
+		// (live: Open-Meteo answers 503 at every quarter-hour): no plan at all instead
+		// of a plan of unknown quarter-hours, the storage projection stays empty. The
+		// next cycle finds the forecast and the plan appears within the same
+		// quarter-hour.
+		final var clock = createDummyClock();
+		final var now = Instant.now(clock);
+		final var cm = new DummyComponentManager(clock);
+		final var sum = new DummySum();
+		final var production = new Integer[96];
+		final var consumption = new Integer[96];
+		final var prices = new Double[96];
+		for (var i = 0; i < 96; i++) {
+			production[i] = 6000;
+			consumption[i] = 2000;
+			prices[i] = 431.;
+		}
+		final var productionPredictor = new DummyPredictor("predictor0", cm, Prediction.EMPTY_PREDICTION,
+				SUM_PRODUCTION);
+		final var predictorManager = new DummyPredictorManager(productionPredictor, //
+				new DummyPredictor("predictor1", cm, Prediction.from(sum, SUM_CONSUMPTION, now, consumption),
+						SUM_CONSUMPTION));
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		new ControllerTest(controller) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", cm) //
+				.addReference("sum", sum) //
+				.addReference("predictorManager", predictorManager) //
+				.addReference("timeOfUseTariff", DummyTimeOfUseTariffProvider.fromQuarterlyPrices(clock, prices)) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setEnablePriceCharging(true) //
+						.setPriceLimit(30) //
+						.setPriceLimitFullPower(20) //
+						.setPriceChargePower(11040) //
+						.setUseStorageSurplus(true) //
+						.setStorageTargetSocNet(80) //
+						.setStorageLossSurcharge(1) //
+						.setTimeOfUseTariffId("") //
+						.build()) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(PLAN_ENERGY, null) //
+						.output(PLAN_REASON, null) //
+						.output(STORAGE_SURPLUS_ENERGY, null)) //
+				.next(new TestCase() //
+						// one cycle later the forecast is there: plan within the same quarter-hour
+						.timeleap(clock, 1, SECONDS) //
+						.onBeforeProcessImage(() -> productionPredictor
+								.setPrediction(Prediction.from(sum, SUM_PRODUCTION, now, production))) //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input("evcs0", ACTIVE_POWER, 4033) //
+						.onAfterControllersCallbacks(() -> {
+							final var energy = controller.channel(PLAN_ENERGY).getNextValue().asOptional();
+							assertTrue(energy.isPresent() && (Integer) energy.get() > 0, "plan expected");
+						}) //
+						.output(PLAN_REASON, "FILL_UP")) //
 				.deactivate();
 	}
 

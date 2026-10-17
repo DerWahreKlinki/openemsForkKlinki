@@ -3,6 +3,7 @@ package io.openems.edge.controller.evcs.price.jsonrpc;
 import static io.openems.common.utils.JsonUtils.buildJsonObject;
 
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 
 import com.google.gson.JsonArray;
@@ -29,6 +30,7 @@ import io.openems.edge.controller.evcs.price.ChargingPlan;
  *     "targetWh": number,
  *     "usableWh": number,
  *     "targetReached": boolean,
+ *     "hypothetical": boolean,       // true: no car, the quarters show charging as if one were plugged in
  *     "quarters": [{
  *       "timestamp": string,
  *       "price": number | null,        // [Currency/MWh]
@@ -73,8 +75,25 @@ public class GetChargingPlanResponse extends JsonrpcResponseSuccess {
 	 */
 	public static GetChargingPlanResponse from(UUID requestId, ChargingPlan.Result plan, int targetWh,
 			double usableWh) {
+		return from(requestId, plan, plan.quarters(), false, targetWh, usableWh);
+	}
+
+	/**
+	 * Builds the response from a plan and the quarter-hours to show.
+	 *
+	 * @param requestId    the request id
+	 * @param plan         the plan: totals and storage projection
+	 * @param planQuarters the quarter-hours to show; without a car those of the
+	 *                     plan as if a car were plugged in
+	 * @param hypothetical true if the quarter-hours assume a car
+	 * @param targetWh     the evening target in [Wh]
+	 * @param usableWh     the usable capacity in [Wh]
+	 * @return the response
+	 */
+	public static GetChargingPlanResponse from(UUID requestId, ChargingPlan.Result plan,
+			List<ChargingPlan.Quarter> planQuarters, boolean hypothetical, int targetWh, double usableWh) {
 		final var quarters = new JsonArray();
-		for (var q : plan.quarters()) {
+		for (var q : planQuarters) {
 			quarters.add(buildJsonObject() //
 					.addProperty("timestamp", q.time().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)) //
 					.add("price", q.price() == null ? JsonNull.INSTANCE : new com.google.gson.JsonPrimitive(q.price() * 10)) //
@@ -101,6 +120,7 @@ public class GetChargingPlanResponse extends JsonrpcResponseSuccess {
 				.addProperty("targetWh", targetWh) //
 				.addProperty("usableWh", Math.round(usableWh)) //
 				.addProperty("targetReached", plan.targetReached()) //
+				.addProperty("hypothetical", hypothetical) //
 				.add("quarters", quarters) //
 				.build();
 		return new GetChargingPlanResponse(requestId, result);

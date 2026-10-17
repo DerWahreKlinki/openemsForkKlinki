@@ -95,6 +95,10 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// The charging plan: recalculated every quarter-hour, after plugging in or out
 	// and after a configuration change
 	private ChargingPlan.Result plan = ChargingPlan.Result.EMPTY;
+	// The plan for the display: without a car the plan as if a car were plugged in
+	// now, so the UI shows what charging would cost per quarter-hour
+	private ChargingPlan.Result displayPlan = ChargingPlan.Result.EMPTY;
+	private boolean displayPlanHypothetical = false;
 	private ZonedDateTime planQuarter = null;
 	private boolean planDirty = true;
 	// Quarter-hour in which the missing prediction was logged, once per quarter-hour
@@ -210,8 +214,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	@Override
 	public void buildJsonApiRoutes(JsonApiBuilder builder) {
-		builder.handleRequest(GetChargingPlanRequest.METHOD, call -> GetChargingPlanResponse
-				.from(call.getRequest().getId(), this.plan, this.planTargetWh, this.planUsableWh));
+		builder.handleRequest(GetChargingPlanRequest.METHOD,
+				call -> GetChargingPlanResponse.from(call.getRequest().getId(), this.plan, this.displayPlan.quarters(),
+						this.displayPlanHypothetical, this.planTargetWh, this.planUsableWh));
 	}
 
 	@Override
@@ -604,10 +609,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.planDirty = false;
 		this.planQuarter = quarter;
 		try {
-			this.plan = this.calculateChargingPlan(quarter, windows, energy);
+			final var plans = this.calculateChargingPlan(quarter, windows, energy);
+			this.plan = plans.plan();
+			this.displayPlan = plans.display();
+			this.displayPlanHypothetical = plans.hypothetical();
 		} catch (RuntimeException e) {
 			this.logWarn(this.log, "Unable to calculate the charging plan: " + e.getMessage());
 			this.plan = ChargingPlan.Result.EMPTY;
+			this.displayPlan = ChargingPlan.Result.EMPTY;
+			this.displayPlanHypothetical = false;
 		}
 		if (this.plan.quarters().isEmpty()) {
 			// right after a restart prices and predictions arrive a little later than
@@ -622,6 +632,19 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
+	 * The plans of a quarter-hour.
+	 *
+	 * @param plan         the plan for the car as it is: for the controller and the
+	 *                     energy optimizer
+	 * @param display      the plan for the display: the same, or without a car the
+	 *                     plan as if a car were plugged in now
+	 * @param hypothetical true if the display plan assumes a car
+	 */
+	protected record Plans(ChargingPlan.Result plan, ChargingPlan.Result display, boolean hypothetical) {
+		static final Plans EMPTY = new Plans(ChargingPlan.Result.EMPTY, ChargingPlan.Result.EMPTY, false);
+	}
+
+	/**
 	 * Calculates the charging plan for the price horizon from the prices of the
 	 * Time-of-Use-Tariff, the predictions of production and unmanaged consumption,
 	 * the schedule of the Time-of-Use-Tariff controller, the storage and the
@@ -630,18 +653,17 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @param quarter the current quarter-hour
 	 * @param windows the storage windows
 	 * @param energy  the storage energy; possibly null
-	 * @return the plan; empty if prices or predictions are missing
+	 * @return the plans; empty if prices or predictions are missing
 	 */
-	private ChargingPlan.Result calculateChargingPlan(ZonedDateTime quarter, List<StorageWindow> windows,
-			StorageEnergy energy) {
+	private Plans calculateChargingPlan(ZonedDateTime quarter, List<StorageWindow> windows, StorageEnergy energy) {
 		final var tariff = this.timeOfUseTariff;
 		final var predictorManager = this.predictorManager;
 		if (tariff == null || predictorManager == null || energy == null) {
-			return ChargingPlan.Result.EMPTY;
+			return Plans.EMPTY;
 		}
 		final var prices = tariff.getPrices();
 		if (prices.isEmpty()) {
-			return ChargingPlan.Result.EMPTY;
+			return Plans.EMPTY;
 		}
 		final var production = predictorManager.getPrediction(new ChannelAddress("_sum", "ProductionActivePower"));
 		var consumption = predictorManager.getPrediction(new ChannelAddress("_sum", "UnmanagedConsumptionActivePower"));
@@ -657,7 +679,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				this.logWarn(this.log, "No charging plan: prediction of "
 						+ (production.isEmpty() ? "production" : "consumption") + " is missing, trying again");
 			}
-			return ChargingPlan.Result.EMPTY;
+			return Plans.EMPTY;
 		}
 		final var modes = this.readStorageModes();
 		final var gridChargePower = this.readStorageGridChargePower();
@@ -690,7 +712,22 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final Integer remainingWh = sessionLimit > 0 //
 				? Math.max(sessionLimit - this.evcs.getEnergySession().orElse(0), 0)
 				: null;
-		return ChargingPlan.calculate(rules, storage, new ChargingPlan.Car(pluggedIn, remainingWh), inputs);
+		final var plan = ChargingPlan.calculate(rules, storage, new ChargingPlan.Car(pluggedIn, remainingWh), inputs);
+		if (pluggedIn) {
+			return new Plans(plan, plan, false);
+		}
+		// Without a car: what charging would cost, as if a car were plugged in now
+		final var display = ChargingPlan.calculate(rules, storage, new ChargingPlan.Car(true, remainingWh), inputs);
+		return new Plans(plan, display, true);
+	}
+
+	/**
+	 * Gets the plan for the display (for tests).
+	 *
+	 * @return the display plan
+	 */
+	protected ChargingPlan.Result getDisplayPlan() {
+		return this.displayPlan;
 	}
 
 	/**

@@ -746,6 +746,13 @@ public class ControllerEvcsPriceImplTest {
 	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, boolean useStorageSurplus,
 			boolean enablePriceCharging, Priority priority, OpenemsComponent timeOfUseTariff, int productionW,
 			int consumptionW, int quarters) throws Exception {
+		return prepareStoragePriceTest(clock, new ControllerEvcsPriceImpl(clock), useStorageSurplus,
+				enablePriceCharging, priority, timeOfUseTariff, productionW, consumptionW, quarters);
+	}
+
+	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			boolean useStorageSurplus, boolean enablePriceCharging, Priority priority,
+			OpenemsComponent timeOfUseTariff, int productionW, int consumptionW, int quarters) throws Exception {
 		final var now = Instant.now(clock);
 		final var cm = new DummyComponentManager(clock);
 		if (timeOfUseTariff != null) {
@@ -765,7 +772,7 @@ public class ControllerEvcsPriceImplTest {
 						SUM_PRODUCTION),
 				new DummyPredictor("predictor1", cm, Prediction.from(sum, SUM_CONSUMPTION, now, consumption),
 						SUM_CONSUMPTION));
-		final var test = new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+		final var test = new ControllerTest(controller) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("componentManager", cm) //
 				.addReference("sum", sum) //
@@ -994,6 +1001,39 @@ public class ControllerEvcsPriceImplTest {
 							assertTrue(energy.isPresent() && (Integer) energy.get() > 0, "plan expected");
 						}) //
 						.output(PLAN_REASON, "FILL_UP")) //
+				.deactivate();
+	}
+
+	@Test
+	public void displayPlanWithoutCarTest() throws Exception {
+		// No car: the plan for the controller has no charging (NOT_PLUGGED), the plan
+		// for the display shows what charging would cost as if a car were plugged in
+		// now: 4 kW surplus below the minimum power -> fill-up from the storage at a
+		// blend below the limit. Setup like planWithoutStorageBudgetTest.
+		final var clock = createDummyClock();
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		prepareStoragePriceTest(clock, controller, true, true, CAR, null, 6000, 2000, 96) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.NOT_READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, -4000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(PLAN_ENERGY, 0) //
+						.output(PLAN_REASON, "NOT_PLUGGED") //
+						.onAfterControllersCallbacks(() -> {
+							final var display = controller.getDisplayPlan();
+							assertFalse(display.quarters().isEmpty(), "display plan expected");
+							final var q = display.quarters().get(0);
+							assertEquals(4140, q.power());
+							assertEquals(ChargingPlan.Reason.FILL_UP, q.reason());
+							assertTrue(q.blendedPrice() != null && q.blendedPrice() < 30, "blend below the limit");
+							assertTrue(display.energyWh() > 0);
+						})) //
 				.deactivate();
 	}
 

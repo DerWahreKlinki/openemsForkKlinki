@@ -9,6 +9,7 @@ import static io.openems.edge.common.sum.Sum.ChannelId.GRID_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.HYSTERESIS_REMAINING;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PAUSE_TODAY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PLAN_ENERGY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PLAN_REASON;
@@ -325,6 +326,7 @@ public class ControllerEvcsPriceImplTest {
 				.next(new TestCase() //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input(GRID_ACTIVE_POWER, -6_000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
@@ -370,6 +372,59 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void noHysteresisWithoutCarTest() throws Exception {
+		// Without a car there is nothing to protect: the limit follows the excess at
+		// once and no hysteresis is shown. After plugging in the charge process starts
+		// with the start hysteresis.
+		final var clock = createDummyClock();
+		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setStartConfirmationTime(30) //
+						.setStopConfirmationTime(120) //
+						.build()) //
+				.next(new TestCase() //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.NOT_READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, -6_000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6_000) //
+						.output(AWAITING_HYSTERESIS, false) //
+						.output(HYSTERESIS_REMAINING, null)) //
+				.next(new TestCase() //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase() //
+						.input(GRID_ACTIVE_POWER, -6_000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6_000) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				// the car is plugged in: start hysteresis from the beginning
+				.next(new TestCase() //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase() //
+						.timeleap(clock, 31, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6_000) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
+	}
+
+	@Test
 	public void awaitDecreasingChargeStateTest() throws Exception {
 		final var clock = createDummyClock();
 		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
@@ -392,6 +447,7 @@ public class ControllerEvcsPriceImplTest {
 				.next(new TestCase() //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input(GRID_ACTIVE_POWER, -6000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000)) //
@@ -1232,6 +1288,7 @@ public class ControllerEvcsPriceImplTest {
 				.next(new TestCase("excess: start at once") //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input(GRID_ACTIVE_POWER, -6000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
@@ -1286,6 +1343,7 @@ public class ControllerEvcsPriceImplTest {
 				.next(new TestCase("excess: charging") //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input(GRID_ACTIVE_POWER, -6000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
@@ -1345,6 +1403,7 @@ public class ControllerEvcsPriceImplTest {
 				.next(new TestCase("apparent excess for one cycle") //
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input(GRID_ACTIVE_POWER, -6000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //

@@ -257,11 +257,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.updatePause();
 		if (!this.config.enabledCharging() || this.isPaused()) {
 			// A new charge process after the pause starts with the start hysteresis
-			this.lastChargePower = 0;
-			this.startWantedSince = null;
-			this.stopWantedSince = null;
-			this.setHysteresisRemaining(null);
-			this.channel(ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS).setNextValue(false);
+			this.resetHysteresis();
 			this.setPriceCharging(false);
 			this.setChargePowerLimit(0);
 			this.evcs.setChargePowerLimit(0);
@@ -445,8 +441,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		}
 
 		if (chargeMode == ChargeMode.EXCESS_POWER) {
-			// Apply hysteresis
-			nextChargePower = this.applyHysteresis(nextChargePower);
+			if (pluggedIn) {
+				// Apply hysteresis
+				nextChargePower = this.applyHysteresis(nextChargePower);
+			} else {
+				// Without a car there is nothing to protect: no hysteresis, the limit
+				// follows the price at once; the charge process after plugging in starts
+				// with the start hysteresis
+				this.resetHysteresis();
+			}
 		}
 
 		// The car becomes a consumer for the energy optimizer with the start of
@@ -1168,6 +1171,18 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		result -= 200;
 
 		return result > 0 ? result : 0;
+	}
+
+	/**
+	 * Forgets the running charge process: the next one starts with the start
+	 * hysteresis.
+	 */
+	private void resetHysteresis() {
+		this.lastChargePower = 0;
+		this.startWantedSince = null;
+		this.stopWantedSince = null;
+		this.setHysteresisRemaining(null);
+		this.channel(ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS).setNextValue(false);
 	}
 
 	/**

@@ -229,6 +229,70 @@ public interface SolarEdgeHybridEss extends OpenemsComponent {
 		 */
 		BATT_STATUS(Doc.of(BatteryStatus.values()).accessMode(AccessMode.READ_ONLY)),
 
+		/**
+		 * Battery status internal (vendor specific, not documented by SolarEdge).
+		 * Read only for diagnosis.
+		 *
+		 * <ul>
+		 * <li>Interface: Ess
+		 * <li>Type: Long
+		 * </ul>
+		 */
+		BATT_STATUS_INTERNAL(Doc.of(OpenemsType.LONG) //
+				.accessMode(AccessMode.READ_ONLY) //
+				.persistencePriority(PersistencePriority.MEDIUM)),
+
+		/**
+		 * Battery event log, registers 1-4 of 8 (bit field, vendor specific). Read
+		 * only for diagnosis.
+		 *
+		 * <ul>
+		 * <li>Interface: Ess
+		 * <li>Type: Long
+		 * </ul>
+		 */
+		BATT_EVENT_LOG_1(Doc.of(OpenemsType.LONG) //
+				.accessMode(AccessMode.READ_ONLY) //
+				.persistencePriority(PersistencePriority.MEDIUM)),
+
+		/**
+		 * Battery event log, registers 5-8 of 8 (bit field, vendor specific).
+		 *
+		 * <ul>
+		 * <li>Interface: Ess
+		 * <li>Type: Long
+		 * </ul>
+		 */
+		BATT_EVENT_LOG_2(Doc.of(OpenemsType.LONG) //
+				.accessMode(AccessMode.READ_ONLY) //
+				.persistencePriority(PersistencePriority.MEDIUM)),
+
+		/**
+		 * Battery event log internal, registers 1-4 of 8 (bit field, vendor
+		 * specific).
+		 *
+		 * <ul>
+		 * <li>Interface: Ess
+		 * <li>Type: Long
+		 * </ul>
+		 */
+		BATT_EVENT_LOG_INTERNAL_1(Doc.of(OpenemsType.LONG) //
+				.accessMode(AccessMode.READ_ONLY) //
+				.persistencePriority(PersistencePriority.MEDIUM)),
+
+		/**
+		 * Battery event log internal, registers 5-8 of 8 (bit field, vendor
+		 * specific).
+		 *
+		 * <ul>
+		 * <li>Interface: Ess
+		 * <li>Type: Long
+		 * </ul>
+		 */
+		BATT_EVENT_LOG_INTERNAL_2(Doc.of(OpenemsType.LONG) //
+				.accessMode(AccessMode.READ_ONLY) //
+				.persistencePriority(PersistencePriority.MEDIUM)),
+
 		/*
 		 * Charge/Discharge default Mode / Remote Control Command Mode Storage
 		 * Charge/Discharge default Mode sets the default mode of operation when Remote

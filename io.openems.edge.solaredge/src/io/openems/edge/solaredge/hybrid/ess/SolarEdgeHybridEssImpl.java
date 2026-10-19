@@ -772,7 +772,19 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 						m(SymmetricEss.ChannelId.SOC, //
 								new FloatDoublewordElement(0xE184).wordOrder(WordOrder.LSWMSW)),
 						m(SolarEdgeHybridEss.ChannelId.BATT_STATUS, //
-								new UnsignedDoublewordElement(0xE186).wordOrder(WordOrder.LSWMSW))));
+								new UnsignedDoublewordElement(0xE186).wordOrder(WordOrder.LSWMSW)),
+						// Vendor specific diagnosis: status internal and the two event logs (8
+						// registers each, read as 2 x 64 bit)
+						m(SolarEdgeHybridEss.ChannelId.BATT_STATUS_INTERNAL, //
+								new UnsignedDoublewordElement(0xE188).wordOrder(WordOrder.LSWMSW)),
+						m(SolarEdgeHybridEss.ChannelId.BATT_EVENT_LOG_1, //
+								new UnsignedQuadruplewordElement(0xE18A).wordOrder(WordOrder.LSWMSW)),
+						m(SolarEdgeHybridEss.ChannelId.BATT_EVENT_LOG_2, //
+								new UnsignedQuadruplewordElement(0xE18E).wordOrder(WordOrder.LSWMSW)),
+						m(SolarEdgeHybridEss.ChannelId.BATT_EVENT_LOG_INTERNAL_1, //
+								new UnsignedQuadruplewordElement(0xE192).wordOrder(WordOrder.LSWMSW)),
+						m(SolarEdgeHybridEss.ChannelId.BATT_EVENT_LOG_INTERNAL_2, //
+								new UnsignedQuadruplewordElement(0xE196).wordOrder(WordOrder.LSWMSW))));
 
 		protocol.addTask(//
 				new FC3ReadRegistersTask(0xE004, Priority.HIGH, //

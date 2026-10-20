@@ -19,18 +19,26 @@ import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelI
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_ENERGY_TO_TARGET;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_SURPLUS_ENERGY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_TARGET_REACHABLE;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.SESSION_ENERGY;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_DISCHARGE_LIMIT;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_LOCKED;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.TARGET_REMAINING_ENERGY;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.TARGET_STATUS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PRICE_CHARGING;
 import static io.openems.edge.controller.evcs.price.Priority.CAR;
 import static io.openems.edge.controller.evcs.price.Priority.STORAGE;
 import static io.openems.edge.evcs.api.ChargeMode.EXCESS_POWER;
 import static io.openems.edge.evcs.api.ChargeMode.FORCE_CHARGE;
+import static io.openems.edge.evcs.api.Evcs.ChannelId.ENERGY_SESSION;
 import static io.openems.edge.evcs.api.Evcs.ChannelId.MAXIMUM_HARDWARE_POWER;
 import static io.openems.edge.evcs.api.Evcs.ChannelId.MAXIMUM_POWER;
 import static io.openems.edge.evcs.api.Evcs.ChannelId.MINIMUM_HARDWARE_POWER;
 import static io.openems.edge.evcs.api.Evcs.ChannelId.STATUS;
+import static io.openems.edge.ess.api.ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_LESS_OR_EQUALS;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.CHARGE_STATE;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.IS_CLUSTERED;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_LIMIT;
+import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_ENERGY_LIMIT;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_REQUEST;
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_POWER;
 import static java.time.temporal.ChronoUnit.HOURS;
@@ -56,6 +64,7 @@ import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.test.AbstractDummyOpenemsComponent;
 import io.openems.edge.common.test.DummyComponentManager;
+import io.openems.edge.ess.test.DummyManagedSymmetricEss;
 import io.openems.edge.common.sum.DummySum;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.controller.test.ControllerTest;
@@ -1468,4 +1477,289 @@ public class ControllerEvcsPriceImplTest {
 
 
 
+
+	@Test
+	public void nextDeadlineTest() {
+		final var now = ZonedDateTime.of(2026, 10, 19, 22, 0, 0, 0, ZoneId.of("Europe/Berlin"));
+		assertEquals(now.plusHours(9), ControllerEvcsPriceImpl.nextDeadline(now, 7 * 60));
+		assertEquals(now.plusMinutes(30), ControllerEvcsPriceImpl.nextDeadline(now, 22 * 60 + 30));
+		assertEquals(now.plusDays(1), ControllerEvcsPriceImpl.nextDeadline(now, 22 * 60));
+	}
+
+	@Test
+	public void targetChargingTest() throws Exception {
+		// Target charging: 5 kWh until two hours from now, 50 ct in the first hour
+		// and 20 ct in the second -> the plan waits for the second hour and charges
+		// with full power there at once, without a start hysteresis
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = i >= 4 && i < 8 ? 200. : 500.;
+		}
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		prepareTargetTest(clock, controller, prices, 5000, targetTime) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 500.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(PLAN_ENERGY, 5000) //
+						.output(PLAN_REASON, "TOO_EXPENSIVE") //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase() //
+						.timeleap(clock, 60, MINUTES) //
+						.input(GRID_BUY_PRICE, 200.) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(PLAN_REASON, "TARGET_CHARGE") //
+						.output(AWAITING_HYSTERESIS, false) //
+						.output(PRICE_CHARGING, true) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.deactivate();
+	}
+
+	@Test
+	public void targetStartEnergyTest() throws Exception {
+		// The target counts from switching on: the session energy at that moment is
+		// stored in the configuration, a new session (counter reset) counts from zero
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 10000, targetTime, -1, cm) //
+				.next(new TestCase("start not yet stored: the whole target is missing") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 22902) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(TARGET_REMAINING_ENERGY, 10000)) //
+				.deactivate();
+		assertEquals(22902, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetStartEnergy"));
+
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 10000, targetTime, 22902,
+				new DummyConfigurationAdmin()) //
+				.next(new TestCase("3 kWh charged since switching on") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 25902) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_REMAINING_ENERGY, 7000)) //
+				.next(new TestCase("new session: the counter restarted at zero") //
+						.input("evcs0", ENERGY_SESSION, 1000) //
+						.output(TARGET_REMAINING_ENERGY, 9000)) //
+				.next(new TestCase("target reached") //
+						.input("evcs0", ENERGY_SESSION, 10000) //
+						.output(TARGET_REMAINING_ENERGY, 0) //
+						.output(TARGET_STATUS, "REACHED")) //
+				.deactivate();
+	}
+
+	@Test
+	public void sessionLimitFromPlugInTest() throws Exception {
+		// The wallbox counter keeps the last session until the next charging: the
+		// controller stores the counter at the plug-in and sends counter + limit
+		var cm = new DummyConfigurationAdmin();
+		new ControllerTest(new ControllerEvcsPriceImpl()) //
+				.addReference("cm", cm) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(4140) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(5000) //
+						.setSessionStartEnergy(-1) //
+						.build()) //
+				.next(new TestCase("plugged in with an old counter: start is stored, limit sent as is") //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 22902) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(SESSION_ENERGY, 0) //
+						.output("evcs0", SET_ENERGY_LIMIT, 5000)) //
+				.deactivate();
+		assertEquals(22902, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("sessionStartEnergy"));
+
+		cm = new DummyConfigurationAdmin();
+		new ControllerTest(new ControllerEvcsPriceImpl()) //
+				.addReference("cm", cm) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(4140) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(5000) //
+						.setSessionStartEnergy(22902) //
+						.build()) //
+				.next(new TestCase("3 kWh since the plug-in: the limit counts from the start") //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 25902) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(SESSION_ENERGY, 3000) //
+						.output("evcs0", SET_ENERGY_LIMIT, 27902)) //
+				.next(new TestCase("the wallbox restarted its counter: the session counts from zero") //
+						.input("evcs0", ENERGY_SESSION, 1000) //
+						.output(SESSION_ENERGY, 1000) //
+						.output("evcs0", SET_ENERGY_LIMIT, 5000)) //
+				.next(new TestCase("unplugged: no session") //
+						.input("evcs0", STATUS, Status.NOT_READY_FOR_CHARGING) //
+						.output(SESSION_ENERGY, null)) //
+				.deactivate();
+		assertEquals(-1, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("sessionStartEnergy"));
+	}
+
+	@Test
+	public void targetStorageLockTest() throws Exception {
+		// Storage at 50 % of 20 kWh, evening target 85 %: target charging locks it
+		// for the car, the discharge is capped to the house load without the car.
+		// At 95 % the lock is released
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime) //
+				.next(new TestCase("locked: cap = house 2500 W - car 0 W") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input(CONSUMPTION_ACTIVE_POWER, 2500) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(STORAGE_LOCKED, true) //
+						.output(STORAGE_DISCHARGE_LIMIT, 2500) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, 2500)) //
+				.next(new TestCase("car charges 11 kW: the cap stays the house load") //
+						.input(CONSUMPTION_ACTIVE_POWER, 13540) //
+						.input("evcs0", ACTIVE_POWER, 11040) //
+						.output(STORAGE_DISCHARGE_LIMIT, 2500) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, 2500)) //
+				.next(new TestCase("storage above the target: released") //
+						.input(ESS_SOC, 95) //
+						.output(STORAGE_LOCKED, false) //
+						.output(STORAGE_DISCHARGE_LIMIT, null) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null)) //
+				.deactivate();
+	}
+
+	@Test
+	public void targetChargingWithoutPricesTest() throws Exception {
+		// Prices for one hour only, target in two hours: nothing is planned blind
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var prices = new Double[] { 200., 200., 200., 200. };
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		prepareTargetTest(clock, controller, prices, 5000, targetTime) //
+				.next(new TestCase() //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PRICES_MISSING") //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.deactivate();
+	}
+
+	private static ControllerTest prepareTargetTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			Double[] prices, int targetEnergy, int targetTime) throws Exception {
+		return prepareTargetTest(clock, controller, prices, targetEnergy, targetTime, -1, new DummyConfigurationAdmin());
+	}
+
+	private static ControllerTest prepareTargetTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			Double[] prices, int targetEnergy, int targetTime, int targetStartEnergy, DummyConfigurationAdmin cm)
+			throws Exception {
+		final var now = Instant.now(clock);
+		final var componentManager = new DummyComponentManager(clock);
+		final var sum = new DummySum();
+		final var production = new Integer[prices.length];
+		final var consumption = new Integer[prices.length];
+		for (var i = 0; i < prices.length; i++) {
+			production[i] = 0;
+			consumption[i] = 1000;
+		}
+		final var predictorManager = new DummyPredictorManager(
+				new DummyPredictor("predictor0", componentManager,
+						Prediction.from(sum, SUM_PRODUCTION, now, production), SUM_PRODUCTION),
+				new DummyPredictor("predictor1", componentManager,
+						Prediction.from(sum, SUM_CONSUMPTION, now, consumption), SUM_CONSUMPTION));
+		return new ControllerTest(controller) //
+				.addReference("cm", cm) //
+				.addReference("componentManager", componentManager) //
+				.addReference("sum", sum) //
+				.addReference("predictorManager", predictorManager) //
+				.addReference("timeOfUseTariff", DummyTimeOfUseTariffProvider.fromQuarterlyPrices(clock, prices)) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.addComponent(new DummyManagedSymmetricEss("ess0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEssId("ess0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setEnablePriceCharging(true) //
+						.setPriceLimit(30) //
+						.setPriceLimitFullPower(20) //
+						.setPriceChargePower(11040) //
+						.setUseStorageSurplus(false) //
+						.setTargetCharging(true) //
+						.setTargetEnergy(targetEnergy) //
+						.setTargetTime(targetTime) //
+						.setTargetStartEnergy(targetStartEnergy) //
+						.build());
+	}
 }

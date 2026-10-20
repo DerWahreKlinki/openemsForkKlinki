@@ -10,6 +10,7 @@ import { ModalComponent } from "../modal/modal";
 import { EvcsPriceForecast } from "../price/price-forecast";
 
 type ChargeMode = "FORCE_CHARGE" | "EXCESS_POWER" | "OFF";
+const TARGET_CHARGE = "EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE";
 
 @Component({
     selector: "Controller_Evcs",
@@ -54,6 +55,15 @@ export class FlatComponent extends AbstractFlatWidget {
     protected storagePrice: number | null = null;
     /** Total storage capacity in [Wh] */
     protected storageCapacity: number | null = null;
+    /** Target charging of Controller.Evcs.Price is on */
+    private targetCharging: boolean = false;
+    /** Target energy and time, e.g. "10 kWh until 07:00" */
+    private targetText: string | null = null;
+    /** Planned energy and cost, e.g. "8.2 kWh, 2.95 EUR" */
+    private plannedText: string | null = null;
+    /** Warning of target charging; null while the plan covers the target */
+    private targetStatusText: string | null = null;
+    private storageLockedText: string | null = null;
 
     private chargePoint: EvcsComponent;
 
@@ -102,6 +112,13 @@ export class FlatComponent extends AbstractFlatWidget {
                     result.push(new ChannelAddress(controller.id, "ChargePowerLimit"));
                     result.push(new ChannelAddress(controller.id, "PauseToday"));
                     result.push(new ChannelAddress("_sum", "EssCapacity"));
+                    result.push(new ChannelAddress(controller.id, "_PropertyTargetCharging"));
+                    result.push(new ChannelAddress(controller.id, "TargetStatus"));
+                    result.push(new ChannelAddress(controller.id, "StorageLocked"));
+                    result.push(new ChannelAddress(controller.id, "SessionEnergy"));
+                    result.push(new ChannelAddress(controller.id, "TargetDeadline"));
+                    result.push(new ChannelAddress(controller.id, "PlanEnergy"));
+                    result.push(new ChannelAddress(controller.id, "PlanCost"));
                 }
             }
         }
@@ -129,7 +146,9 @@ export class FlatComponent extends AbstractFlatWidget {
 
         // Mode
         if (this.isChargingEnabled) {
-            if (this.chargeMode == "FORCE_CHARGE") {
+            if (this.targetCharging) {
+                this.mode = this.translate.instant(TARGET_CHARGE + ".SHORT_NAME");
+            } else if (this.chargeMode == "FORCE_CHARGE") {
                 this.mode = this.translate.instant("GENERAL.MANUALLY");
             } else if (this.chargeMode == "EXCESS_POWER") {
                 this.mode = this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.SHORT_NAME");
@@ -171,6 +190,42 @@ export class FlatComponent extends AbstractFlatWidget {
             currentData.allComponents[this.component.id + "/Status"],
             currentData.allComponents[this.component.id + "/Plug"],
         );
+        // Price controller: target charging with its target, plan and warning
+        if (this.isPriceController && this.controller != null) {
+            const targetCharging = currentData.allComponents[this.controller.id + "/_PropertyTargetCharging"];
+            this.targetCharging = targetCharging === 1 || targetCharging === true || targetCharging === "true";
+            const deadline = currentData.allComponents[this.controller.id + "/TargetDeadline"];
+            const targetEnergy = Number(this.controller.properties["targetEnergy"] ?? 0);
+            this.targetText =
+                this.targetCharging && deadline != null
+                    ? this.translate.instant(TARGET_CHARGE + ".UNTIL", {
+                          energy: (targetEnergy / 1000).toFixed(1) + " kWh",
+                          time: new Date(deadline * 1000).toLocaleString(undefined, {
+                              weekday: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                          }),
+                      })
+                    : null;
+            const planEnergy = currentData.allComponents[this.controller.id + "/PlanEnergy"];
+            const planCost = currentData.allComponents[this.controller.id + "/PlanCost"];
+            this.plannedText =
+                this.targetCharging && planEnergy != null
+                    ? (planEnergy / 1000).toFixed(1) +
+                      " kWh" +
+                      (planCost == null ? "" : ", " + (planCost / 100).toFixed(2) + " €")
+                    : null;
+            const targetStatus = currentData.allComponents[this.controller.id + "/TargetStatus"];
+            this.targetStatusText =
+                this.targetCharging && targetStatus != null && targetStatus !== "PLANNED" && targetStatus !== "NONE"
+                    ? this.translate.instant(TARGET_CHARGE + ".STATUS_" + targetStatus)
+                    : null;
+            const storageLocked = currentData.allComponents[this.controller.id + "/StorageLocked"];
+            this.storageLockedText =
+                this.targetCharging && (storageLocked === 1 || storageLocked === true)
+                    ? this.translate.instant(TARGET_CHARGE + ".STORAGE_LOCKED")
+                    : null;
+        }
         // Price controller: "Do not charge today" replaces the state; while a start or stop
         // hysteresis runs, show it with the remaining time
         if (this.isPriceController && this.isChargingEnabled && this.controller != null) {

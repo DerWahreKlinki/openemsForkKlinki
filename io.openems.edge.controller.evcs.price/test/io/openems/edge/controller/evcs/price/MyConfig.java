@@ -29,6 +29,12 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		// tests count without losses unless they test the efficiency
 		private int storageChargeEfficiency = 100;
 		private String timeOfUseTariffId = "";
+		private boolean targetCharging = false;
+		private int targetEnergy = 10000;
+		private int targetTime = 420;
+		private int targetStartEnergy = -1;
+		private int sessionStartEnergy = -1;
+		private String essId = "";
 
 		private Builder() {
 		}
@@ -135,6 +141,36 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setTimeOfUseTariffId(String timeOfUseTariffId) {
 			this.timeOfUseTariffId = timeOfUseTariffId;
+			return this;
+		}
+
+		public Builder setTargetCharging(boolean targetCharging) {
+			this.targetCharging = targetCharging;
+			return this;
+		}
+
+		public Builder setTargetEnergy(int targetEnergy) {
+			this.targetEnergy = targetEnergy;
+			return this;
+		}
+
+		public Builder setEssId(String essId) {
+			this.essId = essId;
+			return this;
+		}
+
+		public Builder setSessionStartEnergy(int sessionStartEnergy) {
+			this.sessionStartEnergy = sessionStartEnergy;
+			return this;
+		}
+
+		public Builder setTargetStartEnergy(int targetStartEnergy) {
+			this.targetStartEnergy = targetStartEnergy;
+			return this;
+		}
+
+		public Builder setTargetTime(int targetTime) {
+			this.targetTime = targetTime;
 			return this;
 		}
 
@@ -264,5 +300,35 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public String timeOfUseTariff_id() {
 		return this.builder.timeOfUseTariffId;
+	}
+
+	@Override
+	public boolean targetCharging() {
+		return this.builder.targetCharging;
+	}
+
+	@Override
+	public int targetEnergy() {
+		return this.builder.targetEnergy;
+	}
+
+	@Override
+	public int targetTime() {
+		return this.builder.targetTime;
+	}
+
+	@Override
+	public int targetStartEnergy() {
+		return this.builder.targetStartEnergy;
+	}
+
+	@Override
+	public String ess_id() {
+		return this.builder.essId;
+	}
+
+	@Override
+	public int sessionStartEnergy() {
+		return this.builder.sessionStartEnergy;
 	}
 }

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -50,6 +51,7 @@ import io.openems.edge.common.meta.Meta;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.common.sum.Sum;
+import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.energy.api.EnergySchedulable;
 import io.openems.edge.energy.api.handler.EnergyScheduleHandler;
@@ -108,9 +110,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private int planStoragePower = 0;
 	// Evening target and usable capacity the plan was calculated with, for the UI
 	private int planTargetWh = 0;
+	// Stored energy within the usable windows in [Wh]; null if unknown
+	private Double planStoredWh = null;
+	// Target charging locks the storage for the car (with hysteresis)
+	private boolean storageLocked = false;
 	private double planUsableWh = 0;
 	// True while the car charges; a change is reported to the energy optimizer
 	private boolean lastCharging = false;
+	/** Configuration updates sent while the new configuration is still pending. */
+	private final Map<String, Object> configUpdatesSent = new HashMap<>();
 
 	// Forecast of the car for the energy optimizer (Time-of-Use-Tariff plans the
 	// storage with it); unused without an optimizer
@@ -119,6 +127,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	// "Do not charge today": end of the pause; null if not paused
 	private Instant pausedUntil = null;
+	// Target charging: the next occurrence of the target time; null while off
+	private ZonedDateTime targetDeadline = null;
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -188,20 +198,32 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 					+ "] must be between 50 and 100 %");
 		}
 
+		if (config.targetEnergy() < 0 || config.targetTime() < 0 || config.targetTime() >= 24 * 60) {
+			throw new OpenemsException("Target energy [" + config.targetEnergy() + "] must be >= 0 and target time ["
+					+ config.targetTime() + "] between 0 and 1439 minutes after midnight");
+		}
+
 		this.config = config;
+		this.configUpdatesSent.clear();
+		// Target charging ends at the next occurrence of the target time
+		this.targetDeadline = config.targetCharging() //
+				? nextDeadline(ZonedDateTime.now(this.clock), config.targetTime())
+				: null;
 
 		this.evcs._setChargeMode(config.chargeMode());
 		this.evcs._setMaximumPower(null);
 
 		this.energyScheduleHandler = EnergyScheduler.buildEnergyScheduleHandler(this, () -> {
-			if (!this.config.enabled() || !this.config.enabledCharging() || this.config.chargeMode() != ChargeMode.EXCESS_POWER) {
+			if (!this.config.enabled() || !this.config.enabledCharging()
+					|| (this.config.chargeMode() != ChargeMode.EXCESS_POWER && !this.config.targetCharging())) {
 				return null;
 			}
 			// The car is a consumer for the optimizer only while it charges: then with
-			// the energy of the charging plan per quarter-hour
+			// the energy of the charging plan per quarter-hour. Target charging is
+			// planned ahead: its quarter-hours count as soon as the plan contains them
 			final var plan = this.plan;
 			return new EnergyScheduler.Config(//
-					this.lastCharging, //
+					this.lastCharging || (this.config.targetCharging() && plan.energyWh() > 0), //
 					plan.quarters().isEmpty() ? 0 : plan.quarters().get(0).time().toEpochSecond(), //
 					plan.quarters().stream().map(q -> q.power() / 4).toList());
 		});
@@ -246,6 +268,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 						RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
 			}
 		}
+		this.updateSessionStart(pluggedIn);
 
 		if (this.evcs.isReadOnly()) {
 			this.setEvcsIsReadOnlyChannel(true);
@@ -275,7 +298,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 		this.adaptConfigToHardwareLimits();
 
-		this.evcs.setEnergyLimit(this.config.energySessionLimit());
+		this.evcs.setEnergyLimit(this.sessionLimitForEvcs());
 
 		/*
 		 * Sets a fixed request of 0 if the Charger is not ready
@@ -342,12 +365,20 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			nextChargePower = 0;
 		}
 
+		// Target charging ends at the target time: the switch goes off by itself
+		final var targetMode = this.isTargetMode();
+		if (targetMode && !ZonedDateTime.now(this.clock).isBefore(this.targetDeadline)) {
+			this.logInfo(this.log, "Target time reached: target charging switches off");
+			this.configUpdateOnce("targetCharging", false);
+		}
+		this.updateTargetStartEnergy(targetMode);
+
 		// Charge from grid depending on the price; the higher of excess power and
-		// price dependent power wins
+		// price dependent power wins. Target charging follows its plan instead
 		var priceCharging = false;
-		if (chargeMode == ChargeMode.EXCESS_POWER) {
+		if (chargeMode == ChargeMode.EXCESS_POWER || targetMode) {
 			final var gridBuyPrice = this.sum.getGridBuyPrice().get();
-			final var priceChargingEnabled = this.config.enablePriceCharging();
+			final var priceChargingEnabled = this.config.enablePriceCharging() && !targetMode;
 			if (priceChargingEnabled) {
 				var priceChargePower = calculateChargePowerFromPrice(gridBuyPrice, this.config.priceLimit(),
 						this.config.priceLimitFullPower(), minimumHardwarePower, this.config.priceChargePower());
@@ -365,6 +396,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// the plan allows it, the rest like grid power. A blocked storage delivers
 			// nothing
 			final var storagePrice = this.updateStoragePrice(gridBuyPrice);
+			this.applyStorageLock(targetMode);
 			final var carPower = Math.max(this.evcs.getActivePower().orElse(0), 0);
 			// Surplus is what goes to grid, plus what the car draws right now (the
 			// measured excess power); the storage share is what the storage discharges
@@ -382,7 +414,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// Not enough excess power for the minimum hardware power: take the missing
 			// power from the storage as far as the plan allows it and, with price-based
 			// charging, from grid
-			if (nextChargePower == 0) {
+			if (targetMode) {
+				// Target charging: the plan chose the cheapest quarter-hours until the
+				// target time, the price limits and the surplus do not count
+				final var quarter = this.plan.getAt(ZonedDateTime.now(this.clock));
+				nextChargePower = quarter == null ? 0 : quarter.power();
+				// everything beyond the surplus is taken because of the plan, not the sun
+				priceCharging = quarter != null && quarter.power() > 0 && quarter.fromPv() < quarter.power();
+			} else if (nextChargePower == 0) {
 				final var storageAvailable = this.config.useStorageSurplus() && plannedStoragePower > 0;
 				final var available = pvPower > 0 || storageAvailable;
 				final boolean fillUp;
@@ -445,7 +484,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			}
 		}
 
-		if (chargeMode == ChargeMode.EXCESS_POWER) {
+		if (targetMode) {
+			// Target charging follows its plan at once: the quarter-hours are chosen
+			// ahead, a start hysteresis would only cut into them
+			this.resetHysteresis();
+		} else if (chargeMode == ChargeMode.EXCESS_POWER) {
 			if (pluggedIn) {
 				// Apply hysteresis
 				nextChargePower = this.applyHysteresis(nextChargePower);
@@ -558,6 +601,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var targetWh = energy == null ? 0. : energy.usableWh() * this.config.storageTargetSocNet() / 100.;
 		this.planTargetWh = (int) Math.round(targetWh);
 		this.planUsableWh = energy == null ? 0 : energy.usableWh();
+		this.planStoredWh = energy == null ? null : energy.storedWh();
 		final Integer storageSurplus = plan.storageAtPvEndWh() == null //
 				? null
 				: (int) Math.round(plan.storageAtPvEndWh() - targetWh);
@@ -590,6 +634,18 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.setPlanEnergyFromStorage(plan.quarters().isEmpty() ? null : plan.fromStorageWh());
 		this.setPlanPower(quarter == null ? null : quarter.power());
 		this.setPlanReason(quarter == null ? null : quarter.reason().name());
+		this.setPlanEnergyFromGrid(plan.quarters().isEmpty() ? null : plan.fromGridWh());
+		this.setPlanCost(plan.quarters().isEmpty() ? null : plan.costCt());
+		final var targetMode = this.isTargetMode();
+		final var remaining = targetMode ? this.targetRemainingWh() : 0;
+		// reached follows the live session energy, the rest comes from the plan;
+		// without a plan the prices or the forecast are missing
+		this.setTargetStatus(!targetMode ? ChargingPlan.TargetStatus.NONE.name()
+				: remaining == 0 ? ChargingPlan.TargetStatus.REACHED.name()
+						: plan.quarters().isEmpty() ? ChargingPlan.TargetStatus.PRICES_MISSING.name()
+								: plan.targetStatus().name());
+		this.setTargetDeadline(targetMode ? this.targetDeadline.toEpochSecond() : null);
+		this.setTargetRemainingEnergy(targetMode ? remaining : null);
 		return storagePrice;
 	}
 
@@ -699,8 +755,13 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// maximum power while the car draws less than it is offered
 		final var minPower = this.evcs.getMinimumHardwarePower().orElse(0);
 		final var maxHardwarePower = this.evcs.getMaximumHardwarePower().orElse(0);
-		final var maxPower = Math.max(this.evcs.getMaximumPower()
+		final var hardwareMaxPower = Math.max(this.evcs.getMaximumPower()
 				.orElse(maxHardwarePower > 0 ? maxHardwarePower : this.config.priceChargePower()), minPower);
+		final var targetMode = this.isTargetMode();
+		// Target charging is limited by the configured full charge power
+		final var maxPower = targetMode
+				? Math.max(Math.min(hardwareMaxPower, this.config.priceChargePower()), minPower)
+				: hardwareMaxPower;
 		final var rules = new ChargingPlan.Rules(this.config.enablePriceCharging(), this.config.priceLimit(),
 				this.config.priceLimitFullPower(), this.config.priceChargePower(), this.config.priority(), minPower,
 				maxPower, this.config.pvPrice(), this.config.pvPrice() + this.config.storageLossSurcharge(),
@@ -712,6 +773,20 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final Integer remainingWh = sessionLimit > 0 //
 				? Math.max(sessionLimit - this.evcs.getEnergySession().orElse(0), 0)
 				: null;
+		if (targetMode) {
+			// Target charging: the cheapest quarter-hours until the target time for the
+			// energy the session still misses
+			final var remaining = this.targetRemainingWh();
+			final var target = new ChargingPlan.Target(remaining, this.targetDeadline);
+			final var plan = ChargingPlan.calculateTarget(rules, storage, new ChargingPlan.Car(pluggedIn, remaining),
+					target, inputs);
+			if (pluggedIn) {
+				return new Plans(plan, plan, false);
+			}
+			final var display = ChargingPlan.calculateTarget(rules, storage, new ChargingPlan.Car(true, remaining),
+					target, inputs);
+			return new Plans(plan, display, true);
+		}
 		final var plan = ChargingPlan.calculate(rules, storage, new ChargingPlan.Car(pluggedIn, remainingWh), inputs);
 		if (pluggedIn) {
 			return new Plans(plan, plan, false);
@@ -950,6 +1025,214 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	private boolean isPaused() {
 		return this.pausedUntil != null;
+	}
+
+	/**
+	 * Target charging is on: the switch is set and the target time is known.
+	 *
+	 * @return true while target charging is on
+	 */
+	private boolean isTargetMode() {
+		return this.config.targetCharging() && this.targetDeadline != null;
+	}
+
+	/**
+	 * Energy that still misses for the target. The target counts from switching
+	 * target charging on, i.e. from the session energy stored at that moment.
+	 *
+	 * @return the energy in [Wh]; 0 if reached
+	 */
+	private int targetRemainingWh() {
+		return Math.max(this.config.targetEnergy() - this.targetChargedWh(), 0);
+	}
+
+	/**
+	 * Energy charged since target charging was switched on.
+	 *
+	 * @return the energy in [Wh]
+	 */
+	private int targetChargedWh() {
+		final var start = this.config.targetStartEnergy();
+		if (start < 0) {
+			return 0; // start not yet stored
+		}
+		final var session = this.evcs.getEnergySession().orElse(0);
+		// a new session (re-plug) resets the wallbox counter: count from zero then
+		return session >= start ? session - start : session;
+	}
+
+	/**
+	 * Stores the session energy when target charging is switched on and clears it
+	 * when it is off, so that the target always counts from switching on.
+	 *
+	 * @param targetMode true while target charging is on
+	 */
+	private void updateTargetStartEnergy(boolean targetMode) {
+		if (targetMode) {
+			if (this.config.targetStartEnergy() < 0) {
+				final var session = this.evcs.getEnergySession();
+				if (session.isDefined()) {
+					this.logInfo(this.log, "Target charging starts at session energy " + session.get() + " Wh");
+					this.configUpdateOnce("targetStartEnergy", session.get());
+				}
+			}
+		} else if (!this.config.targetCharging() && this.config.targetStartEnergy() >= 0) {
+			this.configUpdateOnce("targetStartEnergy", -1);
+		}
+	}
+
+	/**
+	 * The session counts from plugging the car in: the wallbox counter restarts
+	 * only with the next charging, so its value at the plug-in is stored in the
+	 * configuration. A counter below the stored value means the wallbox started a
+	 * new session, then the session counts from zero.
+	 *
+	 * @param pluggedIn true if a car is plugged in
+	 */
+	private void updateSessionStart(boolean pluggedIn) {
+		final var start = this.config.sessionStartEnergy();
+		if (!pluggedIn) {
+			if (start >= 0) {
+				this.configUpdateOnce("sessionStartEnergy", -1);
+			}
+			this.setSessionEnergy(null);
+			return;
+		}
+		final var counter = this.evcs.getEnergySession();
+		if (!counter.isDefined()) {
+			this.setSessionEnergy(null);
+			return;
+		}
+		if (start < 0) {
+			this.logInfo(this.log, "Car plugged in at wallbox counter " + counter.get() + " Wh");
+			this.configUpdateOnce("sessionStartEnergy", counter.get());
+		} else if (counter.get() < start) {
+			this.logInfo(this.log, "Wallbox counter restarted: the session counts from zero");
+			this.configUpdateOnce("sessionStartEnergy", 0);
+		}
+		this.setSessionEnergy(this.sessionChargedWh());
+	}
+
+	/**
+	 * Energy charged since the car was plugged in.
+	 *
+	 * @return the energy in [Wh]
+	 */
+	private int sessionChargedWh() {
+		final var start = this.config.sessionStartEnergy();
+		final var counter = this.evcs.getEnergySession().orElse(0);
+		if (start < 0) {
+			return 0; // start not yet stored
+		}
+		return counter >= start ? counter - start : counter;
+	}
+
+	/**
+	 * The energy limit for the wallbox component. It compares the limit with its
+	 * own counter, so the counter value at the plug-in is added: the limit then
+	 * counts from the plug-in. Target charging has its own energy target and
+	 * overrides the session limit.
+	 *
+	 * @return the limit in [Wh]; 0 = unlimited
+	 */
+	private int sessionLimitForEvcs() {
+		if (this.isTargetMode()) {
+			return 0;
+		}
+		final var limit = this.config.energySessionLimit();
+		if (limit <= 0) {
+			return 0;
+		}
+		final var start = this.config.sessionStartEnergy();
+		final var counter = this.evcs.getEnergySession().orElse(0);
+		return start > 0 && counter >= start ? start + limit : limit;
+	}
+
+	/**
+	 * Target charging locks the storage for the car while it is below its evening
+	 * target: its discharge is capped to the house load, so the balancing keeps
+	 * serving the house and the car charges from grid. The cap is a constraint for
+	 * the power solver; the balancing controller runs later and fits into it.
+	 *
+	 * @param targetMode true while target charging is on
+	 * @throws OpenemsNamedException on error
+	 */
+	private void applyStorageLock(boolean targetMode) throws OpenemsNamedException {
+		final var ess = this.readStorageForLock();
+		final var stored = this.planStoredWh;
+		final var target = this.planTargetWh;
+		var lock = false;
+		if (targetMode && ess != null && stored != null && target > 0) {
+			// hysteresis: locks below the target, releases 2 % of the usable capacity above
+			final var release = target + this.planUsableWh * 0.02;
+			lock = this.storageLocked ? stored < release : stored < target;
+		}
+		if (lock != this.storageLocked) {
+			this.logInfo(this.log, lock ? "Storage locked for the car: it serves the house only"
+					: "Storage released for the car");
+		}
+		this.storageLocked = lock;
+		Integer cap = null;
+		if (lock) {
+			final var carPower = Math.max(this.evcs.getActivePower().orElse(0), 0);
+			cap = Math.max(this.sum.getConsumptionActivePower().orElse(0) - carPower, 0);
+			ess.setActivePowerLessOrEquals(cap);
+		}
+		this.setStorageLocked(lock);
+		this.setStorageDischargeLimit(cap);
+	}
+
+	/**
+	 * The storage that target charging locks for the car, looked up by its
+	 * configured id. Looked up at runtime, so the default id works for
+	 * configurations that do not contain the property yet.
+	 *
+	 * @return the storage; null if none is configured or found
+	 */
+	private ManagedSymmetricEss readStorageForLock() {
+		final var id = this.config.ess_id();
+		if (id == null || id.isBlank()) {
+			return null;
+		}
+		try {
+			if (this.componentManager.getComponent(id) instanceof ManagedSymmetricEss ess) {
+				return ess;
+			}
+		} catch (OpenemsNamedException | RuntimeException e) {
+			this.logDebug(this.log, "Storage for the lock [" + id + "] not available: " + e.getMessage());
+		}
+		return null;
+	}
+
+	/**
+	 * Like {@link #configUpdate(String, Object)}, but only once until the new
+	 * configuration has been activated; the component is reactivated on every
+	 * configuration change.
+	 *
+	 * @param targetProperty Property that should be changed
+	 * @param requiredValue  Value that should be set
+	 */
+	private void configUpdateOnce(String targetProperty, Object requiredValue) {
+		if (Objects.equals(this.configUpdatesSent.get(targetProperty), requiredValue)) {
+			return;
+		}
+		this.configUpdatesSent.put(targetProperty, requiredValue);
+		this.configUpdate(targetProperty, requiredValue);
+	}
+
+	/**
+	 * The next occurrence of a time of day.
+	 *
+	 * @param now          the current time
+	 * @param minutesOfDay the time of day as minutes after midnight
+	 * @return today at that time if it is still ahead, else tomorrow
+	 */
+	protected static ZonedDateTime nextDeadline(ZonedDateTime now, int minutesOfDay) {
+		var result = now.toLocalDate().atStartOfDay(now.getZone()).plusMinutes(minutesOfDay);
+		if (!result.isAfter(now)) {
+			result = result.plusDays(1);
+		}
+		return result;
 	}
 
 	/**
@@ -1334,9 +1617,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			}
 			c = this.cm.getConfiguration(pid, "?");
 			var properties = c.getProperties();
+			// a property at its default is not part of the configuration yet
 			var target = properties.get(targetProperty);
-			var existingTarget = target.toString();
-			if (!existingTarget.isEmpty()) {
+			if (target == null || !target.toString().isEmpty()) {
 				properties.put(targetProperty, requiredValue);
 				c.update(properties);
 			}

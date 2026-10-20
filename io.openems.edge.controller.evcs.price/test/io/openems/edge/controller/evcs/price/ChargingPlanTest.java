@@ -15,10 +15,13 @@ import org.junit.jupiter.api.Test;
 
 import io.openems.edge.controller.evcs.price.ChargingPlan.Car;
 import io.openems.edge.controller.evcs.price.ChargingPlan.Input;
+import io.openems.edge.controller.evcs.price.ChargingPlan.Quarter;
 import io.openems.edge.controller.evcs.price.ChargingPlan.Reason;
 import io.openems.edge.controller.evcs.price.ChargingPlan.Rules;
 import io.openems.edge.controller.evcs.price.ChargingPlan.Storage;
 import io.openems.edge.controller.evcs.price.ChargingPlan.StorageMode;
+import io.openems.edge.controller.evcs.price.ChargingPlan.Target;
+import io.openems.edge.controller.evcs.price.ChargingPlan.TargetStatus;
 
 public class ChargingPlanTest {
 
@@ -301,5 +304,153 @@ public class ChargingPlanTest {
 		assertEquals(StorageMode.BALANCING, StorageMode.fromState("BALANCING"));
 		assertEquals(StorageMode.NO_DISCHARGE, StorageMode.fromState("DELAY_DISCHARGE"));
 		assertEquals(StorageMode.CHARGE_GRID, StorageMode.fromState("CHARGE_GRID"));
+	}
+
+	/*
+	 * A night from 22:00 to 06:00: 1 kW house, no PV, the storage may not
+	 * discharge, prices per hour 40, 35, 25, 25, 30, 45, 50, 50 ct.
+	 */
+	private static List<Input> targetNight() {
+		final var start = ZonedDateTime.of(2026, 10, 19, 22, 0, 0, 0, ZoneId.of("Europe/Berlin"));
+		final double[] prices = { 40, 35, 25, 25, 30, 45, 50, 50 };
+		final var result = new ArrayList<Input>();
+		for (var i = 0; i < 8 * 4; i++) {
+			result.add(new Input(start.plusMinutes(15L * i), prices[i / 4], 0, 1000, StorageMode.NO_DISCHARGE, 0));
+		}
+		return result;
+	}
+
+	@Test
+	public void targetPicksCheapestQuarters() {
+		// 10 kWh until 06:00 at 11.04 kW (2.76 kWh per quarter-hour): the first
+		// three quarter-hours at 25 ct (8.28 kWh), the rest of 1.72 kWh in the
+		// fourth: its base of 1.035 kWh and 0.685 kWh on top
+		final var inputs = targetNight();
+		final var deadline = inputs.get(0).time().plusHours(8);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 10000),
+				new Target(10000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		assertEquals(10000, r.energyWh());
+		assertEquals(r.energyWh(), r.fromGridWh());
+		assertEquals(0, r.fromStorageWh());
+		for (var q : r.quarters()) {
+			final var hour = q.time().getHour();
+			final var minute = q.time().getMinute();
+			if (hour == 0 && minute < 45) {
+				assertEquals(11040, q.power(), "full power at " + q.time());
+				assertEquals(Reason.TARGET_CHARGE, q.reason());
+				assertEquals(q.price(), q.blendedPrice(), 0.01);
+			} else if (hour == 0 && minute == 45) {
+				assertEquals(6880, q.power(), "rest at " + q.time());
+				assertEquals(Reason.TARGET_CHARGE, q.reason());
+			} else if (hour == 22 || hour == 23) {
+				assertEquals(0, q.power(), "no charging at " + q.time());
+				assertEquals(Reason.TOO_EXPENSIVE, q.reason());
+			} else {
+				// after the target is covered
+				assertEquals(0, q.power(), "no charging at " + q.time());
+				assertEquals(Reason.LIMIT, q.reason());
+			}
+		}
+		// 10 kWh at 25 ct
+		assertEquals(10000 * 25, r.costCt() * 1000, 1);
+	}
+
+	@Test
+	public void targetTakesSurplusBeforeGrid() {
+		// 3 kWh until 15:00 on a PV day with 45 ct in the morning and 33 ct at noon:
+		// the surplus at the PV price is the cheapest, taken with what it offers
+		// instead of full power from grid
+		final var inputs = day(2500);
+		final var deadline = START.plusHours(8);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(10000), new Car(true, 3000),
+				new Target(3000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		assertTrue(r.energyWh() >= 3000 && r.energyWh() <= 3000 + 4140 / 4, "energy " + r.energyWh());
+		assertEquals(0, r.fromGridWh());
+		assertEquals(r.energyWh(), r.fromPvWh());
+		for (var q : r.quarters()) {
+			if (q.power() > 0) {
+				assertEquals(Reason.TARGET_CHARGE, q.reason());
+				assertTrue(q.power() < 11040, "surplus only at " + q.time() + ": " + q.power());
+				assertEquals(q.power(), q.fromPv());
+				assertTrue(q.time().getHour() >= 11 && q.time().getHour() < 15, "noon at " + q.time());
+			}
+		}
+	}
+
+	@Test
+	public void targetLocksStorageBelowEveningTarget() {
+		// Two hours at night in balancing, 1 kW house, 2 kWh target. Storage below its
+		// evening target: locked for the car, it keeps serving the house and the car
+		// takes grid power
+		final var inputs = night(30., StorageMode.BALANCING, 0);
+		final var deadline = START.plusHours(2);
+		final var locked = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 2000),
+				new Target(2000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, locked.targetStatus());
+		assertTrue(locked.energyWh() >= 2000, "energy " + locked.energyWh());
+		assertEquals(0, locked.fromStorageWh());
+		assertEquals(locked.energyWh(), locked.fromGridWh());
+		for (var q : locked.quarters()) {
+			if (q.power() > 0) {
+				assertTrue(q.storageLocked(), "locked at " + q.time());
+				assertEquals(30., q.blendedPrice(), 1e-6);
+			}
+		}
+		// above the evening target the storage discharges for the car
+		final var free = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(TARGET + 3000),
+				new Car(true, 2000), new Target(2000, deadline), inputs);
+		// 8.5 kW discharge minus 1 kW house: the storage delivers most of the 8 kW
+		assertTrue(free.fromStorageWh() >= 1500, "storage " + free.fromStorageWh());
+		assertTrue(free.fromGridWh() < 500, "grid " + free.fromGridWh());
+		assertTrue(free.quarters().stream().noneMatch(Quarter::storageLocked));
+	}
+
+	@Test
+	public void targetWithoutPricesUntilTheTargetTime() {
+		// prices end at 06:00, target 07:00: no charging, nothing is planned blind
+		final var inputs = targetNight();
+		final var deadline = inputs.get(0).time().plusHours(9);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 10000),
+				new Target(10000, deadline), inputs);
+		assertEquals(TargetStatus.PRICES_MISSING, r.targetStatus());
+		assertEquals(0, r.energyWh());
+		assertEquals(32, r.quarters().size());
+		assertTrue(r.quarters().stream().allMatch(q -> q.power() == 0));
+	}
+
+	@Test
+	public void targetUnreachableTakesEverything() {
+		// 100 kWh in 8 hours at 11.04 kW: every quarter-hour at full power
+		final var inputs = targetNight();
+		final var deadline = inputs.get(0).time().plusHours(8);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 100000),
+				new Target(100000, deadline), inputs);
+		assertEquals(TargetStatus.UNREACHABLE, r.targetStatus());
+		assertEquals(8 * 11040, r.energyWh());
+		assertTrue(r.quarters().stream().allMatch(q -> q.power() == 11040 && q.reason() == Reason.TARGET_CHARGE));
+	}
+
+	@Test
+	public void targetReached() {
+		final var inputs = targetNight();
+		final var deadline = inputs.get(0).time().plusHours(8);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 0),
+				new Target(0, deadline), inputs);
+		assertEquals(TargetStatus.REACHED, r.targetStatus());
+		assertEquals(0, r.energyWh());
+		assertTrue(r.quarters().stream().allMatch(q -> q.reason() == Reason.LIMIT));
+	}
+
+	@Test
+	public void targetWithoutCar() {
+		final var inputs = targetNight();
+		final var deadline = inputs.get(0).time().plusHours(8);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(false, 10000),
+				new Target(10000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		assertEquals(0, r.energyWh());
+		assertTrue(r.quarters().stream().allMatch(q -> q.reason() == Reason.NOT_PLUGGED));
 	}
 }

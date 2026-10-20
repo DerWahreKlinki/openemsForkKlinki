@@ -79,6 +79,24 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Time-of-Use-Tariff controller ID", description = "Its state tells whether the storage may discharge: while it delays the discharge or charges from grid, storage power counts like grid power. Empty = not checked.")
 	String timeOfUseTariff_id() default "";
 
+	@AttributeDefinition(name = "Target charging", description = "Charge the target energy until the target time in the cheapest quarter-hours, regardless of the price limits; switches itself off at the target time.")
+	boolean targetCharging() default false;
+
+	@AttributeDefinition(name = "Target energy [Wh]", description = "Energy to charge from switching target charging on until the target time.")
+	int targetEnergy() default 10000;
+
+	@AttributeDefinition(name = "Target time [min]", description = "Time of day as minutes after midnight, e.g. 420 = 07:00; the next occurrence counts.")
+	int targetTime() default 420;
+
+	@AttributeDefinition(name = "Ess-ID for the storage lock", description = "Storage (e.g. the cluster) that target charging locks for the car while it is below its evening target: its discharge is capped to the house load, the car charges from grid. Empty = no lock.")
+	String ess_id() default "essCluster";
+
+	@AttributeDefinition(name = "Session start energy [Wh]", description = "Counter of the wallbox when the car was plugged in; the session limit counts from there. Set by the controller itself, -1 = no car plugged in.")
+	int sessionStartEnergy() default -1;
+
+	@AttributeDefinition(name = "Target start energy [Wh]", description = "Session energy of the wallbox when target charging was switched on; the target counts from there. Set by the controller itself, -1 = not yet set.")
+	int targetStartEnergy() default -1;
+
 	String webconsole_configurationFactory_nameHint() default "Controller Electric Vehicle Charging Station with Price Limit [{id}]";
 
 }

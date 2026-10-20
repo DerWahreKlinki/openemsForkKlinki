@@ -17,6 +17,8 @@ import { JsonrpcResponseSuccess } from "src/app/shared/jsonrpc/base";
  *     "targetWh": number,
  *     "usableWh": number,
  *     "targetReached": boolean,
+ *     "targetStatus": string,        // target charging: NONE, PLANNED, UNREACHABLE, PRICES_MISSING, REACHED
+ *     "costCt": number,              // cost of the planned energy [ct]
  *     "quarters": [{
  *       "timestamp": string,
  *       "price": number | null,        // [Currency/MWh]
@@ -30,7 +32,8 @@ import { JsonrpcResponseSuccess } from "src/app/shared/jsonrpc/base";
  *       "fromGrid": number,            // [W]
  *       "blendedPrice": number | null, // [Currency/MWh]
  *       "reason": string,
- *       "storageWh": number            // [Wh] within the usable window
+ *       "storageWh": number,           // [Wh] within the usable window
+ *       "storageLocked": boolean       // the storage only serves the house (target charging)
  *     }]
  *   }
  * }
@@ -49,6 +52,8 @@ export class GetChargingPlanResponse extends JsonrpcResponseSuccess {
             targetWh: number;
             usableWh: number;
             targetReached: boolean;
+            targetStatus?: string;
+            costCt?: number;
             quarters: GetChargingPlanResponse.Quarter[];
         },
     ) {
@@ -71,5 +76,6 @@ export namespace GetChargingPlanResponse {
         blendedPrice: number | null;
         reason: string;
         storageWh: number;
+        storageLocked?: boolean;
     };
 }

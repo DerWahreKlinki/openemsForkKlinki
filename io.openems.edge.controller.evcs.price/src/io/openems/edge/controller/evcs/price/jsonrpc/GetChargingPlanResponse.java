@@ -31,6 +31,8 @@ import io.openems.edge.controller.evcs.price.ChargingPlan;
  *     "usableWh": number,
  *     "targetReached": boolean,
  *     "hypothetical": boolean,       // true: no car, the quarters show charging as if one were plugged in
+ *     "targetStatus": string,        // target charging: NONE, PLANNED, UNREACHABLE, PRICES_MISSING, REACHED
+ *     "costCt": number,              // cost of the planned energy [ct]
  *     "quarters": [{
  *       "timestamp": string,
  *       "price": number | null,        // [Currency/MWh]
@@ -44,7 +46,8 @@ import io.openems.edge.controller.evcs.price.ChargingPlan;
  *       "fromGrid": number,            // [W]
  *       "blendedPrice": number | null, // [Currency/MWh]
  *       "reason": string,
- *       "storageWh": number            // [Wh] within the usable window
+ *       "storageWh": number,           // [Wh] within the usable window
+ *       "storageLocked": boolean       // the storage only serves the house (target charging)
  *     }]
  *   }
  * }
@@ -108,6 +111,7 @@ public class GetChargingPlanResponse extends JsonrpcResponseSuccess {
 					.add("blendedPrice", q.blendedPrice() == null ? JsonNull.INSTANCE : new com.google.gson.JsonPrimitive(q.blendedPrice() * 10)) //
 					.addProperty("reason", q.reason().name()) //
 					.addProperty("storageWh", Math.round(q.storageWh())) //
+					.addProperty("storageLocked", q.storageLocked()) //
 					.build());
 		}
 		final var result = buildJsonObject() //
@@ -121,6 +125,8 @@ public class GetChargingPlanResponse extends JsonrpcResponseSuccess {
 				.addProperty("usableWh", Math.round(usableWh)) //
 				.addProperty("targetReached", plan.targetReached()) //
 				.addProperty("hypothetical", hypothetical) //
+				.addProperty("targetStatus", plan.targetStatus().name()) //
+				.addProperty("costCt", Math.round(plan.costCt() * 10) / 10.) //
 				.add("quarters", quarters) //
 				.build();
 		return new GetChargingPlanResponse(requestId, result);

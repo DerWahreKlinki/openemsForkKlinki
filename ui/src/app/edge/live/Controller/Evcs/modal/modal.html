@@ -48,6 +48,21 @@
             <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PAUSE_TODAY_INFO' | translate" style="font-size: small"></oe-modal-info-line>
           }
         }
+        <!--The session: energy since the plug-in and its limit; target charging overrides the limit-->
+        @if (sessionEnergy != null) {
+          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.SESSION_ENERGY' | translate" [value]="sessionEnergy" [converter]="CONVERT_TO_KILO_WATT_HOURS"></oe-modal-line>
+        }
+        @if (controller && isReadWrite) {
+          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.MAX_ENERGY_RESTRICTION' | translate" [formGroup]="formGroup" [component]="controller" controlName="energyLimit" [control]="{ type: 'TOGGLE' }" class="align_right" leftColumnWidth="100"></oe-modal-line>
+          @if (formGroup.controls["energyLimit"].value === true) {
+            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.ENERGY_LIMIT' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['energySessionLimit']" [converter]="Utils.CONVERT_TO_KILO_WATTHOURS"></oe-modal-line>
+            <!-- Using "kWh " (with space) to not use the default unitvalue pipe conversion -->
+            <oe-range-slider [formGroup]="formGroup" controlName="energySessionLimitKwh" [properties]="{ tickMin: 1, tickMax: 100, unit: 'kWh ', step: 1, pinFormatter: KILO_WATT_HOURS_PIN_FORMATTER }"></oe-range-slider>
+            @if (targetCharging) {
+              <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.SESSION_LIMIT_OVERRIDDEN' | translate" style="font-size: small"></oe-modal-info-line>
+            }
+          }
+        }
         <oe-modal-horizontal-line></oe-modal-horizontal-line>
         <table class="full_width">
           <tr>
@@ -60,17 +75,7 @@
           </tr>
         </table>
         @if (formGroup.controls["chargeMode"].value) {
-          <oe-modal-buttons
-            [formGroup]="formGroup"
-            controlName="chargeMode"
-            [component]="component"
-            [buttons]="[
-              { name: ('GENERAL.MANUALLY' | translate), value: 'FORCE_CHARGE', icon: { color: 'success', name: 'options-outline' } },
-              { name: ('GENERAL.AUTOMATIC' | translate), value: 'EXCESS_POWER', icon: { color: 'primary', name: 'sunny-outline' } },
-              { name: ('GENERAL.OFF' | translate), value: 'OFF', icon: { color: 'danger', name: 'power-outline' } },
-            ]"
-          >
-          </oe-modal-buttons>
+          <oe-modal-buttons [formGroup]="formGroup" controlName="chargeMode" [component]="component" [buttons]="modeButtons"> </oe-modal-buttons>
         }
       }
       @if (showKEBAwarining) {
@@ -111,6 +116,53 @@
           <oe-modal-horizontal-line></oe-modal-horizontal-line>
         }
 
+        <!--Target charging of Controller.Evcs.Price: the view; the switch on it starts it-->
+        @if (formGroup.value.chargeMode === "TARGET_CHARGE" && controller.factoryId === "Controller.Evcs.Price") {
+          <table class="full_width" style="line-height: 1.4; margin-top: 0.5%">
+            <tr>
+              <td class="align_left" style="width: 70%">{{ "EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.ACTIVE" | translate }}</td>
+              <td class="align_right" [style]="this.service.isSmartphoneResolution() ? 'transform: scale(0.7)' : ''">
+                <ion-toggle mode="md" tabindex="0" [checked]="targetCharging" (ionChange)="setTargetCharging($event)"></ion-toggle>
+              </td>
+            </tr>
+          </table>
+          <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.INFO' | translate" style="font-size: small"></oe-modal-info-line>
+          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.ENERGY' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['targetEnergy']" [converter]="Utils.CONVERT_TO_KILO_WATTHOURS"></oe-modal-line>
+          <!-- Using "kWh " (with space) to not use the default unitvalue pipe conversion -->
+          <oe-range-slider [formGroup]="formGroup" controlName="targetEnergyKwh" [properties]="{ tickMin: 1, tickMax: 100, unit: 'kWh ', step: 1, pinFormatter: KILO_WATT_HOURS_PIN_FORMATTER }"></oe-range-slider>
+          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.TIME' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['targetTime']" [converter]="CONVERT_TIME_OF_DAY"></oe-modal-line>
+          <oe-range-slider [formGroup]="formGroup" controlName="targetTime" [properties]="{ tickMin: 0, tickMax: 1425, step: 15, pinFormatter: TIME_OF_DAY_PIN_FORMATTER, tickFormatter: CONVERT_TIME_OF_DAY }"></oe-range-slider>
+          <!--Evening target of the storage: below it the storage is locked for the car-->
+          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.TARGET' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['storageTargetSocNet']" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
+          <oe-range-slider [formGroup]="formGroup" controlName="storageTargetSocNet" [properties]="{ tickMin: 0, tickMax: 100, unit: '%', step: 5, pinFormatter: PERCENT_PIN_FORMATTER }"></oe-range-slider>
+          @if (targetCharging) {
+            @if (targetDeadline != null) {
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.DEADLINE' | translate" [value]="formatDeadline(targetDeadline)"></oe-modal-line>
+            }
+            @if (targetStatus && targetStatus !== "PLANNED" && targetStatus !== "NONE") {
+              <oe-modal-info-line [info]="[{ text: 'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.STATUS_' + targetStatus | translate, lineStyle: targetStatus === 'REACHED' ? 'color: #2dd36f' : 'color: #d32f2f' }]"></oe-modal-info-line>
+            }
+            @if (storageLocked) {
+              <oe-modal-info-line [info]="[{ text: 'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.STORAGE_LOCKED' | translate }]"></oe-modal-info-line>
+            }
+            @if (targetRemaining != null) {
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.REMAINING' | translate" [value]="targetRemaining" [converter]="CONVERT_TO_KILO_WATT_HOURS"></oe-modal-line>
+            }
+            @if (planEnergy != null) {
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.PLANNED' | translate" [value]="planEnergy" [converter]="CONVERT_TO_KILO_WATT_HOURS"></oe-modal-line>
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.PLANNED_SHARES' | translate" [value]="getPlanShares()"></oe-modal-line>
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.COST' | translate" [value]="planCost" [converter]="CONVERT_CENT_TO_EURO"></oe-modal-line>
+            }
+          }
+          <!--Forecast needs the schedule of the Time-of-Use-Tariff controller-->
+          @if (hasTimeOfUseTariff) {
+            <oe-modal-horizontal-line></oe-modal-horizontal-line>
+            <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_TITLE' | translate"></oe-modal-info-line>
+            <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower" [storagePrice]="storagePrice" [storageReleased]="storageTargetReachable" [storageCapacity]="storageCapacity" [priority]="formGroup.value['priority']" [enablePriceCharging]="formGroup.value['enablePriceCharging']" [live]="live"> </oe-evcs-price-chart>
+          }
+          <oe-modal-horizontal-line></oe-modal-horizontal-line>
+        }
+
         <!--Excess Power settings-->
         @if (formGroup.value.chargeMode === "EXCESS_POWER") {
           <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.MIN_CHARGING' | translate" [formGroup]="formGroup" controlName="minGuarantee" [control]="{ type: 'TOGGLE' }" leftColumnWidth="100"></oe-modal-line>
@@ -148,7 +200,7 @@
             <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.INFO' | translate" style="font-size: small"></oe-modal-info-line>
             @if (formGroup.controls["useStorageSurplus"].value === true) {
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.TARGET' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['storageTargetSocNet']" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
-              <oe-range-slider [formGroup]="formGroup" controlName="storageTargetSocNet" [properties]="{ tickMin: 50, tickMax: 100, unit: '%', step: 5, pinFormatter: PERCENT_PIN_FORMATTER }"></oe-range-slider>
+              <oe-range-slider [formGroup]="formGroup" controlName="storageTargetSocNet" [properties]="{ tickMin: 0, tickMax: 100, unit: '%', step: 5, pinFormatter: PERCENT_PIN_FORMATTER }"></oe-range-slider>
               @if (storageNetSoc != null) {
                 <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.NET_SOC' | translate" [value]="storageNetSoc" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
               }
@@ -175,14 +227,6 @@
             }
           }
           <oe-modal-horizontal-line></oe-modal-horizontal-line>
-        }
-        @if (controller && formGroup.value.chargeMode !== "OFF") {
-          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.MAX_ENERGY_RESTRICTION' | translate" [formGroup]="formGroup" [component]="controller" controlName="energyLimit" [control]="{ type: 'TOGGLE' }" class="align_right" leftColumnWidth="100"></oe-modal-line>
-          @if (formGroup.controls["energyLimit"].value === true) {
-            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.ENERGY_LIMIT' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['energySessionLimit']" [converter]="Utils.CONVERT_TO_KILO_WATTHOURS"></oe-modal-line>
-            <!-- Using "kWh " (with space) to not use the default unitvalue pipe conversion -->
-            <oe-range-slider [formGroup]="formGroup" controlName="energySessionLimitKwh" [properties]="{ tickMin: 1, tickMax: 100, unit: 'kWh ', step: 1, pinFormatter: KILO_WATT_HOURS_PIN_FORMATTER }"></oe-range-slider>
-          }
         }
       }
       <!--Uncontrollable Evcs-->

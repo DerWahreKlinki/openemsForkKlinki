@@ -15,7 +15,8 @@ import { PopoverComponent } from "../popover/popover";
 
 import { EvcsPriceForecast } from "../price/price-forecast";
 
-type ChargeMode = "FORCE_CHARGE" | "EXCESS_POWER";
+type ChargeMode = "FORCE_CHARGE" | "EXCESS_POWER" | "TARGET_CHARGE";
+type ModeButton = { name: string; value: string; icon: { color: string; name: string } };
 @Component({
     selector: "oe-controller-evcs-modal",
     templateUrl: "./modal.html",
@@ -74,6 +75,26 @@ export class ModalComponent extends AbstractModal {
     private showKEBAwarining: boolean = false;
 
     private chargePoint: EvcsComponent | null = null;
+    /** The buttons of the mode selection; "Target charging" only with Controller.Evcs.Price */
+    private modeButtons: ModeButton[] = [];
+    /** Target charging (property targetCharging of the controller); null if not available */
+    private targetCharging: boolean | null = null;
+    /** State of target charging: NONE, PLANNED, UNREACHABLE, PRICES_MISSING or REACHED */
+    private targetStatus: string | null = null;
+    /** Target time as epoch seconds; null while target charging is off */
+    private targetDeadline: number | null = null;
+    /** Energy still missing for the target in [Wh]; null while target charging is off */
+    private targetRemaining: number | null = null;
+    private storageLocked: boolean = false;
+    private sessionEnergy: number | null = null;
+    /** Energy of the charging plan in [Wh]; null without a plan */
+    private planEnergy: number | null = null;
+    /** Part of the planned energy from the storage in [Wh] */
+    private planFromStorage: number | null = null;
+    /** Part of the planned energy from grid in [Wh] */
+    private planFromGrid: number | null = null;
+    /** Cost of the planned energy in [ct] */
+    private planCost: number | null = null;
 
     constructor(
         @Inject(Websocket) protected override websocket: Websocket,
@@ -119,6 +140,26 @@ export class ModalComponent extends AbstractModal {
         return isNaN(result) ? null : result;
     }
 
+    /**
+     * Converts a config property to a boolean.
+     *
+     * @param value The property value
+     * @returns True if the property is set
+     */
+    private static isTrue(value: unknown): boolean {
+        return value === true || value === "true" || value === 1;
+    }
+
+    /**
+     * Formats minutes after midnight as HH:MM.
+     *
+     * @param minutes The minutes after midnight
+     * @returns The time of day
+     */
+    private static formatTimeOfDay(minutes: number): string {
+        return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+    }
+
     protected readonly KILO_WATT_HOURS_PIN_FORMATTER: IonRange["pinFormatter"] = (val) =>
         this.Converter.TO_KILO_WATT_HOURS(val);
     protected readonly WATT_PIN_FORMATTER: IonRange["pinFormatter"] = (val) => this.Converter.POWER_IN_WATT(val);
@@ -131,11 +172,19 @@ export class ModalComponent extends AbstractModal {
         value == null ? "-" : value + " ct/kWh";
     protected readonly CONVERT_TO_KILO_WATT_HOURS = (value: number | null): string =>
         value == null ? "-" : (value / 1000).toFixed(1) + " kWh";
+    /** Converts minutes after midnight to HH:MM */
+    protected readonly CONVERT_TIME_OF_DAY = (value: number | null): string =>
+        value == null ? "-" : ModalComponent.formatTimeOfDay(value);
+    protected readonly TIME_OF_DAY_PIN_FORMATTER: IonRange["pinFormatter"] = (val) =>
+        ModalComponent.formatTimeOfDay(val);
+    /** Converts a cost in [ct] to Euro */
+    protected readonly CONVERT_CENT_TO_EURO = (value: number | null): string =>
+        value == null ? "-" : (value / 100).toFixed(2) + " €";
 
     /**
      * "Do not charge today": writes the switch to the controller, which pauses charging until midnight.
      *
-     * @param event the toggle event
+     * @param event The toggle event
      */
     protected setPauseToday(event: CustomEvent): void {
         if (this.edge == null || this.controller == null) {
@@ -199,6 +248,32 @@ export class ModalComponent extends AbstractModal {
         this.pvPrice = ModalComponent.toNumber(this.controller?.properties.pvPrice);
         this.priceChargePower = ModalComponent.toNumber(this.controller?.properties.priceChargePower);
         this.hasTimeOfUseTariff = EvcsPriceForecast.getTimeOfUseTariffController(this.config) != null;
+        this.modeButtons = [
+            {
+                name: this.translate.instant("GENERAL.MANUALLY"),
+                value: "FORCE_CHARGE",
+                icon: { color: "success", name: "options-outline" },
+            },
+            {
+                name: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.SHORT_NAME"),
+                value: "EXCESS_POWER",
+                icon: { color: "primary", name: "sunny-outline" },
+            },
+            ...(this.controller?.factoryId === "Controller.Evcs.Price"
+                ? [
+                      {
+                          name: this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.SHORT_NAME"),
+                          value: "TARGET_CHARGE",
+                          icon: { color: "primary", name: "flag-outline" },
+                      },
+                  ]
+                : []),
+            {
+                name: this.translate.instant("GENERAL.OFF"),
+                value: "OFF",
+                icon: { color: "danger", name: "power-outline" },
+            },
+        ];
 
         const channels: ChannelAddress[] = [];
 
@@ -241,6 +316,16 @@ export class ModalComponent extends AbstractModal {
                 new ChannelAddress(this.controller.id, "PauseToday"),
                 new ChannelAddress(this.controller.id, "ChargePowerLimit"),
                 new ChannelAddress("_sum", "ProductionActivePower"),
+                new ChannelAddress(this.controller.id, "_PropertyTargetCharging"),
+                new ChannelAddress(this.controller.id, "TargetStatus"),
+                new ChannelAddress(this.controller.id, "TargetDeadline"),
+                new ChannelAddress(this.controller.id, "TargetRemainingEnergy"),
+                new ChannelAddress(this.controller.id, "StorageLocked"),
+                new ChannelAddress(this.controller.id, "SessionEnergy"),
+                new ChannelAddress(this.controller.id, "PlanEnergy"),
+                new ChannelAddress(this.controller.id, "PlanEnergyFromStorage"),
+                new ChannelAddress(this.controller.id, "PlanEnergyFromGrid"),
+                new ChannelAddress(this.controller.id, "PlanCost"),
             );
         }
 
@@ -306,6 +391,17 @@ export class ModalComponent extends AbstractModal {
         this.storageDischargeBlocked = blocked == null ? null : blocked === 1 || blocked === true;
         const pauseToday = currentData.allComponents[this.controller?.id + "/PauseToday"];
         this.pauseToday = pauseToday == null ? null : pauseToday === 1 || pauseToday === true;
+        const targetCharging = currentData.allComponents[this.controller?.id + "/_PropertyTargetCharging"];
+        this.targetCharging = targetCharging == null ? null : ModalComponent.isTrue(targetCharging);
+        this.targetStatus = currentData.allComponents[this.controller?.id + "/TargetStatus"] ?? null;
+        this.targetDeadline = currentData.allComponents[this.controller?.id + "/TargetDeadline"] ?? null;
+        this.targetRemaining = currentData.allComponents[this.controller?.id + "/TargetRemainingEnergy"] ?? null;
+        this.storageLocked = ModalComponent.isTrue(currentData.allComponents[this.controller?.id + "/StorageLocked"]);
+        this.sessionEnergy = currentData.allComponents[this.controller?.id + "/SessionEnergy"] ?? null;
+        this.planEnergy = currentData.allComponents[this.controller?.id + "/PlanEnergy"] ?? null;
+        this.planFromStorage = currentData.allComponents[this.controller?.id + "/PlanEnergyFromStorage"] ?? null;
+        this.planFromGrid = currentData.allComponents[this.controller?.id + "/PlanEnergyFromGrid"] ?? null;
+        this.planCost = currentData.allComponents[this.controller?.id + "/PlanCost"] ?? null;
 
         if (this.controller?.factoryId === "Controller.Evcs.Price") {
             const blendedPrice = currentData.allComponents[this.controller.id + "/BlendedPrice"];
@@ -366,6 +462,18 @@ export class ModalComponent extends AbstractModal {
             this.formGroup as FormGroup,
             "defaultChargeMinPower",
         ) as FormControl;
+        const targetChargingCtrl = FormUtils.findFormControlSafely(
+            this.formGroup as FormGroup,
+            "targetCharging",
+        ) as FormControl;
+        const targetEnergyCtrl = FormUtils.findFormControlSafely(
+            this.formGroup as FormGroup,
+            "targetEnergy",
+        ) as FormControl;
+        const targetEnergyKwhCtrl = FormUtils.findFormControlSafely(
+            this.formGroup as FormGroup,
+            "targetEnergyKwh",
+        ) as FormControl;
 
         if (
             energyLimitCtrl == null ||
@@ -399,12 +507,36 @@ export class ModalComponent extends AbstractModal {
                 if (chargeMode === "OFF") {
                     enabledChargingCtrl.setValue(false);
                     chargeModeCtrl.markAsPristine();
+                } else if (chargeMode === "TARGET_CHARGE") {
+                    // only a view: the switch on it starts target charging; nothing to save
+                    // unless charging was off
+                    chargeModeCtrl.markAsPristine();
+                    if (enabledChargingCtrl.value !== true) {
+                        enabledChargingCtrl.setValue(true);
+                        enabledChargingCtrl.markAsDirty();
+                    }
                 } else {
                     enabledChargingCtrl.setValue(true);
                 }
-                enabledChargingCtrl.markAsDirty();
+                if (chargeMode !== "TARGET_CHARGE") {
+                    enabledChargingCtrl.markAsDirty();
+                }
+                // leaving the view ends target charging
+                if (chargeMode !== "TARGET_CHARGE" && targetChargingCtrl?.value === true) {
+                    targetChargingCtrl.setValue(false);
+                    targetChargingCtrl.markAsDirty();
+                }
             }),
         );
+        if (targetEnergyCtrl != null && targetEnergyKwhCtrl != null) {
+            this.subscription.add(
+                targetEnergyKwhCtrl.valueChanges.subscribe((newValue: number) => {
+                    targetEnergyCtrl.setValue(newValue * 1000);
+                    targetEnergyCtrl.markAsDirty();
+                    targetEnergyKwhCtrl.markAsPristine();
+                }),
+            );
+        }
 
         if (this.subscription == null) {
             return;
@@ -432,7 +564,11 @@ export class ModalComponent extends AbstractModal {
     protected override getFormGroup(): FormGroup {
         return this.formBuilder.group({
             chargeMode: new FormControl(
-                this.controller?.properties.enabledCharging == false ? "OFF" : this.controller?.properties.chargeMode,
+                this.controller?.properties.enabledCharging == false
+                    ? "OFF"
+                    : ModalComponent.isTrue(this.controller?.properties.targetCharging)
+                      ? "TARGET_CHARGE"
+                      : this.controller?.properties.chargeMode,
             ),
             energyLimit: new FormControl(this.controller?.properties.energySessionLimit > 0),
             minGuarantee: new FormControl(this.controller?.properties.defaultChargeMinPower > 0),
@@ -454,6 +590,14 @@ export class ModalComponent extends AbstractModal {
             storageTargetSocNet: new FormControl(
                 ModalComponent.toNumber(this.controller?.properties.storageTargetSocNet),
             ),
+            // Target charging, only available with Controller.Evcs.Price; the switch is written at once
+            targetCharging: new FormControl(ModalComponent.isTrue(this.controller?.properties.targetCharging)),
+            targetEnergy: new FormControl(ModalComponent.toNumber(this.controller?.properties.targetEnergy) ?? 10000),
+            // Target energy as kWh value, for ion-range
+            targetEnergyKwh: new FormControl(
+                Math.round((ModalComponent.toNumber(this.controller?.properties.targetEnergy) ?? 10000) / 1000),
+            ),
+            targetTime: new FormControl(ModalComponent.toNumber(this.controller?.properties.targetTime) ?? 420),
         });
     }
 
@@ -575,6 +719,53 @@ export class ModalComponent extends AbstractModal {
             default:
                 return "";
         }
+    }
+
+    /**
+     * Formats the target time as weekday and time of day.
+     *
+     * @param epochSeconds The target time
+     * @returns The formatted time
+     */
+    private formatDeadline(epochSeconds: number): string {
+        return new Date(epochSeconds * 1000).toLocaleString(undefined, {
+            weekday: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
+    /**
+     * Target charging: writes the switch to the controller at once, like "Do not charge today". The target energy and
+     * time are saved with the form.
+     *
+     * @param event The toggle event
+     */
+    private setTargetCharging(event: CustomEvent): void {
+        if (this.edge == null || this.controller == null) {
+            return;
+        }
+        const checked = event.detail.checked === true;
+        this.targetCharging = checked;
+        this.formGroup?.get("targetCharging")?.setValue(checked, { emitEvent: false });
+        this.edge
+            .updateComponentConfig(this.websocket, this.controller.id, [{ name: "targetCharging", value: checked }])
+            .catch((reason) => console.warn(reason));
+    }
+
+    /**
+     * The planned shares of PV, storage and grid.
+     *
+     * @returns The shares in [kWh]
+     */
+    private getPlanShares(): string {
+        if (this.planEnergy == null) {
+            return "-";
+        }
+        const storage = this.planFromStorage ?? 0;
+        const grid = this.planFromGrid ?? 0;
+        const kwh = (wh: number): string => (wh / 1000).toFixed(1);
+        return kwh(this.planEnergy - storage - grid) + " / " + kwh(storage) + " / " + kwh(grid) + " kWh";
     }
 }
 

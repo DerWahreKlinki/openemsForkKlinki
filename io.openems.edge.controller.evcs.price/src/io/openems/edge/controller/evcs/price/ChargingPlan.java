@@ -5,8 +5,11 @@ import static java.lang.Math.min;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -169,7 +172,33 @@ public final class ChargingPlan {
 		/** The energy limit of the session is reached. */
 		LIMIT,
 		/** The grid connection limit leaves no room. */
-		GRID_LIMIT
+		GRID_LIMIT,
+		/** Target charging: one of the cheapest quarter-hours until the target time. */
+		TARGET_CHARGE
+	}
+
+	/** State of target charging in a plan. */
+	public enum TargetStatus {
+		/** Not a target plan. */
+		NONE,
+		/** The cheapest quarter-hours until the target time cover the target. */
+		PLANNED,
+		/** Every usable quarter-hour is taken and the target is still missed. */
+		UNREACHABLE,
+		/** Prices or forecast do not reach the target time: no charging. */
+		PRICES_MISSING,
+		/** The session already holds the target energy. */
+		REACHED
+	}
+
+	/**
+	 * Target charging: charge an energy until a time of day in the cheapest
+	 * quarter-hours.
+	 *
+	 * @param remainingWh the energy still missing in [Wh]
+	 * @param deadline    the target time
+	 */
+	public record Target(int remainingWh, ZonedDateTime deadline) {
 	}
 
 	/**
@@ -196,7 +225,7 @@ public final class ChargingPlan {
 	 */
 	public record Quarter(ZonedDateTime time, Double price, Integer production, Integer consumption, StorageMode mode,
 			int power, int fromPv, int fromStorage, int storageBudget, int fromGrid, Double blendedPrice,
-			Reason reason, double storageWh) {
+			Reason reason, double storageWh, boolean storageLocked) {
 	}
 
 	/**
@@ -212,12 +241,47 @@ public final class ChargingPlan {
 	 *                         PV block in [Wh]; null if there is no PV block
 	 * @param targetReached    true if the storage reaches its target at the end of
 	 *                         every PV block
+	 * @param targetStatus     the state of target charging; NONE for a plan by
+	 *                         price
 	 */
 	public record Result(List<Quarter> quarters, ZonedDateTime start, int energyWh, int fromPvWh, int fromStorageWh,
-			int fromGridWh, Double storageAtPvEndWh, boolean targetReached) {
+			int fromGridWh, Double storageAtPvEndWh, boolean targetReached, TargetStatus targetStatus) {
 
 		/** An empty plan. */
 		public static final Result EMPTY = new Result(List.of(), null, 0, 0, 0, 0, null, true);
+
+		public Result(List<Quarter> quarters, ZonedDateTime start, int energyWh, int fromPvWh, int fromStorageWh,
+				int fromGridWh, Double storageAtPvEndWh, boolean targetReached) {
+			this(quarters, start, energyWh, fromPvWh, fromStorageWh, fromGridWh, storageAtPvEndWh, targetReached,
+					TargetStatus.NONE);
+		}
+
+		/**
+		 * The same plan with a state of target charging.
+		 *
+		 * @param status the state
+		 * @return the plan
+		 */
+		public Result withTargetStatus(TargetStatus status) {
+			return new Result(this.quarters, this.start, this.energyWh, this.fromPvWh, this.fromStorageWh,
+					this.fromGridWh, this.storageAtPvEndWh, this.targetReached, status);
+		}
+
+		/**
+		 * Gets the cost of the planned energy: the blended price of every charging
+		 * quarter-hour times its energy.
+		 *
+		 * @return the cost in [ct]
+		 */
+		public double costCt() {
+			var result = 0.;
+			for (var q : this.quarters) {
+				if (q.power() > 0 && q.blendedPrice() != null) {
+					result += q.power() / (double) QUARTERS_PER_HOUR / 1000. * q.blendedPrice();
+				}
+			}
+			return result;
+		}
 
 		/**
 		 * Gets the quarter-hour that contains the time.
@@ -315,8 +379,197 @@ public final class ChargingPlan {
 		return false;
 	}
 
+	/**
+	 * Target charging locks the storage for the car while it is below its evening
+	 * target.
+	 *
+	 * @param rules  the {@link Rules}
+	 * @param stored the stored energy in [Wh]
+	 * @return true if the storage may not discharge for the car
+	 */
+	public static boolean isStorageLocked(Rules rules, double stored) {
+		return rules.targetWh() > 0 && stored < rules.targetWh();
+	}
+
+	/**
+	 * The house and the storage of a quarter-hour without the car.
+	 *
+	 * @param surplus           production minus consumption in [W]
+	 * @param roomPower         the power the storage can still take in [W]
+	 * @param gridCharge        the planned charging from grid in [W]
+	 * @param mayDischarge      true if the storage may discharge
+	 * @param charge            the storage charging in [W]
+	 * @param dischargeForHouse the storage discharging for the house in [W]
+	 * @param feedIn            the feed-in in [W]
+	 * @param buyWithout        the grid buy in [W]
+	 * @param excess            the surplus the car may take in [W], by priority
+	 */
+	private record House(int surplus, double roomPower, int gridCharge, boolean mayDischarge, int charge,
+			int dischargeForHouse, int feedIn, int buyWithout, int excess) {
+
+		static House of(Rules rules, Storage storage, Input in, double stored) {
+			final var mode = in.modeOrDefault();
+			final var surplus = in.production() - in.consumption();
+			final var roomPower = max(storage.usableWh() - stored, 0) * QUARTERS_PER_HOUR / storage.efficiency();
+			final var gridCharge = mode == StorageMode.CHARGE_GRID ? max(in.storageGridChargePower(), 0) : 0;
+			final var mayDischarge = mode == StorageMode.BALANCING;
+			final var charge = (int) min(max(surplus, 0) + gridCharge, min(storage.maxChargePower(), roomPower));
+			final var dischargeForHouse = mayDischarge
+					? (int) min(max(-surplus, 0), min(storage.maxDischargePower(), stored * QUARTERS_PER_HOUR))
+					: 0;
+			final var feedIn = max(surplus, 0) - max(charge - gridCharge, 0);
+			final var buyWithout = max(-surplus, 0) - dischargeForHouse + min(gridCharge, charge);
+			final var excess = switch (rules.priority()) {
+			case STORAGE -> max(feedIn - rules.bufferPower(), 0);
+			case CAR -> max(surplus, 0);
+			};
+			return new House(surplus, roomPower, gridCharge, mayDischarge, charge, dischargeForHouse, feedIn,
+					buyWithout, excess);
+		}
+	}
+
+	/**
+	 * Calculates the plan for target charging: the cheapest quarter-hours until
+	 * the target time that cover the missing energy, regardless of the price
+	 * limits.
+	 *
+	 * <p>
+	 * Every quarter-hour offers its power in slices with their own price: the
+	 * surplus the car may take at the PV price, storage power at the storage price
+	 * while the storage is above its evening target (else at the grid price) and
+	 * grid power at the grid price, up to the maximum power. The first minimum
+	 * power of a quarter-hour is one slice at its blended price, because the car
+	 * cannot charge below it; the rest is divisible. The cheapest slices are taken
+	 * until the missing energy is covered, among equals the earlier ones. Without
+	 * prices or forecast until the target time nothing is planned: charging blind
+	 * is not what target charging is for.
+	 *
+	 * @param rules   the rules; maxPower is the upper limit of target charging
+	 * @param storage the storage now
+	 * @param car     the car now; remainingWh is the missing energy
+	 * @param target  the target
+	 * @param inputs  the forecast per quarter-hour, in ascending order
+	 * @return the plan
+	 */
+	public static Result calculateTarget(Rules rules, Storage storage, Car car, Target target, List<Input> inputs) {
+		final var horizon = new ArrayList<Input>();
+		for (var in : inputs) {
+			if (in.time().isBefore(target.deadline())) {
+				horizon.add(in);
+			}
+		}
+		if (horizon.isEmpty()) {
+			return Result.EMPTY.withTargetStatus(TargetStatus.PRICES_MISSING);
+		}
+		final var blocks = findPvBlocks(horizon);
+		final var noPower = new HashMap<Integer, Integer>();
+		final var last = horizon.get(horizon.size() - 1);
+		final var pricesKnown = horizon.stream().allMatch(in -> in.price() != null)
+				&& !last.time().plusMinutes(15).isBefore(target.deadline());
+		if (!pricesKnown) {
+			return simulate(rules, storage, car, horizon, blocks, Set.of(), noPower)
+					.withTargetStatus(TargetStatus.PRICES_MISSING);
+		}
+		if (target.remainingWh() <= 0) {
+			return simulate(rules, storage, new Car(car.pluggedIn(), 0), horizon, blocks, Set.of(), noPower)
+					.withTargetStatus(TargetStatus.REACHED);
+		}
+		// The slices: the storage runs without the car, the car takes what every
+		// quarter-hour offers
+		record Slice(int index, double price, double wh, boolean base) {
+		}
+
+		final var slices = new ArrayList<Slice>();
+		var stored = min(max(storage.storedWh(), 0), storage.usableWh());
+		for (var i = 0; i < horizon.size(); i++) {
+			final var in = horizon.get(i);
+			if (in.production() == null || in.consumption() == null || in.price() == null) {
+				continue;
+			}
+			final var price = in.price();
+			final var h = House.of(rules, storage, in, stored);
+			final var storageUsable = isInPvBlock(blocks, i) && in.modeOrDefault() == StorageMode.BALANCING;
+			final var reductionAvailable = storageUsable ? max(h.charge() - h.gridCharge(), 0) : 0;
+			// below its evening target the storage is locked for the car: it only serves
+			// the house, the car takes grid power instead
+			final var dischargeAvailable = storageUsable && !isStorageLocked(rules, stored)
+					? (int) max(min(storage.maxDischargePower(), stored * QUARTERS_PER_HOUR) - h.dischargeForHouse(), 0)
+					: 0;
+			final var storagePrice = rules.useStorageSurplus() && stored >= rules.targetWh() ? rules.storagePrice()
+					: price;
+			final var gridAvailable = rules.gridMaxBuyPower() > 0 ? max(rules.gridMaxBuyPower() - h.buyWithout(), 0)
+					: Integer.MAX_VALUE;
+			final int[] powers = { h.excess(), reductionAvailable, dischargeAvailable, gridAvailable };
+			final double[] prices = { rules.pvPrice(), storagePrice, storagePrice, price };
+			// the first minimum power as one slice at its blended price
+			var missing = rules.minPower();
+			var cost = 0.;
+			for (var k = 0; k < powers.length; k++) {
+				final var share = min(powers[k], missing);
+				cost += share * prices[k];
+				powers[k] -= share;
+				missing -= share;
+			}
+			if (missing > 0) {
+				// not even the minimum power: unusable
+				stored = min(max(stored + h.charge() / (double) QUARTERS_PER_HOUR * storage.efficiency()
+						- h.dischargeForHouse() / (double) QUARTERS_PER_HOUR, 0), storage.usableWh());
+				continue;
+			}
+			slices.add(new Slice(i, cost / rules.minPower(), rules.minPower() / (double) QUARTERS_PER_HOUR, true));
+			var room = max(rules.maxPower() - rules.minPower(), 0);
+			for (var k = 0; k < powers.length && room > 0; k++) {
+				final var share = min(powers[k], room);
+				if (share > 0) {
+					slices.add(new Slice(i, prices[k], share / (double) QUARTERS_PER_HOUR, false));
+					room -= share;
+				}
+			}
+			stored = min(max(stored + h.charge() / (double) QUARTERS_PER_HOUR * storage.efficiency()
+					- h.dischargeForHouse() / (double) QUARTERS_PER_HOUR, 0), storage.usableWh());
+		}
+		// the cheapest slices first, among equals the earlier quarter-hour and its
+		// base before its rest; a divisible slice needs the base of its quarter-hour
+		slices.sort(Comparator.comparingDouble(Slice::price) //
+				.thenComparingInt(Slice::index) //
+				.thenComparing(s -> !s.base()));
+		final var takenWh = new double[horizon.size()];
+		final var baseTaken = new boolean[horizon.size()];
+		var need = (double) target.remainingWh();
+		for (var s : slices) {
+			if (need <= 0) {
+				break;
+			}
+			if (!s.base() && !baseTaken[s.index()]) {
+				continue;
+			}
+			// the base is indivisible, the rest is taken as far as needed
+			final var wh = s.base() ? s.wh() : min(s.wh(), need);
+			takenWh[s.index()] += wh;
+			need -= wh;
+			baseTaken[s.index()] = true;
+		}
+		final var fixedPower = new HashMap<Integer, Integer>();
+		for (var i = 0; i < takenWh.length; i++) {
+			if (takenWh[i] > 0) {
+				fixedPower.put(i, (int) Math.round(takenWh[i] * QUARTERS_PER_HOUR));
+			}
+		}
+		final var status = need > 0.5 ? TargetStatus.UNREACHABLE : TargetStatus.PLANNED;
+		return simulate(rules, storage, car, horizon, blocks, Set.of(), fixedPower).withTargetStatus(status);
+	}
+
 	private static Result simulate(Rules rules, Storage storage, Car car, List<Input> inputs, List<int[]> blocks,
 			Set<Integer> dropped) {
+		return simulate(rules, storage, car, inputs, blocks, dropped, null);
+	}
+
+	/*
+	 * Simulates storage and car. With fixedPower (target charging) the car charges
+	 * the given power per quarter-hour index and nothing else.
+	 */
+	private static Result simulate(Rules rules, Storage storage, Car car, List<Input> inputs, List<int[]> blocks,
+			Set<Integer> dropped, Map<Integer, Integer> fixedPower) {
 		final var quarters = new ArrayList<Quarter>(inputs.size());
 		var stored = min(max(storage.storedWh(), 0), storage.usableWh());
 		var remaining = car.remainingWh();
@@ -338,35 +591,42 @@ public final class ChargingPlan {
 			int gridShare = 0;
 			Double blended = null;
 			Reason reason;
+			var storageLockedNow = false;
 			if (prod == null || cons == null || price == null) {
 				reason = Reason.UNKNOWN;
 			} else {
 				final var inPvBlock = isInPvBlock(blocks, i);
 				// without storage budget the storage share costs the grid price
 				final var budget = !dropped.contains(i);
-				final var surplus = prod - cons;
-				final var roomPower = max(storage.usableWh() - stored, 0) * QUARTERS_PER_HOUR / storage.efficiency();
-				final var gridCharge = mode == StorageMode.CHARGE_GRID ? max(in.storageGridChargePower(), 0) : 0;
-				final var mayDischarge = mode == StorageMode.BALANCING;
 				// the storage without the car
-				final var charge = (int) min(max(surplus, 0) + gridCharge, min(storage.maxChargePower(), roomPower));
-				final var dischargeForHouse = mayDischarge
-						? (int) min(max(-surplus, 0), min(storage.maxDischargePower(), stored * QUARTERS_PER_HOUR))
-						: 0;
-				final var feedIn = max(surplus, 0) - max(charge - gridCharge, 0);
-				final var buyWithout = max(-surplus, 0) - dischargeForHouse + min(gridCharge, charge);
-				final var excess = switch (rules.priority()) {
-				case STORAGE -> max(feedIn - rules.bufferPower(), 0);
-				case CAR -> max(surplus, 0);
-				};
+				final var h = House.of(rules, storage, in, stored);
+				final var surplus = h.surplus();
+				final var roomPower = h.roomPower();
+				final var gridCharge = h.gridCharge();
+				final var mayDischarge = h.mayDischarge();
+				final var charge = h.charge();
+				final var dischargeForHouse = h.dischargeForHouse();
+				final var buyWithout = h.buyWithout();
+				final var excess = h.excess();
 				final var pricePower = rules.enablePriceCharging()
 						? ControllerEvcsPriceImpl.calculateChargePowerFromPrice(price * 10, rules.priceLimit(),
 								rules.priceLimitFullPower(), rules.minPower(), rules.priceChargePower())
 						: 0;
+				var targetCharging = false;
 				if (!car.pluggedIn()) {
 					reason = Reason.NOT_PLUGGED;
 				} else if (remaining != null && remaining <= 0) {
 					reason = Reason.LIMIT;
+				} else if (fixedPower != null) {
+					// target charging: the plan decided, the price limits do not count
+					final var fixed = fixedPower.getOrDefault(i, 0);
+					if (fixed >= rules.minPower()) {
+						power = min(fixed, rules.maxPower());
+						reason = Reason.TARGET_CHARGE;
+						targetCharging = true;
+					} else {
+						reason = Reason.TOO_EXPENSIVE;
+					}
 				} else if (excess >= rules.minPower()) {
 					power = min(max(excess, pricePower), rules.maxPower());
 					reason = Reason.SURPLUS;
@@ -401,19 +661,30 @@ public final class ChargingPlan {
 					}
 				}
 				if (power > 0 && remaining != null) {
-					power = (int) min(power, (long) remaining * QUARTERS_PER_HOUR);
+					// target charging keeps the minimum power for the last quarter-hour: the
+					// car cannot charge below it and the target is a minimum, not a limit
+					final var cap = targetCharging ? max((long) remaining * QUARTERS_PER_HOUR, rules.minPower())
+							: (long) remaining * QUARTERS_PER_HOUR;
+					power = (int) min(power, cap);
 					if (power < rules.minPower()) {
 						power = 0;
 						reason = Reason.LIMIT;
 					}
 				}
 				// the storage with the car; the grid connection limit is shared with the house
-				// and the storage, so the car is reduced by what exceeds it
+				// and the storage, so the car is reduced by what exceeds it. Target charging
+				// locks the storage for the car while it is below its evening target: it
+				// discharges for the house only
+				final var locked = targetCharging && isStorageLocked(rules, stored);
+				storageLockedNow = locked;
 				var net = surplus - power;
 				var chargeWith = (int) min(max(net, 0) + gridCharge, min(storage.maxChargePower(), roomPower));
 				var dischargeWith = mayDischarge
 						? (int) min(max(-net, 0), min(storage.maxDischargePower(), stored * QUARTERS_PER_HOUR))
 						: 0;
+				if (locked) {
+					dischargeWith = min(dischargeWith, dischargeForHouse);
+				}
 				var buyWith = max(-net, 0) - dischargeWith + min(gridCharge, chargeWith);
 				if (power > 0 && rules.gridMaxBuyPower() > 0 && buyWith > rules.gridMaxBuyPower()) {
 					power -= buyWith - rules.gridMaxBuyPower();
@@ -426,6 +697,9 @@ public final class ChargingPlan {
 					dischargeWith = mayDischarge
 							? (int) min(max(-net, 0), min(storage.maxDischargePower(), stored * QUARTERS_PER_HOUR))
 							: 0;
+					if (locked) {
+						dischargeWith = min(dischargeWith, dischargeForHouse);
+					}
 					buyWith = max(-net, 0) - dischargeWith + min(gridCharge, chargeWith);
 				}
 				if (power > 0) {
@@ -468,7 +742,7 @@ public final class ChargingPlan {
 				stored = min(max(stored, 0), storage.usableWh());
 			}
 			quarters.add(new Quarter(in.time(), price, prod, cons, mode, power, pvShare, storageShare, storageBudget,
-					gridShare, blended, reason, stored));
+					gridShare, blended, reason, stored, storageLockedNow));
 		}
 		Double storageAtPvEnd = null;
 		var targetReached = true;

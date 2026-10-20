@@ -173,7 +173,63 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 		 */
 		PAUSED_UNTIL(Doc.of(LONG) //
 				.persistencePriority(HIGH) //
-				.text("Charging is paused until this time (epoch seconds)")); //
+				.text("Charging is paused until this time (epoch seconds)")), //
+		/**
+		 * Part of the planned energy bought from grid.
+		 */
+		PLAN_ENERGY_FROM_GRID(Doc.of(INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Planned charging energy from grid")), //
+		/**
+		 * Cost of the planned energy: the blended price of every charging
+		 * quarter-hour times its energy.
+		 */
+		PLAN_COST(Doc.of(DOUBLE) //
+				.persistencePriority(HIGH) //
+				.text("Cost of the planned charging energy [ct]")), //
+		/**
+		 * State of target charging: NONE while off, else PLANNED, UNREACHABLE,
+		 * PRICES_MISSING or REACHED.
+		 */
+		TARGET_STATUS(Doc.of(STRING) //
+				.persistencePriority(HIGH) //
+				.text("State of target charging")), //
+		/**
+		 * Target time of target charging as epoch seconds; empty while off.
+		 */
+		TARGET_DEADLINE(Doc.of(LONG) //
+				.persistencePriority(HIGH) //
+				.text("Target charging ends at this time (epoch seconds)")), //
+		/**
+		 * Energy still missing for the target in this session; empty while off.
+		 */
+		TARGET_REMAINING_ENERGY(Doc.of(INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Energy still missing for the target")), //
+		/**
+		 * Energy charged since the car was plugged in. The wallbox counter restarts
+		 * only with the next charging, so the controller counts from the plug-in.
+		 */
+		SESSION_ENERGY(Doc.of(INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Energy charged since the car was plugged in")), //
+		/**
+		 * Target charging locks the storage for the car: it discharges for the house
+		 * only while it is below its evening target.
+		 */
+		STORAGE_LOCKED(Doc.of(BOOLEAN) //
+				.persistencePriority(HIGH) //
+				.text("Storage locked for the car, it serves the house only")), //
+		/**
+		 * The discharge cap set on the storage while it is locked; empty otherwise.
+		 */
+		STORAGE_DISCHARGE_LIMIT(Doc.of(INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(HIGH) //
+				.text("Discharge cap of the locked storage")); //
 
 		private final Doc doc;
 
@@ -261,6 +317,38 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 
 	public default void setPlanReason(String val) {
 		this.channel(ChannelId.PLAN_REASON).setNextValue(val);
+	}
+
+	public default void setPlanEnergyFromGrid(Integer val) {
+		this.channel(ChannelId.PLAN_ENERGY_FROM_GRID).setNextValue(val);
+	}
+
+	public default void setPlanCost(Double val) {
+		this.channel(ChannelId.PLAN_COST).setNextValue(val);
+	}
+
+	public default void setTargetStatus(String val) {
+		this.channel(ChannelId.TARGET_STATUS).setNextValue(val);
+	}
+
+	public default void setTargetDeadline(Long val) {
+		this.channel(ChannelId.TARGET_DEADLINE).setNextValue(val);
+	}
+
+	public default void setTargetRemainingEnergy(Integer val) {
+		this.channel(ChannelId.TARGET_REMAINING_ENERGY).setNextValue(val);
+	}
+
+	public default void setSessionEnergy(Integer val) {
+		this.channel(ChannelId.SESSION_ENERGY).setNextValue(val);
+	}
+
+	public default void setStorageLocked(Boolean val) {
+		this.channel(ChannelId.STORAGE_LOCKED).setNextValue(val);
+	}
+
+	public default void setStorageDischargeLimit(Integer val) {
+		this.channel(ChannelId.STORAGE_DISCHARGE_LIMIT).setNextValue(val);
 	}
 
 	/**

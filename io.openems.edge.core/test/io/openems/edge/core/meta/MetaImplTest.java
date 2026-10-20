@@ -8,8 +8,11 @@ import static io.openems.common.types.CurrencyConfig.EUR;
 import static io.openems.common.utils.JsonUtils.buildJsonArray;
 import static io.openems.common.utils.JsonUtils.buildJsonObject;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +31,7 @@ import io.openems.edge.common.meta.types.Environment;
 import io.openems.edge.common.meta.types.EnvironmentStatus;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
+import io.openems.edge.common.test.DummyComponentContext;
 import io.openems.edge.common.test.DummyComponentManager;
 import io.openems.edge.evse.api.chargepoint.EvseChargePoint;
 
@@ -388,4 +392,13 @@ class MetaImplTest {
 
 		assertEquals(0, sut.getEssDischargeToGridLimit());
 	}
+
+	@Test
+	public void testFormatBuildTime() {
+		// Bnd-LastModified is UTC; the channel shows local time
+		assertEquals("2026 10 20 06:52", MetaImpl.formatBuildTime(//
+				Instant.parse("2026-10-20T04:52:00Z"), ZoneId.of("Europe/Berlin")));
+		assertNull(MetaImpl.getBuildTime(new DummyComponentContext()));
+	}
+
 }

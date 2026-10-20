@@ -47,6 +47,17 @@ public interface Meta extends ModbusSlave {
 		VERSION(Doc.of(STRING)//
 				.persistencePriority(HIGH)),
 		/**
+		 * Build time of the newest OpenEMS bundle in local time, e.g. "2026 10 20
+		 * 06:52".
+		 *
+		 * <ul>
+		 * <li>Interface: Meta
+		 * <li>Type: String
+		 * </ul>
+		 */
+		BUILD_TIME(Doc.of(STRING)//
+				.persistencePriority(HIGH)),
+		/**
 		 * System Time: seconds since 1st January 1970 00:00:00 UTC.
 		 *
 		 * <ul>

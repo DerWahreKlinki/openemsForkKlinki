@@ -1,4 +1,4 @@
-import { Component, effect, inject, OnInit, signal, WritableSignal, ChangeDetectionStrategy } from "@angular/core";
+import { Component, effect, inject, OnDestroy, OnInit, signal, WritableSignal, ChangeDetectionStrategy, } from "@angular/core";
 import { ActivatedRoute, RouterModule } from "@angular/router";
 import { NavController, PopoverController } from "@ionic/angular";
 import { TranslateService } from "@ngx-translate/core";
@@ -41,8 +41,9 @@ import { GetModbusProtocolExportXlsxRequest } from "./modbusapi/getModbusProtoco
         LocationComponent,
     ],
 })
-export class ProfileComponent implements OnInit {
+export class ProfileComponent implements OnInit, OnDestroy {
     private static readonly SELECTOR = "profile";
+    private static readonly BUILD_TIME = new ChannelAddress("_meta", "BuildTime");
 
     public environment = environment;
     public edge: Edge | null = null;
@@ -55,6 +56,7 @@ export class ProfileComponent implements OnInit {
     protected isLoading: WritableSignal<boolean> = signal(true);
     protected isAtLeastOwner: boolean = false;
     protected locationModel: LocationModel | null = null;
+    protected buildTime: string | null = null;
 
     private routeService: RouteService = inject(RouteService);
     private navCtrl: NavController = inject(NavController);
@@ -113,6 +115,10 @@ export class ProfileComponent implements OnInit {
     public ngOnInit() {
         this.service.getCurrentEdge().then((edge) => {
             this.edge = edge;
+            edge.subscribeChannels(this.websocket, ProfileComponent.SELECTOR, [ProfileComponent.BUILD_TIME]);
+            edge.currentData.subscribe((currentData) => {
+                this.buildTime = currentData.channel[ProfileComponent.BUILD_TIME.toString()] ?? null;
+            });
             this.service.getConfig().then(async (config) => {
                 this.isAtLeastOwner = EdgePermission.isUserAllowedToSetupProtocolDownload(edge);
                 this.config = config;
@@ -141,6 +147,10 @@ export class ProfileComponent implements OnInit {
                 };
             });
         });
+    }
+
+    public ngOnDestroy() {
+        this.edge?.unsubscribeChannels(this.websocket, ProfileComponent.SELECTOR);
     }
 
     public getChannelExport(componentId: string) {

@@ -14,6 +14,7 @@ import static org.osgi.service.component.annotations.ReferencePolicyOption.GREED
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Optional;
@@ -77,6 +78,8 @@ import io.openems.edge.core.meta.geocoding.OpenCageGeocodingService;
 public class MetaImpl extends AbstractOpenemsComponent
 		implements Meta, OpenemsComponent, ModbusSlave, ComponentJsonApi, EventHandler {
 
+	private static final DateTimeFormatter BUILD_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy MM dd HH:mm");
+
 	private final Logger log = OpenemsComponent.getComponentLogger(this);
 
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
@@ -135,6 +138,8 @@ public class MetaImpl extends AbstractOpenemsComponent
 	private void activate(ComponentContext context, Config config) {
 		super.activate(context, SINGLETON_COMPONENT_ID, Meta.SINGLETON_SERVICE_PID, true);
 
+		this.channel(Meta.ChannelId.BUILD_TIME).setNextValue(getBuildTime(context));
+
 		// Update the Channel _meta/SystemTimeUtc after every second
 		final var systemTimeUtcChannel = this.<LongReadChannel>channel(Meta.ChannelId.SYSTEM_TIME_UTC);
 		this.executor.scheduleAtFixedRate(() -> {
@@ -148,6 +153,60 @@ public class MetaImpl extends AbstractOpenemsComponent
 		if (OpenemsComponent.validateSingleton(this.cm, Meta.SINGLETON_SERVICE_PID, SINGLETON_COMPONENT_ID)) {
 			return;
 		}
+	}
+
+	/**
+	 * Gets the build time of the newest "io.openems.*" bundle, formatted in local
+	 * time like "2026 10 20 06:52".
+	 *
+	 * <p>
+	 * Bnd writes the "Bnd-LastModified" manifest header (epoch milliseconds) on
+	 * every build. A fat-jar is always made of the latest build of each bundle, so
+	 * the newest bundle marks the last code change in the deployed jar.
+	 *
+	 * @param context the {@link ComponentContext}
+	 * @return the formatted build time or null if unknown
+	 */
+	protected static String getBuildTime(ComponentContext context) {
+		final var bundleContext = context.getBundleContext();
+		if (bundleContext == null) {
+			return null;
+		}
+		final var bundles = bundleContext.getBundles();
+		if (bundles == null) {
+			return null;
+		}
+		var latest = 0L;
+		for (var bundle : bundles) {
+			final var name = bundle.getSymbolicName();
+			if (name == null || !name.startsWith("io.openems.")) {
+				continue;
+			}
+			final var header = bundle.getHeaders().get("Bnd-LastModified");
+			if (header == null) {
+				continue;
+			}
+			try {
+				latest = max(latest, Long.parseLong(header.trim()));
+			} catch (NumberFormatException e) {
+				// ignore
+			}
+		}
+		if (latest == 0L) {
+			return null;
+		}
+		return formatBuildTime(Instant.ofEpochMilli(latest), ZoneId.systemDefault());
+	}
+
+	/**
+	 * Formats a build time like "2026 10 20 06:52".
+	 *
+	 * @param instant the {@link Instant}
+	 * @param zone    the {@link ZoneId}
+	 * @return the formatted build time
+	 */
+	protected static String formatBuildTime(Instant instant, ZoneId zone) {
+		return BUILD_TIME_FORMAT.format(instant.atZone(zone));
 	}
 
 	@Modified

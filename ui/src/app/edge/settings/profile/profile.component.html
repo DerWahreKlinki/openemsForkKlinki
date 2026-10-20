@@ -31,7 +31,12 @@
                   }
                   <ion-item>
                     <ion-label style="white-space: initial">{{ environment.edgeShortName }} Version</ion-label>
-                    <a class="ion-link" style="white-space: initial; display: inline-block; max-width: 50%; text-align: right" routerLinkActive="active" (keydown.enter)="navigateToChangelog($event)" (click)="navigateToChangelog($event)">{{ edge.version | version: edge.role }}</a>
+                    <a class="ion-link" style="white-space: initial; display: inline-block; max-width: 50%; text-align: right" routerLinkActive="active" (keydown.enter)="navigateToChangelog($event)" (click)="navigateToChangelog($event)"
+                      >{{ edge.version | version: edge.role }}
+                      @if (buildTime) {
+                        | {{ buildTime }}
+                      }
+                    </a>
                   </ion-item>
                   <ion-item>
                     <ion-label>{{ "EDGE.CONFIG.INDEX.ROLE" | translate }}</ion-label>

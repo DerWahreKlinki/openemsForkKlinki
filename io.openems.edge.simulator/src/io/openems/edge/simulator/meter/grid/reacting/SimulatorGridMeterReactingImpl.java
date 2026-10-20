@@ -135,12 +135,14 @@ public class SimulatorGridMeterReactingImpl extends AbstractOpenemsComponent
 			try {
 				switch (m.getMeterType()) {
 				case CONSUMPTION_METERED:
-				case MANAGED_CONSUMPTION_METERED:
 				case GRID:
 				case GRID_GENSET:
 					// ignore
 					break;
 				case CONSUMPTION_NOT_METERED:
+				case MANAGED_CONSUMPTION_METERED:
+					// a simulated managed consumer (e.g. Simulator.Evcs) is not part of any
+					// other simulated meter, so it counts like a not-metered consumer
 					activePower = add(activePower, m.getActivePowerChannel().getNextValue().get());
 					break;
 				case PRODUCTION:

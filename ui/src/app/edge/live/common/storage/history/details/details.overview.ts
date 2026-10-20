@@ -1,4 +1,4 @@
-import { Component } from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { ReactiveFormsModule } from "@angular/forms";
 import { CommonUiModule } from "src/app/shared/common-ui.module";
 import { AbstractHistoryChartOverview } from "src/app/shared/components/chart/abstractHistoryChartOverview";
@@ -11,6 +11,8 @@ import { StorageEssChartComponent } from "./chart/esschart";
 @Component({
     templateUrl: "./details.overview.html",
     standalone: true,
+    // Angular 22 defaults to OnPush: isInitialized is set in a promise, so the view needs eager checks
+    changeDetection: ChangeDetectionStrategy.Eager,
     imports: [
         CommonUiModule,
         LocaleProvider,
@@ -22,4 +24,4 @@ import { StorageEssChartComponent } from "./chart/esschart";
         FooterNavigationComponentsModule,
     ],
 })
-export class DetailsOverviewComponent extends AbstractHistoryChartOverview { }
+export class DetailsOverviewComponent extends AbstractHistoryChartOverview {}

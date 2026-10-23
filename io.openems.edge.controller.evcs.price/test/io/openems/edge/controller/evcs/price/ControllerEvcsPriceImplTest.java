@@ -765,6 +765,14 @@ public class ControllerEvcsPriceImplTest {
 	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
 			boolean useStorageSurplus, boolean enablePriceCharging, Priority priority,
 			OpenemsComponent timeOfUseTariff, int productionW, int consumptionW, int quarters) throws Exception {
+		return prepareStoragePriceTest(clock, controller, useStorageSurplus, enablePriceCharging, priority,
+				timeOfUseTariff, productionW, consumptionW, quarters, 0);
+	}
+
+	private static ControllerTest prepareStoragePriceTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			boolean useStorageSurplus, boolean enablePriceCharging, Priority priority,
+			OpenemsComponent timeOfUseTariff, int productionW, int consumptionW, int quarters,
+			int stopConfirmationTime) throws Exception {
 		final var now = Instant.now(clock);
 		final var cm = new DummyComponentManager(clock);
 		if (timeOfUseTariff != null) {
@@ -810,6 +818,7 @@ public class ControllerEvcsPriceImplTest {
 						.setUseStorageSurplus(useStorageSurplus) //
 						.setStorageTargetSocNet(80) //
 						.setStorageLossSurcharge(1) //
+						.setStopConfirmationTime(stopConfirmationTime) //
 						.setTimeOfUseTariffId(timeOfUseTariff == null ? "" : timeOfUseTariff.id()) //
 						.build());
 	}
@@ -1123,6 +1132,71 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void storageDipKeepsChargingByPlanTest() throws Exception {
+		// Charging by price from the storage the plan releases (8 ct, grid 43.1 ct):
+		// a house load that takes the storage share for a moment is a cloud, not a
+		// price -> the stop hysteresis holds. The optimizer taking the storage away
+		// is a decision of the plan -> stop at once
+		final var clock = createDummyClock();
+		final var tou = new DummyTimeOfUseTariff("ctrlToU0");
+		prepareStoragePriceTest(clock, new ControllerEvcsPriceImpl(clock), true, true, STORAGE, tou, 12000, 2000,
+				96, 600) //
+				.next(new TestCase("balancing while charging") //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.BALANCING) //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 30000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 5140) //
+						.input(CONSUMPTION_ACTIVE_POWER, 5140) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 4140) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(STORAGE_PRICE, 80.) //
+						.output(STORAGE_POWER_FOR_CAR, 4140) //
+						.output(BLENDED_PRICE, 80.0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				// 5 kW house load: the storage delivers its maximum 5140 W, 140 W are
+				// left for the car, blended 41.9 ct -> no fill-up, but the plan still has
+				// 4140 W storage for the car -> stop hysteresis, charging goes on
+				.next(new TestCase("house load takes the storage") //
+						.timeleap(clock, 1, MINUTES) //
+						.input(ESS_DISCHARGE_POWER, 5140) //
+						.input(CONSUMPTION_ACTIVE_POWER, 9140) //
+						.input(GRID_ACTIVE_POWER, 4000) //
+						.output(STORAGE_POWER_FOR_CAR, 140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase("house load still there") //
+						.timeleap(clock, 5, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase("house load gone") //
+						.timeleap(clock, 1, MINUTES) //
+						.input(CONSUMPTION_ACTIVE_POWER, 5140) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.output(STORAGE_POWER_FOR_CAR, 4140) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				// the optimizer delays the discharge: the plan has no storage for the
+				// car any more -> charging by price ends at once
+				.next(new TestCase("delayed discharge") //
+						.timeleap(clock, 1, MINUTES) //
+						.input("ctrlToU0", DummyTimeOfUseTariff.ChannelId.STATE_MACHINE,
+								DummyTimeOfUseTariff.State.DELAY_DISCHARGE) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input(GRID_ACTIVE_POWER, 4140) //
+						.output(STORAGE_DISCHARGE_BLOCKED, true) //
+						.output(STORAGE_POWER_FOR_CAR, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
+	}
+
+	@Test
 	public void storageBlockedByTimeOfUseTariffTest() throws Exception {
 		// Priority STORAGE, 12 kW production, 2 kW consumption: the plan lets the car
 		// fill up from the storage charging while the storage still reaches its
@@ -1366,6 +1440,94 @@ public class ControllerEvcsPriceImplTest {
 						.input(GRID_ACTIVE_POWER, 2000) //
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
 						.output(AWAITING_HYSTERESIS, false)) //
+				.deactivate();
+	}
+
+	@Test
+	public void priceDrivenSwitchesAtOnceTest() throws Exception {
+		// Charging the price alone carries starts and stops at once, the time
+		// hysteresis of 600 s does not apply: the price changes with the quarter-hour.
+		// Once charging by price it goes on up to 1 ct above the limit. Surplus
+		// charging keeps the time hysteresis
+		final var clock = createDummyClock();
+		new ControllerTest(new ControllerEvcsPriceImpl(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.addReference("sum", new DummySum()) //
+				.addReference("evcs", DummyManagedEvcs.ofDisabled("evcs0")) //
+				.activate(MyConfig.create() //
+						.setId("ctrlEvcs0") //
+						.setEvcsId("evcs0") //
+						.setEnableCharging(true) //
+						.setChargeMode(EXCESS_POWER) //
+						.setForceChargeMinPower(3680) //
+						.setDefaultChargeMinPower(0) //
+						.setPriority(CAR) //
+						.setEnergySessionLimit(0) //
+						.setEnablePriceCharging(true) //
+						.setPriceLimit(30) //
+						.setPriceLimitFullPower(17) //
+						.setPriceChargePower(11040) //
+						.setPriceHysteresis(1) //
+						.setStartConfirmationTime(600) //
+						.setStopConfirmationTime(600) //
+						.build()) //
+				.next(new TestCase("29 ct, no surplus: start at once") //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input(GRID_BUY_PRICE, 290.) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4671) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("30.5 ct: within the price hysteresis, minimum power") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_BUY_PRICE, 305.) //
+						.input(GRID_ACTIVE_POWER, 5600) //
+						.input("evcs0", ACTIVE_POWER, 4600) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("31.5 ct: stop at once") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_BUY_PRICE, 315.) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("30.5 ct: not charging, no hysteresis: stays off") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_BUY_PRICE, 305.) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase("25 ct: start at once") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_BUY_PRICE, 250.) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6794) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("40 ct but surplus: charging goes on by sun") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_BUY_PRICE, 400.) //
+						.input(GRID_ACTIVE_POWER, -2000) //
+						.input("evcs0", ACTIVE_POWER, 4000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("surplus gone: the stop hysteresis applies") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, 5000) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 6000) //
+						.output(AWAITING_HYSTERESIS, true)) //
+				.next(new TestCase("after 600 s without surplus: stop") //
+						.timeleap(clock, 600, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, false)) //
+				.next(new TestCase("sun back: the start hysteresis applies") //
+						.timeleap(clock, 2, SECONDS) //
+						.input(GRID_ACTIVE_POWER, -6000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0) //
+						.output(AWAITING_HYSTERESIS, true)) //
 				.deactivate();
 	}
 
@@ -1999,6 +2161,60 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void carTakesNothingCountPausesWithoutOfferTest() throws Exception {
+		// The 45 minutes count the time offered in total: 30 minutes offered, 30
+		// minutes nothing offered (too expensive), then 16 minutes offered again
+		final var clock = createDummyClock();
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		preparePricePlanTest(clock, controller, prices) //
+				.next(new TestCase("plugged in, nothing taken") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 500) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("offered") //
+						.timeleap(clock, 1, SECONDS)) //
+				.next(new TestCase("after 30 minutes offered: too expensive, nothing offered") //
+						.timeleap(clock, 30, MINUTES) //
+						.input(GRID_BUY_PRICE, 900.) //
+						.output(CAR_TAKES_NOTHING, false)) //
+				.next(new TestCase("nothing offered") //
+						.timeleap(clock, 1, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.next(new TestCase("30 minutes without offer: the count pauses") //
+						.timeleap(clock, 30, MINUTES) //
+						.output(CAR_TAKES_NOTHING, false)) //
+				.next(new TestCase("cheap again: offered") //
+						.timeleap(clock, 1, SECONDS) //
+						.input(GRID_BUY_PRICE, 200.) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("offered") //
+						.timeleap(clock, 1, SECONDS)) //
+				.next(new TestCase("14 more minutes offered: 44 in total") //
+						.timeleap(clock, 14, MINUTES) //
+						.output(CAR_TAKES_NOTHING, false)) //
+				.next(new TestCase("2 more minutes offered: 46 in total, the car takes nothing") //
+						.timeleap(clock, 2, MINUTES) //
+						.output(CAR_TAKES_NOTHING, true) //
+						.onAfterControllersCallbacks(() -> {
+							assertFalse(controller.energySchedulerConfig().charging(), "no consumption for the optimizer");
+						})) //
+				.deactivate();
+	}
+
+	@Test
 	public void targetPlanKeptWhileTheCarTakesNothingTest() throws Exception {
 		// Target charging: the car takes nothing for 46 minutes: target charging and
 		// its plan stay, only the optimizer gets nothing; power again: it counts again
@@ -2376,5 +2592,18 @@ public class ControllerEvcsPriceImplTest {
 						.setTargetStartEnergy(targetStartEnergy) //
 						.setTargetPlan(targetPlan) //
 						.build());
+	}
+
+	@Test
+	public void isPluggedInTest() {
+		// without plug state: from the status
+		assertTrue(ControllerEvcsPriceImpl.isPluggedIn(Status.READY_FOR_CHARGING, null));
+		assertFalse(ControllerEvcsPriceImpl.isPluggedIn(Status.NOT_READY_FOR_CHARGING, null));
+		// Keba with a car plugged in while no power was offered
+		assertTrue(ControllerEvcsPriceImpl.isPluggedIn(Status.NOT_READY_FOR_CHARGING, 7));
+		assertTrue(ControllerEvcsPriceImpl.isPluggedIn(Status.NOT_READY_FOR_CHARGING, 5));
+		// cable only on the wallbox
+		assertFalse(ControllerEvcsPriceImpl.isPluggedIn(Status.NOT_READY_FOR_CHARGING, 3));
+		assertFalse(ControllerEvcsPriceImpl.isPluggedIn(Status.READY_FOR_CHARGING, 0));
 	}
 }

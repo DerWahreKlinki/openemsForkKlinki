@@ -607,6 +607,7 @@ export class ModalComponent extends AbstractModal {
             priceLimitFullPower: new FormControl(
                 ModalComponent.toNumber(this.controller?.properties.priceLimitFullPower),
             ),
+            priceHysteresis: new FormControl(ModalComponent.toNumber(this.controller?.properties.priceHysteresis) ?? 1),
             useStorageSurplus: new FormControl(this.controller?.properties.useStorageSurplus === true),
             storageTargetSocNet: new FormControl(
                 ModalComponent.toNumber(this.controller?.properties.storageTargetSocNet),

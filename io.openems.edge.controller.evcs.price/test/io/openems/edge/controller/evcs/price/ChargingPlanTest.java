@@ -34,7 +34,12 @@ public class ChargingPlanTest {
 	private static final int TARGET = (int) Math.round(USABLE * 0.85);
 
 	private static Rules rules(Priority priority) {
-		return new Rules(true, 30, 17, 11040, priority, 4140, 11040, 7, 8, true, TARGET, 200, 16170);
+		return new Rules(true, 30, 17, 11040, priority, 4140, 11040, 7, 8, true, TARGET, 200, 16170, 0, false);
+	}
+
+	private static Rules rulesWithHysteresis(double hysteresis, boolean priceDrivenNow) {
+		return new Rules(true, 30, 17, 11040, Priority.CAR, 4140, 11040, 7, 8, true, TARGET, 200, 16170, hysteresis,
+				priceDrivenNow);
 	}
 
 	private static Storage storage(double storedWh) {
@@ -63,6 +68,39 @@ public class ChargingPlanTest {
 			result.add(new Input(START.plusMinutes(15L * i), price, 0, 1000, mode, gridCharge));
 		}
 		return result;
+	}
+
+	private static List<Input> nightPrices(double... prices) {
+		final var result = new ArrayList<Input>();
+		for (var i = 0; i < prices.length; i++) {
+			result.add(new Input(START.plusMinutes(15L * i), prices[i], 0, 1000));
+		}
+		return result;
+	}
+
+	@Test
+	public void priceHysteresisKeepsCharging() {
+		// prices around the limit of 30 ct: once charging by price, a quarter-hour up
+		// to 1 ct above the limit goes on with the minimum power; a start needs a
+		// price below the limit
+		final var inputs = nightPrices(29, 30.5, 32, 30.5, 29, 30.9, 31.1);
+		final var without = ChargingPlan.calculate(rulesWithHysteresis(0, false), storage(10000), new Car(true, null),
+				inputs).quarters();
+		assertEquals(List.of(Reason.PRICE, Reason.TOO_EXPENSIVE, Reason.TOO_EXPENSIVE, Reason.TOO_EXPENSIVE,
+				Reason.PRICE, Reason.TOO_EXPENSIVE, Reason.TOO_EXPENSIVE),
+				without.stream().map(Quarter::reason).toList());
+		final var with = ChargingPlan.calculate(rulesWithHysteresis(1, false), storage(10000), new Car(true, null),
+				inputs).quarters();
+		assertEquals(List.of(Reason.PRICE, Reason.PRICE, Reason.TOO_EXPENSIVE, Reason.TOO_EXPENSIVE, Reason.PRICE,
+				Reason.PRICE, Reason.TOO_EXPENSIVE), with.stream().map(Quarter::reason).toList());
+		// within the hysteresis: the minimum power only
+		assertEquals(4140, with.get(1).power());
+		assertTrue(with.get(0).power() > 4140);
+		// charging by price right now: the first quarter-hour continues within the
+		// hysteresis
+		final var now = ChargingPlan.calculate(rulesWithHysteresis(1, true), storage(10000), new Car(true, null),
+				nightPrices(30.5, 32)).quarters();
+		assertEquals(List.of(Reason.PRICE, Reason.TOO_EXPENSIVE), now.stream().map(Quarter::reason).toList());
 	}
 
 	@Test
@@ -240,7 +278,8 @@ public class ChargingPlanTest {
 
 	@Test
 	public void gridLimitLeavesNoRoom() {
-		final var rules = new Rules(true, 30, 17, 11040, Priority.STORAGE, 4140, 11040, 7, 8, true, TARGET, 200, 9000);
+		final var rules = new Rules(true, 30, 17, 11040, Priority.STORAGE, 4140, 11040, 7, 8, true, TARGET, 200, 9000,
+				0, false);
 		final var r = ChargingPlan.calculate(rules, storage(10000), new Car(true, null),
 				night(20, StorageMode.CHARGE_GRID, 6000));
 		assertEquals(0, r.energyWh());

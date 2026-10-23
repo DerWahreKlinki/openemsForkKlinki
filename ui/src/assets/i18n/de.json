@@ -461,6 +461,8 @@
                         "PRICE_CHARGING_INFO": "Lädt aus dem Netz, solange der Strompreis bzw. der Mischpreis unter der Preisgrenze liegt. Ausgeschaltet wird nie Netzstrom wegen des Preises genommen: Das Auto lädt nur aus Überschuss, der sonst ins Netz ginge, und ggf. aus der Speicher-Reserve.",
                         "PRICE_LIMIT": "Netzladen unter Strompreis",
                         "PRICE_LIMIT_FULL_POWER": "Volle Ladeleistung unter Strompreis",
+                        "PRICE_HYSTERESIS": "Preis-Hysterese",
+                        "PRICE_HYSTERESIS_INFO": "Einmal zum Strompreis gestartet, lädt das Auto mit Mindestleistung weiter, bis der Preis die Preisgrenze um diesen Wert übersteigt. Preisbedingte Wechsel schalten sofort zur Viertelstunde, die Zeit-Hysterese gilt nur beim Überschussladen.",
                         "PV_PRICE": "Wert des Überschussstroms",
                         "SHORT_NAME": "Preisladen"
                     },

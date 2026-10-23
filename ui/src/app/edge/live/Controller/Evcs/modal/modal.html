@@ -217,6 +217,9 @@
               <oe-range-slider [formGroup]="formGroup" controlName="priceLimit" [properties]="{ tickMin: 0, tickMax: 100, unit: 'ct/kWh', step: 1, pinFormatter: CENT_PIN_FORMATTER }"></oe-range-slider>
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_LIMIT_FULL_POWER' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['priceLimitFullPower']" [converter]="CONVERT_TO_CENT_PER_KWH"></oe-modal-line>
               <oe-range-slider [formGroup]="formGroup" controlName="priceLimitFullPower" [properties]="{ tickMin: 0, tickMax: 100, unit: 'ct/kWh', step: 1, pinFormatter: CENT_PIN_FORMATTER }"></oe-range-slider>
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_HYSTERESIS' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['priceHysteresis']" [converter]="CONVERT_TO_CENT_PER_KWH"></oe-modal-line>
+              <oe-range-slider [formGroup]="formGroup" controlName="priceHysteresis" [properties]="{ tickMin: 0, tickMax: 20, unit: 'ct/kWh', step: 1, pinFormatter: CENT_PIN_FORMATTER }"></oe-range-slider>
+              <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_HYSTERESIS_INFO' | translate" style="font-size: small"></oe-modal-info-line>
             }
             <!--Storage: car may charge from the storage if it will be refilled by PV surplus today-->
             <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.NAME' | translate" [formGroup]="formGroup" [component]="controller" controlName="useStorageSurplus" [control]="{ type: 'TOGGLE' }" leftColumnWidth="100"></oe-modal-line>

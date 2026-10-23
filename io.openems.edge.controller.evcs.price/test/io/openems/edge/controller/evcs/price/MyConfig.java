@@ -22,6 +22,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private boolean enablePriceCharging = true;
 		private double priceLimit = 0;
 		private double priceLimitFullPower = 0;
+		private double priceHysteresis = 0;
 		private int priceChargePower = 11040;
 		private boolean useStorageSurplus = false;
 		private int storageTargetSocNet = 80;
@@ -107,6 +108,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setPriceLimitFullPower(double priceLimitFullPower) {
 			this.priceLimitFullPower = priceLimitFullPower;
+			return this;
+		}
+
+		public Builder setPriceHysteresis(double priceHysteresis) {
+			this.priceHysteresis = priceHysteresis;
 			return this;
 		}
 
@@ -266,6 +272,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public double priceLimitFullPower() {
 		return this.builder.priceLimitFullPower;
+	}
+
+	@Override
+	public double priceHysteresis() {
+		return this.builder.priceHysteresis;
 	}
 
 	@Override

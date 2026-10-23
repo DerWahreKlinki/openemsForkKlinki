@@ -92,10 +92,15 @@ public final class ChargingPlan {
 	 * @param targetWh            the evening target of the storage in [Wh] net
 	 * @param bufferPower         the buffer below the feed-in in [W]
 	 * @param gridMaxBuyPower     the grid buy limit in [W]; 0 for none
+	 * @param priceHysteresis     once charging by price it goes on while the
+	 *                            price stays below the limit plus this [ct/kWh]
+	 * @param priceDrivenNow      the car charges by price right now: the
+	 *                            hysteresis applies to the first quarter-hour
 	 */
 	public record Rules(boolean enablePriceCharging, double priceLimit, double priceLimitFullPower,
 			int priceChargePower, Priority priority, int minPower, int maxPower, double pvPrice, double storagePrice,
-			boolean useStorageSurplus, int targetWh, int bufferPower, int gridMaxBuyPower) {
+			boolean useStorageSurplus, int targetWh, int bufferPower, int gridMaxBuyPower, double priceHysteresis,
+			boolean priceDrivenNow) {
 
 		/**
 		 * The rules with a lower maximum power, e.g. the measured power of the car.
@@ -107,7 +112,7 @@ public final class ChargingPlan {
 			return new Rules(this.enablePriceCharging, this.priceLimit, this.priceLimitFullPower, this.priceChargePower,
 					this.priority, this.minPower, Math.max(Math.min(this.maxPower, maxPower), this.minPower),
 					this.pvPrice, this.storagePrice, this.useStorageSurplus, this.targetWh, this.bufferPower,
-					this.gridMaxBuyPower);
+					this.gridMaxBuyPower, this.priceHysteresis, this.priceDrivenNow);
 		}
 	}
 
@@ -786,6 +791,8 @@ public final class ChargingPlan {
 		var fromPv = 0.;
 		var fromStorage = 0.;
 		var fromGrid = 0.;
+		// the quarter-hour before charged by price: the price hysteresis applies
+		var prevPriceDriven = rules.priceDrivenNow();
 		for (var i = 0; i < inputs.size(); i++) {
 			final var in = inputs.get(i);
 			final var prod = in.production();
@@ -800,6 +807,8 @@ public final class ChargingPlan {
 			Double blended = null;
 			Reason reason;
 			var storageLockedNow = false;
+			// the price alone carries the charging, without the surplus
+			var priceDriven = false;
 			if (prod == null || cons == null || price == null) {
 				reason = Reason.UNKNOWN;
 			} else {
@@ -816,10 +825,13 @@ public final class ChargingPlan {
 				final var dischargeForHouse = h.dischargeForHouse();
 				final var buyWithout = h.buyWithout();
 				final var excess = h.excess();
+				final var onOffLimit = rules.priceLimit() + (prevPriceDriven ? rules.priceHysteresis() : 0);
 				final var pricePower = rules.enablePriceCharging()
 						? ControllerEvcsPriceImpl.calculateChargePowerFromPrice(price * 10, rules.priceLimit(),
-								rules.priceLimitFullPower(), rules.minPower(), rules.priceChargePower())
+								rules.priceLimitFullPower(), rules.minPower(), rules.priceChargePower(),
+								rules.priceHysteresis(), prevPriceDriven)
 						: 0;
+				priceDriven = pricePower > 0;
 				var targetCharging = false;
 				if (!car.pluggedIn()) {
 					reason = Reason.NOT_PLUGGED;
@@ -864,9 +876,12 @@ public final class ChargingPlan {
 					final var essShare = reductionShare + dischargeShare;
 					blended = (excess * rules.pvPrice() + reductionShare * reductionPrice
 							+ dischargeShare * dischargePrice + (missing - essShare) * price) / rules.minPower();
-					if ((excess > 0 || essShare > 0) && blended < rules.priceLimit()) {
+					if ((excess > 0 || essShare > 0) && blended < onOffLimit) {
 						power = rules.minPower();
 						reason = Reason.FILL_UP;
+						// storage and grid alone below the limit: by price, not by sun
+						priceDriven = (reductionShare * reductionPrice + dischargeShare * dischargePrice
+								+ (rules.minPower() - essShare) * price) / rules.minPower() < onOffLimit;
 					} else {
 						reason = budget ? Reason.TOO_EXPENSIVE : Reason.TARGET;
 					}
@@ -953,6 +968,7 @@ public final class ChargingPlan {
 						- dischargeWith / (double) QUARTERS_PER_HOUR;
 				stored = min(max(stored, 0), storage.usableWh());
 			}
+			prevPriceDriven = power > 0 && priceDriven;
 			quarters.add(new Quarter(in.time(), price, prod, cons, mode, power, pvShare, storageShare, storageBudget,
 					gridShare, blended, reason, stored, storageLockedNow));
 		}

@@ -19,6 +19,10 @@ Stop hysteresis:: Charging stops only after it has not been allowed continuously
 
 Changes of the charge power while charging are applied at once, after the response time of the charging station.
 
+Both apply to changes the surplus causes only. A start the price alone carries (the car would charge without any surplus, from grid below the "Price limit" or from storage and grid below it at the blended price) happens at once, and charging the price alone carried stops at once when the price no longer allows it and the surplus does not take over: the price changes with the quarter-hour, waiting would only charge into the expensive quarter-hour.
+
+Price hysteresis:: Once charging by price, charging goes on with the minimum hardware power while the price stays below the "Price limit" plus this value, so that a price around the limit does not switch the car every quarter-hour. A start needs a price below the limit. The charging plan applies the same rule.
+
 == Modbus/TCP
 
 The controller provides a Modbus table (`getModbusSlaveTable`) with its set-points and the storage figures of the charging plan, so that external systems can read the charging decision.

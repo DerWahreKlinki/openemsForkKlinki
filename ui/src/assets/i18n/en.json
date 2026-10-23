@@ -461,6 +461,8 @@
                         "PRICE_CHARGING_INFO": "Charges from grid while the grid price or the blended price is below the price limit. Switched off, grid power is never taken because of its price: the car charges only from surplus that would otherwise be fed into the grid and, if included, from the storage reserve.",
                         "PRICE_LIMIT": "Grid charging below price",
                         "PRICE_LIMIT_FULL_POWER": "Full charge power below price",
+                        "PRICE_HYSTERESIS": "Price hysteresis",
+                        "PRICE_HYSTERESIS_INFO": "Once started by price, the car goes on charging with the minimum power until the price exceeds the price limit by this value. Changes caused by the price switch at once with the quarter-hour; the time hysteresis applies to surplus charging only.",
                         "PV_PRICE": "Value of surplus power",
                         "SHORT_NAME": "Price charging"
                     },

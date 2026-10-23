@@ -70,6 +70,10 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 	// The last complete report: it stands in while a member restarts and its
 	// channels are empty for a moment
 	private volatile EnergyScheduler.Config lastReport = null;
+	// The optimizer was told that the first report is there: right after the
+	// activation the members have no values yet and the optimizer plans without
+	// the window until its next run
+	private boolean firstReportAnnounced = false;
 
 	public ControllerEssChargeDischargeLimiterClusterImpl() {
 		super(//
@@ -122,6 +126,12 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 		this._setChargePowerAllowed(report == null ? null : report.maxChargePower());
 		this._setDischargePowerAllowed(report == null ? null : report.maxDischargePower());
 		this._setNetSoc(netSoc(report, summary.currentEnergy()));
+		if (report != null && !this.firstReportAnnounced && this.config.reportToEnergyScheduler()
+				&& this.energyScheduleHandler != null) {
+			this.firstReportAnnounced = true;
+			this.energyScheduleHandler.triggerReschedule("ControllerEssChargeDischargeLimiterClusterImpl::first report",
+					RescheduleMode.OPTIMIZE_CURRENT_PERIOD);
+		}
 		if (this.config.debugMode()) {
 			this.logInfo(this.log, this.debugLog());
 		}

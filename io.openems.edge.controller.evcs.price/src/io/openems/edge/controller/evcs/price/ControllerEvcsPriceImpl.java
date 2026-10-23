@@ -88,6 +88,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	// Last charge power, used for the hysteresis
 	private int lastChargePower = 0;
+	// The running charging is carried by the price alone (it would go on without
+	// any surplus): the price hysteresis applies, the time hysteresis does not
+	private boolean priceDrivenCharging = false;
 
 	// Time since when a charge power above zero (below or equal zero) is calculated
 	// continuously while not charging (charging); used for the start (stop)
@@ -151,9 +154,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Price charging: the car power measured in this session, for the plan; 0 for
 	// the hardware. Target charging keeps its own in the stored plan
 	private int priceCarPower = 0;
-	// Since when the car takes nothing although at least the minimum power is
-	// offered; null while it takes power or while nothing is offered
-	private Instant carIdleSince = null;
+	// How long the car took nothing although at least the minimum power was
+	// offered; the time without offer pauses it, power or a new session resets it
+	private Duration carIdleTime = Duration.ZERO;
+	// The cycle the idle time was counted last; null while nothing is offered
+	private Instant carIdleLast = null;
 	// The car takes nothing for a long time, e.g. it is full: the plan goes on,
 	// but it does not count for the energy optimizer
 	private boolean carTakesNothing = false;
@@ -163,6 +168,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// The car takes this much less than planned or offered -> plan again
 	private static final int CAR_POWER_TOLERANCE = 1000; // W
 	private static final Duration CAR_POWER_CONFIRMATION = Duration.ofMinutes(2);
+	// Plug state of the EVCS from which a car is plugged in, e.g. Keba: 5 and 7
+	private static final int PLUGGED_IN_EV = 5;
 	// Below this the car takes nothing
 	private static final int CAR_IDLE_POWER = 500; // W
 	// A car that takes nothing this long although power is offered counts as
@@ -334,8 +341,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 		// A car plugged in or out changes the forecast for the energy optimizer
 		final var evcsStatus = this.evcs.getStatus();
-		final var pluggedIn = isPluggedIn(evcsStatus);
-		if (evcsStatus == Status.UNDEFINED || evcsStatus == Status.STARTING) {
+		final var plug = this.evcsPlug();
+		final var pluggedIn = isPluggedIn(evcsStatus, plug);
+		if (plug == null && (evcsStatus == Status.UNDEFINED || evcsStatus == Status.STARTING)) {
 			// not known yet, e.g. right after a restart
 		} else if (this.lastPluggedIn == null) {
 			this.lastPluggedIn = pluggedIn;
@@ -345,13 +353,13 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			// a new session, maybe another car: measure its power again
 			this.priceCarPower = 0;
 			this.carPowerLowSince = null;
-			this.carIdleSince = null;
+			this.resetCarIdle();
 			this.carTakesNothing = false;
 			if (pluggedIn) {
 				this.chargingLowerThanTargetHandler.reset();
 				this.evcs._setMaximumPower(null);
 				this.requestTargetReplan("car plugged in");
-			} else if (evcsStatus == Status.NOT_READY_FOR_CHARGING && this.config.targetCharging()) {
+			} else if ((plug != null || evcsStatus == Status.NOT_READY_FOR_CHARGING) && this.config.targetCharging()) {
 				// the car is gone: target charging ends, its plan is void
 				this.logInfo(this.log, "Car unplugged: target charging switches off");
 				this.configUpdateOnce("targetCharging", false);
@@ -477,12 +485,20 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// Charge from grid depending on the price; the higher of excess power and
 		// price dependent power wins. Target charging follows its plan instead
 		var priceCharging = false;
+		// the decision would be the same without any surplus: the price alone carries
+		// it, so it changes with the quarter-hour and not with a cloud
+		var priceDriven = false;
 		if (chargeMode == ChargeMode.EXCESS_POWER || targetMode) {
 			final var gridBuyPrice = this.sum.getGridBuyPrice().get();
 			final var priceChargingEnabled = this.config.enablePriceCharging() && !targetMode;
+			// once charging by price the price may exceed the limit by the hysteresis
+			final var onOffLimit = this.config.priceLimit()
+					+ (this.priceDrivenCharging ? this.config.priceHysteresis() : 0);
 			if (priceChargingEnabled) {
 				var priceChargePower = calculateChargePowerFromPrice(gridBuyPrice, this.config.priceLimit(),
-						this.config.priceLimitFullPower(), minimumHardwarePower, this.config.priceChargePower());
+						this.config.priceLimitFullPower(), minimumHardwarePower, this.config.priceChargePower(),
+						this.config.priceHysteresis(), this.priceDrivenCharging);
+				priceDriven = priceChargePower > 0;
 				if (priceChargePower > nextChargePower) {
 					nextChargePower = priceChargePower;
 					priceCharging = true;
@@ -528,9 +544,18 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				final boolean fillUp;
 				if (priceChargingEnabled) {
 					fillUp = this.config.useStorageSurplus() //
-							? available && blendedPrice != null && blendedPrice < this.config.priceLimit()
+							? available && blendedPrice != null && blendedPrice < onOffLimit
 							: isBlendedPriceBelowLimit(gridBuyPrice, pvPower, minimumHardwarePower,
-									this.config.pvPrice(), this.config.priceLimit());
+									this.config.pvPrice(), onOffLimit);
+					if (this.config.useStorageSurplus() && this.planStoragePower > 0) {
+						// storage and grid alone below the limit, e.g. storage the optimizer
+						// releases at night: charging by price, the surplus is not needed.
+						// The storage share of the plan counts, not the measured one: a house
+						// load that takes the storage for a moment is a cloud, not a price
+						final var withoutPv = calculateBlendedPrice(gridBuyPrice, 0, this.planStoragePower,
+								minimumHardwarePower, this.config.pvPrice(), storagePrice);
+						priceDriven = priceDriven || withoutPv != null && withoutPv < onOffLimit;
+					}
 				} else {
 					// Without price-based charging no grid power at all: PV and the planned
 					// storage power have to cover the minimum power by themselves
@@ -592,7 +617,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		} else if (chargeMode == ChargeMode.EXCESS_POWER) {
 			if (pluggedIn) {
 				// Apply hysteresis
-				nextChargePower = this.applyHysteresis(nextChargePower);
+				nextChargePower = this.applyHysteresis(nextChargePower, priceDriven);
 			} else {
 				// Without a car there is nothing to protect: no hysteresis, the limit
 				// follows the price at once; the charge process after plugging in starts
@@ -600,6 +625,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				this.resetHysteresis();
 			}
 		}
+		this.priceDrivenCharging = !targetMode && nextChargePower > 0 && priceDriven;
 
 		// The car becomes a consumer for the energy optimizer with the start of
 		// charging and disappears with its end
@@ -885,8 +911,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				maxPower, this.config.pvPrice(), this.config.pvPrice() + this.config.storageLossSurcharge(),
 				this.config.useStorageSurplus(),
 				(int) Math.round(energy.usableWh() * this.config.storageTargetSocNet() / 100.), CHARGE_POWER_BUFFER,
-				meta == null ? 0 : meta.getGridBuyLimit().hard().power());
-		final var pluggedIn = isPluggedIn(this.evcs.getStatus()) && !this.isPaused();
+				meta == null ? 0 : meta.getGridBuyLimit().hard().power(), this.config.priceHysteresis(),
+				this.priceDrivenCharging);
+		final var pluggedIn = isPluggedIn(this.evcs.getStatus(), this.evcsPlug()) && !this.isPaused();
 		final var sessionLimit = this.config.energySessionLimit();
 		final Integer remainingWh = sessionLimit > 0 //
 				? Math.max(sessionLimit - this.evcs.getEnergySession().orElse(0), 0)
@@ -1127,7 +1154,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	/**
 	 * The car may take nothing although power is offered: it pauses, or it is
 	 * full; the wallbox cannot tell. After 45 minutes without power while at least
-	 * the minimum power is offered the car counts as taking nothing: the plan goes
+	 * the minimum power is offered, in total, the car counts as taking nothing; the
+	 * time without offer only pauses the count, as a plan of single cheap
+	 * quarter-hours may never offer 45 minutes at a stretch. The plan goes
 	 * on and the wallbox offers as before, so that a pausing car starts by itself,
 	 * but the plan does not count for the energy optimizer. Power again ends it,
 	 * with a new measurement of the car.
@@ -1136,12 +1165,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var now = Instant.now(this.clock());
 		final var actual = this.evcs.getActivePower().orElse(0);
 		if (!Boolean.TRUE.equals(this.lastPluggedIn) || !this.config.enabledCharging() || this.isPaused()) {
-			this.carIdleSince = null;
+			this.resetCarIdle();
 			this.carTakesNothing = false;
 			return;
 		}
 		if (actual >= CAR_IDLE_POWER) {
-			this.carIdleSince = null;
+			this.resetCarIdle();
 			if (this.carTakesNothing) {
 				this.carTakesNothing = false;
 				this.priceCarPower = 0;
@@ -1154,21 +1183,26 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var offered = this.offeredPower();
 		final var minPower = this.evcs.getMinimumHardwarePower().orElse(0);
 		if (offered <= 0 || offered < minPower) {
-			// nothing offered: no evidence either way
-			this.carIdleSince = null;
+			// nothing offered: no evidence either way, the count pauses
+			this.carIdleLast = null;
 			return;
 		}
-		if (this.carIdleSince == null) {
-			this.carIdleSince = now;
-			return;
+		if (this.carIdleLast != null) {
+			this.carIdleTime = this.carIdleTime.plus(Duration.between(this.carIdleLast, now));
 		}
-		if (!this.carTakesNothing && Duration.between(this.carIdleSince, now).compareTo(CAR_IDLE_CONFIRMATION) >= 0) {
+		this.carIdleLast = now;
+		if (!this.carTakesNothing && this.carIdleTime.compareTo(CAR_IDLE_CONFIRMATION) >= 0) {
 			this.carTakesNothing = true;
 			this.logInfo(this.log, "The car takes nothing for " + CAR_IDLE_CONFIRMATION.toMinutes() + " minutes although "
 					+ offered + " W are offered: the plan does not count for the optimizer");
 			this.planAnnounce = "car takes nothing";
 			this.planDirty = true;
 		}
+	}
+
+	private void resetCarIdle() {
+		this.carIdleTime = Duration.ZERO;
+		this.carIdleLast = null;
 	}
 
 	/**
@@ -1896,12 +1930,37 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
-	 * A car is plugged in.
+	 * The plug state of the EVCS, if it has one: e.g. a Keba reports
+	 * NOT_READY_FOR_CHARGING without a car and as well with a car that was plugged
+	 * in while no power was offered; only its plug state tells them apart.
+	 *
+	 * @return the plug state; null if the EVCS has none or it is not known yet
+	 */
+	private Integer evcsPlug() {
+		final Channel<?> channel = this.evcs.channelOrNull("Plug");
+		if (channel == null) {
+			return null;
+		}
+		final var value = channel.value().get();
+		if (value instanceof Integer plug && plug >= 0) {
+			return plug;
+		}
+		return null;
+	}
+
+	/**
+	 * A car is plugged in: from the plug state of the EVCS if known, otherwise
+	 * from its status.
 	 *
 	 * @param status the EVCS {@link Status}
+	 * @param plug   the plug state of the EVCS, from 5 on a car is plugged in;
+	 *               null if unknown
 	 * @return true if a car is plugged in
 	 */
-	protected static boolean isPluggedIn(Status status) {
+	protected static boolean isPluggedIn(Status status, Integer plug) {
+		if (plug != null) {
+			return plug >= PLUGGED_IN_EV;
+		}
 		return switch (status) {
 		case READY_FOR_CHARGING, CHARGING, CHARGING_REJECTED, ENERGY_LIMIT_REACHED -> true;
 		case UNDEFINED, STARTING, NOT_READY_FOR_CHARGING, ERROR -> false;
@@ -2063,6 +2122,32 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
+	 * Calculates the charge power that is allowed by the grid buy price, with the
+	 * price hysteresis: while charging by price, a price above 'priceLimit' but
+	 * below 'priceLimit' plus 'hysteresis' still allows the minimum power.
+	 *
+	 * @param gridBuyPrice        the grid buy price in [Currency/MWh]; possibly
+	 *                            null
+	 * @param priceLimit          the upper limit in [Cent/kWh]
+	 * @param priceLimitFullPower the lower limit in [Cent/kWh]
+	 * @param minPower            the minimum hardware power in [W]
+	 * @param fullPower           the full charge power by price in [W]
+	 * @param hysteresis          the price hysteresis in [Cent/kWh]
+	 * @param charging            true while charging by price
+	 * @return the charge power in [W]; 0 if charging is not allowed by price
+	 */
+	protected static int calculateChargePowerFromPrice(Double gridBuyPrice, double priceLimit,
+			double priceLimitFullPower, int minPower, int fullPower, double hysteresis, boolean charging) {
+		final var power = calculateChargePowerFromPrice(gridBuyPrice, priceLimit, priceLimitFullPower, minPower,
+				fullPower);
+		if (power > 0 || !charging || hysteresis <= 0 || gridBuyPrice == null || fullPower <= 0
+				|| fullPower < minPower) {
+			return power;
+		}
+		return gridBuyPrice / 10 < priceLimit + hysteresis ? minPower : 0;
+	}
+
+	/**
 	 * Calculates the blended price of charging with the given power, partly from
 	 * excess power and partly from grid.
 	 *
@@ -2159,6 +2244,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 */
 	private void resetHysteresis() {
 		this.lastChargePower = 0;
+		this.priceDrivenCharging = false;
 		this.startWantedSince = null;
 		this.stopWantedSince = null;
 		this.setHysteresisRemaining(null);
@@ -2167,12 +2253,18 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	/**
 	 * Applies the hysteresis to avoid too quick changes between a charge process
-	 * and a pause.
+	 * and a pause. Only a change the surplus causes is confirmed over time: a
+	 * start the price carries alone happens at once, and charging the price
+	 * carried alone stops at once when the price no longer does (and the surplus
+	 * does not take over); the price changes with the quarter-hour, waiting adds
+	 * nothing but charging into the expensive quarter-hour.
 	 *
 	 * @param nextChargePower the next charge power limit
+	 * @param priceDriven     the price alone, with the storage share of the
+	 *                        plan, carries charging now
 	 * @return next charge power or the last power if hysteresis is active
 	 */
-	private int applyHysteresis(int nextChargePower) {
+	private int applyHysteresis(int nextChargePower, boolean priceDriven) {
 		int targetChargePower = nextChargePower;
 		boolean showWarning = false;
 		var now = Instant.now(this.clock());
@@ -2190,7 +2282,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// hysteresis; a short burst of sun or a single wrong measurement must not
 		// start the car (every start is a contactor cycle)
 		Integer remaining = null;
-		if (this.lastChargePower <= 0 && nextChargePower > 0) {
+		if (this.lastChargePower <= 0 && nextChargePower > 0 && !priceDriven) {
 			if (this.startWantedSince == null) {
 				this.startWantedSince = now;
 			}
@@ -2207,8 +2299,10 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 		// Pause charging by limiting to zero: the charge power has to stay at zero
 		// for the stop hysteresis; a short cloud must not end a charge process that
-		// would then need the start hysteresis again
-		if (this.lastChargePower > 0 && nextChargePower <= 0) {
+		// would then need the start hysteresis again. Charging by price ends at once
+		// when the price or the plan no longer carries it, not when a house load
+		// takes the storage share for a moment
+		if (this.lastChargePower > 0 && nextChargePower <= 0 && (!this.priceDrivenCharging || priceDriven)) {
 			if (this.stopWantedSince == null) {
 				this.stopWantedSince = now;
 			}

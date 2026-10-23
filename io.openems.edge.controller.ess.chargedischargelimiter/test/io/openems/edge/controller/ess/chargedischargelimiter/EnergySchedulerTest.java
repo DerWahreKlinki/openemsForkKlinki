@@ -21,8 +21,9 @@ public class EnergySchedulerTest {
 
 	@Test
 	public void testEnergySchedulerMinMaxSoc() {
+		// minSoc 20 % and maxSoc 90 % of 22000 Wh, no power limit
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
-				() -> new EnergyScheduler.Config(20, 90));
+				() -> new EnergyScheduler.Config(4400, 19800, -1, -1));
 
 		assertEquals("", esh.getParentFactoryPid());
 		assertEquals("ctrl0", esh.getParentId());
@@ -50,9 +51,31 @@ public class EnergySchedulerTest {
 	}
 
 	@Test
-	public void testEnergySchedulerMaxSocAlreadyExceeded() {
+	public void testEnergySchedulerPowerAllowed() {
+		// the window leaves room, the power allowed right now limits: 2000 W
+		// discharge and 8000 W charge in a quarter-hour
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
-				() -> new EnergyScheduler.Config(0, 20));
+				() -> new EnergyScheduler.Config(0, 22000, 8000, 2000));
+		var t = EnergyScheduleTester.from(esh);
+		assertEquals(500 /* 2000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().setEss(4000));
+		assertEquals(-2000 /* 8000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().setEss(-4000));
+	}
+
+	@Test
+	public void testEnergySchedulerNoPowerAllowed() {
+		// an ESS at its minimum: no discharge right now, charging stays possible
+		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
+				() -> new EnergyScheduler.Config(0, 22000, -1, 0));
+		var t = EnergyScheduleTester.from(esh);
+		assertEquals(0, t.simulatePeriodIndex(0).ef().setEss(4000));
+		assertEquals(-3894, t.simulatePeriodIndex(0).ef().setEss(-4000));
+	}
+
+	@Test
+	public void testEnergySchedulerMaxSocAlreadyExceeded() {
+		// maxSoc 20 % of 22000 Wh
+		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
+				() -> new EnergyScheduler.Config(0, 4400, -1, -1));
 
 		var t = EnergyScheduleTester.from(esh);
 

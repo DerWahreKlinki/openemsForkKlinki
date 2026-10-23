@@ -15,17 +15,8 @@
     }
   </div>
   <div class="legend">
-    @if (zones.includes(Zone.FULL)) {
-      <span><i [style.background-color]="COLOR_FULL"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_FULL" | translate }}</span>
-    }
-    @if (zones.includes(Zone.REDUCED)) {
-      <span><i [style.background-color]="COLOR_REDUCED"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_REDUCED" | translate }}</span>
-    }
-    @if (zones.includes(Zone.NONE)) {
-      <span><i [style.background-color]="COLOR_NONE"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_NONE" | translate }}</span>
-    }
-    @if (zones.includes(Zone.NO_SURPLUS)) {
-      <span><i [style.background-color]="COLOR_NO_SURPLUS"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_NO_SURPLUS" | translate }}</span>
+    @for (zone of zones; track zone) {
+      <span><i [style.background-color]="ZONE_COLORS[zone]"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.ZONE_" + zone | translate }}</span>
     }
     @if (hasSurplus) {
       <span><i [style.background-color]="COLOR_SURPLUS"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.SURPLUS" | translate }}</span>

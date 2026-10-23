@@ -34,6 +34,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int targetTime = 420;
 		private int targetStartEnergy = -1;
 		private int sessionStartEnergy = -1;
+		private String targetPlan = "";
 		private String essId = "";
 
 		private Builder() {
@@ -156,6 +157,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setEssId(String essId) {
 			this.essId = essId;
+			return this;
+		}
+
+		public Builder setTargetPlan(String targetPlan) {
+			this.targetPlan = targetPlan;
 			return this;
 		}
 
@@ -330,5 +336,10 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int sessionStartEnergy() {
 		return this.builder.sessionStartEnergy;
+	}
+
+	@Override
+	public String targetPlan() {
+		return this.builder.targetPlan;
 	}
 }

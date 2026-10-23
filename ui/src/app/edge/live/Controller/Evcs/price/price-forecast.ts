@@ -1,3 +1,4 @@
+import { ChartConstants } from "src/app/shared/components/chart/chart.constants";
 import { ComponentJsonApiRequest } from "src/app/shared/jsonrpc/request/componentJsonApiRequest";
 import { GetChargingPlanRequest } from "src/app/shared/jsonrpc/request/getChargingPlanRequest";
 import { GetScheduleRequest } from "src/app/shared/jsonrpc/request/getScheduleRequest";
@@ -22,9 +23,23 @@ export namespace EvcsPriceForecast {
         REDUCED = "REDUCED",
         /** Does not charge: too expensive (blended price above the limit). */
         NONE = "NONE",
-        /** Does not charge: nothing available (no PV surplus, storage not above its evening target). */
-        NO_SURPLUS = "NO_SURPLUS",
+        /** Does not charge: the storage needs the surplus for its evening target, everything counts at the grid price, too expensive. */
+        GRID_PRICE = "GRID_PRICE",
+        /** Does not charge: session limit, grid limit, forecast unknown; target charging: quarter-hour not chosen. */
+        UNPLANNABLE = "UNPLANNABLE",
+        /** Target charging: after the target time, not planned. */
+        AFTER_TARGET = "AFTER_TARGET",
     }
+
+    /** The colour of every zone, shared by the chart, the band and the explanation in the modal. */
+    export const ZONE_COLORS: Record<Zone, string> = {
+        [Zone.FULL]: ChartConstants.Colors.GREEN,
+        [Zone.REDUCED]: ChartConstants.Colors.ORANGE,
+        [Zone.NONE]: ChartConstants.Colors.RED,
+        [Zone.GRID_PRICE]: "rgb(205, 205, 205)",
+        [Zone.UNPLANNABLE]: "rgb(120, 120, 120)",
+        [Zone.AFTER_TARGET]: "rgb(77, 106, 130)",
+    };
 
     export type Settings = {
         /** Priority of the controller: CAR takes surplus before the storage, STORAGE only what would go to grid */
@@ -389,7 +404,7 @@ export namespace EvcsPriceForecast {
     function getZone(chargePower: number, effectivePrice: number, settings: Settings): Zone {
         if (chargePower <= 0) {
             // without price-based charging the price is never the reason
-            return settings.enablePriceCharging && effectivePrice >= settings.priceLimit ? Zone.NONE : Zone.NO_SURPLUS;
+            return settings.enablePriceCharging && effectivePrice >= settings.priceLimit ? Zone.NONE : Zone.UNPLANNABLE;
         }
         if (chargePower >= getFullPower(settings)) {
             return Zone.FULL;
@@ -643,13 +658,18 @@ export namespace EvcsPriceForecast {
             const referencePower = q.power > 0 ? q.power : settings.minPower;
             const effectivePrice = q.blendedPrice != null ? q.blendedPrice / 10 : price;
             const storageAboveTarget = q.storageBudget > 0;
-            // TARGET: the plan keeps the storage for the evening, the forecast gives no surplus for the
-            // minimum power without it -> "no surplus"; TOO_EXPENSIVE -> "too expensive"
+            // TOO_EXPENSIVE: blended price above the limit; TARGET: the storage needs the surplus for the
+            // evening, everything counts at the grid price; the rest (limit, grid limit, unknown, not chosen
+            // by target charging) is not plannable
             const zone =
                 q.power <= 0
                     ? q.reason === "TOO_EXPENSIVE"
                         ? Zone.NONE
-                        : Zone.NO_SURPLUS
+                        : q.reason === "TARGET"
+                          ? Zone.GRID_PRICE
+                          : q.reason === "AFTER_TARGET"
+                            ? Zone.AFTER_TARGET
+                            : Zone.UNPLANNABLE
                     : getZone(q.power, effectivePrice, settings);
             result.push({
                 timestamp: timestamp,

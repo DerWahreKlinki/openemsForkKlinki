@@ -83,7 +83,45 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 		 */
 		USEABLE_SOC(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.PERCENT) //
-				.persistencePriority(PersistencePriority.HIGH));		
+				.persistencePriority(PersistencePriority.HIGH)),
+		/**
+		 * Lower end of the SoC window in energy: Min-SoC of the capacity of the ESS.
+		 */
+		MIN_ENERGY(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(PersistencePriority.HIGH) //
+				.text("Lower end of the SoC window")),
+		/**
+		 * Upper end of the SoC window in energy: Max-SoC of the capacity of the ESS.
+		 */
+		MAX_ENERGY(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(PersistencePriority.HIGH) //
+				.text("Upper end of the SoC window")),
+		/**
+		 * Energy in the ESS: SoC of the capacity.
+		 */
+		CURRENT_ENERGY(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(PersistencePriority.HIGH) //
+				.text("Energy in the ESS")),
+		/**
+		 * Battery discharge power the controller allows right now: 0 at the minimum,
+		 * reduced while approaching it, the full allowed power otherwise.
+		 */
+		DISCHARGE_POWER_ALLOWED(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(PersistencePriority.HIGH) //
+				.text("Battery discharge power allowed right now")),
+		/**
+		 * Battery charge power the controller allows right now, as a positive value:
+		 * 0 at the maximum, reduced while approaching it, the full allowed power
+		 * otherwise.
+		 */
+		CHARGE_POWER_ALLOWED(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(PersistencePriority.HIGH) //
+				.text("Battery charge power allowed right now"));
 
 		private final Doc doc;
 
@@ -95,6 +133,143 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 		public Doc doc() {
 			return this.doc;
 		}
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#MIN_ENERGY}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getMinEnergyChannel() {
+		return this.channel(ChannelId.MIN_ENERGY);
+	}
+
+	/**
+	 * Gets the lower end of the SoC window in [Wh].
+	 *
+	 * @return the value
+	 */
+	public default Value<Integer> getMinEnergy() {
+		return this.getMinEnergyChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on {@link ChannelId#MIN_ENERGY}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setMinEnergy(Integer value) {
+		this.getMinEnergyChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#MAX_ENERGY}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getMaxEnergyChannel() {
+		return this.channel(ChannelId.MAX_ENERGY);
+	}
+
+	/**
+	 * Gets the upper end of the SoC window in [Wh].
+	 *
+	 * @return the value
+	 */
+	public default Value<Integer> getMaxEnergy() {
+		return this.getMaxEnergyChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on {@link ChannelId#MAX_ENERGY}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setMaxEnergy(Integer value) {
+		this.getMaxEnergyChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#CURRENT_ENERGY}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getCurrentEnergyChannel() {
+		return this.channel(ChannelId.CURRENT_ENERGY);
+	}
+
+	/**
+	 * Gets the energy in the ESS in [Wh].
+	 *
+	 * @return the value
+	 */
+	public default Value<Integer> getCurrentEnergy() {
+		return this.getCurrentEnergyChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on {@link ChannelId#CURRENT_ENERGY}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setCurrentEnergy(Integer value) {
+		this.getCurrentEnergyChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#DISCHARGE_POWER_ALLOWED}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getDischargePowerAllowedChannel() {
+		return this.channel(ChannelId.DISCHARGE_POWER_ALLOWED);
+	}
+
+	/**
+	 * Gets the battery discharge power allowed right now in [W].
+	 *
+	 * @return the value
+	 */
+	public default Value<Integer> getDischargePowerAllowed() {
+		return this.getDischargePowerAllowedChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#DISCHARGE_POWER_ALLOWED}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setDischargePowerAllowed(Integer value) {
+		this.getDischargePowerAllowedChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#CHARGE_POWER_ALLOWED}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getChargePowerAllowedChannel() {
+		return this.channel(ChannelId.CHARGE_POWER_ALLOWED);
+	}
+
+	/**
+	 * Gets the battery charge power allowed right now in [W], positive.
+	 *
+	 * @return the value
+	 */
+	public default Value<Integer> getChargePowerAllowed() {
+		return this.getChargePowerAllowedChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#CHARGE_POWER_ALLOWED}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setChargePowerAllowed(Integer value) {
+		this.getChargePowerAllowedChannel().setNextValue(value);
 	}
 
 	/**

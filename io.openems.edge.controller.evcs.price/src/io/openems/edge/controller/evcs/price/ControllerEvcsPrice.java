@@ -229,7 +229,28 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 		STORAGE_DISCHARGE_LIMIT(Doc.of(INTEGER) //
 				.unit(Unit.WATT) //
 				.persistencePriority(HIGH) //
-				.text("Discharge cap of the locked storage")); //
+				.text("Discharge cap of the locked storage")), //
+		/**
+		 * When the plan of target charging was made, as epoch seconds; empty without a
+		 * plan.
+		 */
+		TARGET_PLAN_TIME(Doc.of(LONG) //
+				.persistencePriority(HIGH) //
+				.text("Target plan made at (epoch seconds)")), //
+		/**
+		 * Number of quarter-hours with charging in the plan of target charging.
+		 */
+		TARGET_PLAN_QUARTERS(Doc.of(INTEGER) //
+				.persistencePriority(HIGH) //
+				.text("Quarter-hours with charging in the target plan")), //
+		/**
+		 * The car takes nothing for a long time although power is offered, e.g. it
+		 * is full: the plan does not count for the energy optimizer, the wallbox
+		 * goes on offering.
+		 */
+		CAR_TAKES_NOTHING(Doc.of(BOOLEAN) //
+				.persistencePriority(HIGH) //
+				.text("The car takes nothing although power is offered; the plan does not count for the optimizer")); //
 
 		private final Doc doc;
 
@@ -349,6 +370,18 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 
 	public default void setStorageDischargeLimit(Integer val) {
 		this.channel(ChannelId.STORAGE_DISCHARGE_LIMIT).setNextValue(val);
+	}
+
+	public default void setCarTakesNothing(Boolean val) {
+		this.channel(ChannelId.CAR_TAKES_NOTHING).setNextValue(val);
+	}
+
+	public default void setTargetPlanTime(Long val) {
+		this.channel(ChannelId.TARGET_PLAN_TIME).setNextValue(val);
+	}
+
+	public default void setTargetPlanQuarters(Integer val) {
+		this.channel(ChannelId.TARGET_PLAN_QUARTERS).setNextValue(val);
 	}
 
 	/**

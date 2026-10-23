@@ -91,6 +91,9 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Ess-ID for the storage lock", description = "Storage (e.g. the cluster) that target charging locks for the car while it is below its evening target: its discharge is capped to the house load, the car charges from grid. Empty = no lock.")
 	String ess_id() default "essCluster";
 
+	@AttributeDefinition(name = "Target plan", description = "The plan of target charging as announced to the energy optimizer; set by the controller itself. The controller follows it until the target time and plans again only when the car is plugged in, the target changes or the charged energy deviates from the plan.")
+	String targetPlan() default "";
+
 	@AttributeDefinition(name = "Session start energy [Wh]", description = "Counter of the wallbox when the car was plugged in; the session limit counts from there. Set by the controller itself, -1 = no car plugged in.")
 	int sessionStartEnergy() default -1;
 

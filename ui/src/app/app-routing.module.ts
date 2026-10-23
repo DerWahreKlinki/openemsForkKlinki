@@ -23,6 +23,7 @@ import { ControllerChpOverviewComponent } from "./edge/live/Controller/ChpSoc/hi
 import { ControllerEnerixOverviewComponent } from "./edge/live/Controller/EnerixControl/history/overview/overview";
 import { ControllerEssGridOptimizedChargeOverviewComponent } from "./edge/live/Controller/Ess/GridOptimizedCharge/history/overview/overview";
 import { ControllerEssTimeOfUseTariffOverviewComponent } from "./edge/live/Controller/Ess/TimeOfUseTariff/history/overview/overview";
+import { EvcsPriceHistoryOverviewComponent } from "./edge/live/Controller/Evcs/history/overview/overview";
 import { ControllerHeatOverviewComponent } from "./edge/live/Controller/Heat/history/overview/overview";
 import { ControllerIoChannelSingleThresholdOverviewComponent } from "./edge/live/Controller/Io/ChannelSingleThreshold/history/overview/overview";
 import { ControllerIoFixDigitalOutputDetailsOverviewComponent } from "./edge/live/Controller/Io/FixDigitalOutput/history/details/details.overview";
@@ -114,6 +115,10 @@ export const history: (/** Determines if titles in headers can be set */ customH
             {
                 path: ":componentId/time-of-use",
                 component: ControllerEssTimeOfUseTariffOverviewComponent,
+            },
+            {
+                path: ":componentId/evcs-price",
+                component: EvcsPriceHistoryOverviewComponent,
             },
             {
                 path: ":componentId/symmetricpeakshavingchart",

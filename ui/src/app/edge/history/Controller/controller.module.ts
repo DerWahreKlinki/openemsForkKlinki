@@ -3,6 +3,7 @@ import { ChannelThreshold } from "../../live/Controller/Channelthreshold/history
 import { ControllerChpHistory } from "../../live/Controller/ChpSoc/history/chp.module";
 import { ControllerEnerixControlControlHistory } from "../../live/Controller/EnerixControl/history/enerixControl.module";
 import { ControllerEssGridOptimizedCharge } from "../../live/Controller/Ess/GridOptimizedCharge/history/gridOptimizeCharge.module";
+import { ControllerEvcsPriceHistory } from "../../live/Controller/Evcs/history/evcsPriceHistory.module";
 import { ControllerHeat } from "../../live/Controller/Heat/history/heat-history";
 import { ControllerIoSingleThreshold } from "../../live/Controller/Io/ChannelSingleThreshold/history/channelSingleThreshold.module";
 import { FixDigitalOutputHistory } from "../../live/Controller/Io/FixDigitalOutput/history/fix-digital-output-history.module";
@@ -17,6 +18,7 @@ import { ControllerIo } from "./Io/Io.module";
         ControllerEnerixControlControlHistory,
         ControllerEss,
         ControllerEssGridOptimizedCharge,
+        ControllerEvcsPriceHistory,
         ControllerHeat,
         ControllerIo,
         ControllerIoSingleThreshold,
@@ -29,6 +31,7 @@ import { ControllerIo } from "./Io/Io.module";
         ControllerEnerixControlControlHistory,
         ControllerEss,
         ControllerEssGridOptimizedCharge,
+        ControllerEvcsPriceHistory,
         ControllerHeat,
         ControllerIo,
         ControllerIoSingleThreshold,

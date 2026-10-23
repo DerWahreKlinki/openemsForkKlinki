@@ -39,6 +39,7 @@ export enum WidgetFactory {
     "Controller.Ess.RippleControlReceiver",
     "Controller.Ess.Time-Of-Use-Tariff.Discharge",
     "Controller.Ess.Time-Of-Use-Tariff",
+    "Controller.Evcs.Price",
     "Controller.Heat.Heatingelement",
     "Controller.IO.ChannelSingleThreshold",
     "Controller.Io.FixDigitalOutput",

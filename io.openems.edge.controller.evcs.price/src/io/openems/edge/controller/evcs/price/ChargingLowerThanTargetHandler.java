@@ -1,9 +1,9 @@
 package io.openems.edge.controller.evcs.price;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.function.Supplier;
 
-import io.openems.common.exceptions.InvalidValueException;
 import io.openems.edge.evcs.api.ManagedEvcs;
 
 public class ChargingLowerThanTargetHandler {
@@ -19,12 +19,13 @@ public class ChargingLowerThanTargetHandler {
 	private static final double CHARGING_TARGET_MAX_DIFFERENCE_PERCENT = 0.15; // 10%
 	private static final int CHECK_CHARGING_TARGET_DIFFERENCE_TIME = 45; // sec
 
-	private final Clock clock;
+	private final Supplier<Clock> clock;
 
-	private LocalDateTime lastChargingCheck = LocalDateTime.now();
+	// null until the first check
+	private Instant lastChargingCheck = null;
 	private Integer maximumChargePower = null; // W
 
-	public ChargingLowerThanTargetHandler(Clock clock) {
+	public ChargingLowerThanTargetHandler(Supplier<Clock> clock) {
 		this.clock = clock;
 	}
 
@@ -35,11 +36,14 @@ public class ChargingLowerThanTargetHandler {
 	 *
 	 * @param evcs EVCS
 	 * @return true if the difference is too high
-	 * @throws InvalidValueException invalidValueException
 	 */
-	protected boolean isLower(ManagedEvcs evcs) throws InvalidValueException {
-		if (this.lastChargingCheck.plusSeconds(CHECK_CHARGING_TARGET_DIFFERENCE_TIME)
-				.isBefore(LocalDateTime.now(this.clock))) {
+	protected boolean isLower(ManagedEvcs evcs) {
+		final var now = Instant.now(this.clock.get());
+		if (this.lastChargingCheck == null) {
+			this.lastChargingCheck = now;
+			return false;
+		}
+		if (this.lastChargingCheck.plusSeconds(CHECK_CHARGING_TARGET_DIFFERENCE_TIME).isBefore(now)) {
 			if (this.isChargingLowerThanTarget(evcs)) {
 
 				this.outOfRangeCounter++;
@@ -49,7 +53,7 @@ public class ChargingLowerThanTargetHandler {
 			} else {
 				this.outOfRangeCounter = 0;
 			}
-			this.lastChargingCheck = LocalDateTime.now();
+			this.lastChargingCheck = now;
 		}
 		return false;
 	}
@@ -61,15 +65,21 @@ public class ChargingLowerThanTargetHandler {
 	 *
 	 * @param evcs EVCS
 	 * @return true if the difference is too high
-	 * @throws InvalidValueException invalidValueException
 	 */
-	protected boolean isChargingLowerThanTarget(ManagedEvcs evcs) throws InvalidValueException {
+	protected boolean isChargingLowerThanTarget(ManagedEvcs evcs) {
 		int chargePower = evcs.getActivePower().orElse(0);
-		int chargePowerTarget = evcs.getSetChargePowerLimit().orElse(evcs.getMaximumHardwarePower().getOrError());
+		final var target = evcs.getSetChargePowerLimit().asOptional()
+				.or(() -> evcs.getMaximumHardwarePower().asOptional());
+		if (target.isEmpty()) {
+			// neither a limit nor the hardware known: nothing to compare
+			this.maximumChargePower = null;
+			return false;
+		}
+		int chargePowerTarget = target.get();
 
 		if (chargePowerTarget - chargePower > chargePowerTarget * CHARGING_TARGET_MAX_DIFFERENCE_PERCENT) {
 			this.maximumChargePower = this.calculateMaximumPower(chargePower);
-			this.lastChargingCheck = LocalDateTime.now();
+			this.lastChargingCheck = Instant.now(this.clock.get());
 			return true;
 		}
 		this.maximumChargePower = null;
@@ -96,6 +106,14 @@ public class ChargingLowerThanTargetHandler {
 	 *
 	 * @return The maximum charge power of the EV.
 	 */
+	/**
+	 * Forgets the measured maximum: a new session, maybe another car.
+	 */
+	protected void reset() {
+		this.outOfRangeCounter = 0;
+		this.maximumChargePower = null;
+	}
+
 	protected Integer getMaximumChargePower() {
 		return this.maximumChargePower;
 	}

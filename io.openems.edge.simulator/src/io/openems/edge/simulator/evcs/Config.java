@@ -23,6 +23,9 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Minimum power", description = "Minimum power of the charger in Watt.", required = true)
 	int minHwPower() default 4140;
 
+	@AttributeDefinition(name = "Car maximum power", description = "The simulated car takes at most this power in Watt, whatever the charger offers; 0 = the car takes what it is offered.")
+	int carMaxPower() default 0;
+
 	String webconsole_configurationFactory_nameHint() default "Simulator EVCS [{id}]";
 
 }

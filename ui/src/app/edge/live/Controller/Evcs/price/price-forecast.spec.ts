@@ -268,7 +268,7 @@ describe("EvcsPriceForecast", () => {
         // negative price, 4000 W surplus below the minimum power -> no charging, and never "too expensive"
         let slot = EvcsPriceForecast.calculate([entry("10:00", -10, 5000, 1000)], settings, NOW)[0];
         expect(slot.chargePower).toBe(0);
-        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.UNPLANNABLE);
         // 5000 W surplus covers the minimum power
         slot = EvcsPriceForecast.calculate([entry("10:00", 500, 6000, 1000)], settings, NOW)[0];
         expect(slot.chargePower).toBe(5000);
@@ -313,7 +313,7 @@ describe("EvcsPriceForecast", () => {
         const live = EvcsPriceForecast.applyLive(forecast, { chargePower: 0, blendedPrice: 8, production: 4400 },
             settings, new Date("2026-10-02T10:05:00Z"));
         expect(live[0].live).toBe(true);
-        expect(live[0].zone).toBe(EvcsPriceForecast.Zone.NO_SURPLUS);
+        expect(live[0].zone).toBe(EvcsPriceForecast.Zone.UNPLANNABLE);
         expect(live[0].chargePower).toBe(0);
         expect(live[0].effectivePrice).toBe(8);
         expect(live[0].production).toBe(4400);

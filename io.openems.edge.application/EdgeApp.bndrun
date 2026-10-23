@@ -245,6 +245,7 @@
 	bnd.identity;id='io.openems.edge.pytes',\
 	bnd.identity;id='io.openems.edge.generator.api',\
 	bnd.identity;id='io.openems.edge.controller.ess.chargedischargelimiter',\
+	bnd.identity;id='io.openems.edge.controller.ess.chargedischargelimiter.cluster',\
 	bnd.identity;id='io.openems.edge.predictor.pv.weather.forecast',\
 	bnd.identity;id='io.openems.edge.controller.chp.costoptimization',\
 	bnd.identity;id='io.openems.edge.meter.emh',\
@@ -554,6 +555,7 @@
 	io.openems.edge.pytes;version=snapshot,\
 	io.openems.edge.generator.api;version=snapshot,\
 	io.openems.edge.controller.ess.chargedischargelimiter;version=snapshot,\
+	io.openems.edge.controller.ess.chargedischargelimiter.cluster;version=snapshot,\
 	io.openems.edge.controller.symmetric.thresholdpeakshaver;version=snapshot,\
 	io.openems.edge.predictor.pv.weather.forecast;version=snapshot,\
 	io.openems.edge.controller.chp.costoptimization;version=snapshot,\

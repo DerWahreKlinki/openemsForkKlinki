@@ -1,0 +1,13 @@
+@if (isInitialized && component) {
+  <oe-flat-widget button [title]="component.alias"
+    [link]="'/device/' + edge.id + newNavigationUrlSegment + '/history/' + component.id + '/evcs-price'"
+    [icon]="{ name: 'oe-evcs', color: 'success' }">
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_HISTORY.CHARGED' | translate" [value]="charged | unitvalue: 'kWh'"></oe-flat-widget-line>
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_HISTORY.FROM_STORAGE' | translate" [value]="fromStorage | unitvalue: 'kWh'"></oe-flat-widget-line>
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_HISTORY.COST' | translate" [value]="cost ?? '-'"></oe-flat-widget-line>
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_HISTORY.AVERAGE_PRICE' | translate" [value]="averagePrice ?? '-'"></oe-flat-widget-line>
+    <oe-flat-widget-horizontal-line></oe-flat-widget-horizontal-line>
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_HISTORY.SESSIONS' | translate" [value]="sessions ?? '-'"></oe-flat-widget-line>
+    <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_HISTORY.CHARGING_TIME' | translate" [value]="chargingSeconds | formatSecondsToDuration"></oe-flat-widget-line>
+  </oe-flat-widget>
+}

@@ -1,6 +1,18 @@
 @if (isInitialized) {
   <oe-flat-widget [class]="storageIconStyle" [icon]="{name: 'oe-storage', color: 'success'}"
     [title]="'GENERAL.STORAGE_SYSTEM'| translate" [modalComponent]="modalComponent">
+    <!-- ESS clusters: the sum of their members; the SoC bar shows the net SoC of the cluster limiter, if there is one -->
+    @for (cluster of clusterComponents; track cluster) {
+      <oe-flat-widget-line [name]="cluster.alias"></oe-flat-widget-line>
+      <oe-flat-widget-percentagebar [channelAddress]="clusterLimiters[cluster.id].id + '/NetSoc'"></oe-flat-widget-percentagebar>
+      <oe-flat-widget-line [name]="'GENERAL.CHARGE' | translate" [channelAddress]="cluster.id + '/ActivePower'"
+        [converter]="convertChargePower">
+      </oe-flat-widget-line>
+      <oe-flat-widget-line [name]="'GENERAL.DISCHARGE' | translate" [channelAddress]="cluster.id + '/ActivePower'"
+        [converter]="convertDischargePower">
+      </oe-flat-widget-line>
+      <oe-flat-widget-horizontal-line></oe-flat-widget-horizontal-line>
+    }
     @for (component of essComponents; track component; let i = $index) {
       <!-- Show Alias if there are more than one ESS -->
       @if (essComponents.length > 1) {

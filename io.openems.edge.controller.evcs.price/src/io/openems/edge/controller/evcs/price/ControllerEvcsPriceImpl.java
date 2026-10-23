@@ -12,13 +12,14 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -38,6 +39,7 @@ import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.ChannelAddress;
 import io.openems.common.types.OptionsEnum;
 import io.openems.common.referencetarget.GenerateTargetsFromReferences;
+import io.openems.common.utils.DateUtils;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
@@ -51,6 +53,7 @@ import io.openems.edge.common.meta.Meta;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.common.sum.Sum;
+import io.openems.edge.energy.api.simulation.periods.PeriodDuration;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.energy.api.EnergySchedulable;
@@ -79,7 +82,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 	private final Logger log = LoggerFactory.getLogger(ControllerEvcsPriceImpl.class);
 	private final ChargingLowerThanTargetHandler chargingLowerThanTargetHandler;
-	private final Clock clock;
+	// The clock of the tests; null in production, where the clock of the
+	// component manager counts (see clock())
+	private final Clock testClock;
 
 	// Last charge power, used for the hysteresis
 	private int lastChargePower = 0;
@@ -115,6 +120,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Target charging locks the storage for the car (with hysteresis)
 	private boolean storageLocked = false;
 	private double planUsableWh = 0;
+	// The plan of target charging as stored in the configuration; null without
+	private StoredTargetPlan storedTargetPlan = null;
+	// A new target plan is requested, with the reason
+	private boolean targetReplan = false;
+	private String targetReplanReason = null;
 	// True while the car charges; a change is reported to the energy optimizer
 	private boolean lastCharging = false;
 	/** Configuration updates sent while the new configuration is still pending. */
@@ -123,12 +133,45 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Forecast of the car for the energy optimizer (Time-of-Use-Tariff plans the
 	// storage with it); unused without an optimizer
 	private EnergyScheduleHandler energyScheduleHandler = null;
-	private boolean lastPluggedIn = false;
+	// null until the wallbox reported a status
+	private Boolean lastPluggedIn = null;
 
 	// "Do not charge today": end of the pause; null if not paused
 	private Instant pausedUntil = null;
 	// Target charging: the next occurrence of the target time; null while off
 	private ZonedDateTime targetDeadline = null;
+	// Target charging: the plan (its time of making) the optimizer was told about
+	// last; 0 if none. A new plan is announced once this instance follows it
+	private long announcedTargetPlanAt = 0;
+	// Target charging: since when the car takes less than the plan gives it; null
+	// while it takes what it gets
+	private Instant carPowerLowSince = null;
+	// Target charging: the car power the next plan is made with; 0 for the hardware
+	private int targetCarPower = 0;
+	// Price charging: the car power measured in this session, for the plan; 0 for
+	// the hardware. Target charging keeps its own in the stored plan
+	private int priceCarPower = 0;
+	// Since when the car takes nothing although at least the minimum power is
+	// offered; null while it takes power or while nothing is offered
+	private Instant carIdleSince = null;
+	// The car takes nothing for a long time, e.g. it is full: the plan goes on,
+	// but it does not count for the energy optimizer
+	private boolean carTakesNothing = false;
+	// The next plan is announced to the energy optimizer, with the reason; null
+	// if not
+	private String planAnnounce = null;
+	// The car takes this much less than planned or offered -> plan again
+	private static final int CAR_POWER_TOLERANCE = 1000; // W
+	private static final Duration CAR_POWER_CONFIRMATION = Duration.ofMinutes(2);
+	// Below this the car takes nothing
+	private static final int CAR_IDLE_POWER = 500; // W
+	// A car that takes nothing this long although power is offered counts as
+	// taking nothing (e.g. it is full); a pausing car starts again within it
+	private static final Duration CAR_IDLE_CONFIRMATION = Duration.ofMinutes(45);
+	// the planning period: the quarter-hour of the optimizer
+	private static final Duration QUARTER = PeriodDuration.QUARTER.duration;
+	/** The plan is shown for this long from the current quarter-hour on, in every mode. */
+	private static final Duration DISPLAY_HORIZON = Duration.ofHours(24);
 
 	@Reference
 	private ConfigurationAdmin cm;
@@ -159,7 +202,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private Config config;
 
 	public ControllerEvcsPriceImpl() {
-		this(Clock.systemDefaultZone());
+		this((Clock) null);
 	}
 
 	protected ControllerEvcsPriceImpl(Clock clock) {
@@ -168,8 +211,23 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				Controller.ChannelId.values(), //
 				ControllerEvcsPrice.ChannelId.values() //
 		);
-		this.clock = clock;
-		this.chargingLowerThanTargetHandler = new ChargingLowerThanTargetHandler(clock);
+		this.testClock = clock;
+		this.chargingLowerThanTargetHandler = new ChargingLowerThanTargetHandler(this::clock);
+	}
+
+	/**
+	 * The clock: the one of the component manager, like the Time-of-Use-Tariff
+	 * and the energy optimizer use it, so that a simulated clock moves all of
+	 * them together; the tests pass their own.
+	 *
+	 * @return the clock
+	 */
+	private Clock clock() {
+		if (this.testClock != null) {
+			return this.testClock;
+		}
+		final var componentManager = this.componentManager;
+		return componentManager != null ? componentManager.getClock() : Clock.systemDefaultZone();
 	}
 
 	@Activate
@@ -207,26 +265,42 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.configUpdatesSent.clear();
 		// Target charging ends at the next occurrence of the target time
 		this.targetDeadline = config.targetCharging() //
-				? nextDeadline(ZonedDateTime.now(this.clock), config.targetTime())
+				? nextDeadline(ZonedDateTime.now(this.clock()), config.targetTime())
 				: null;
+		this.storedTargetPlan = StoredTargetPlan.decode(config.targetPlan());
+		if (this.targetDeadline != null && this.storedTargetPlan != null
+				&& this.storedTargetPlan.deadline() <= ZonedDateTime.now(this.clock()).toEpochSecond()) {
+			// the target time of the stored plan passed while the controller was off:
+			// target charging ends instead of planning for the next day
+			this.targetDeadline = Instant.ofEpochSecond(this.storedTargetPlan.deadline())
+					.atZone(this.targetDeadline.getZone());
+		}
 
 		this.evcs._setChargeMode(config.chargeMode());
 		this.evcs._setMaximumPower(null);
 
-		this.energyScheduleHandler = EnergyScheduler.buildEnergyScheduleHandler(this, () -> {
-			if (!this.config.enabled() || !this.config.enabledCharging()
-					|| (this.config.chargeMode() != ChargeMode.EXCESS_POWER && !this.config.targetCharging())) {
-				return null;
-			}
-			// The car is a consumer for the optimizer only while it charges: then with
-			// the energy of the charging plan per quarter-hour. Target charging is
-			// planned ahead: its quarter-hours count as soon as the plan contains them
-			final var plan = this.plan;
-			return new EnergyScheduler.Config(//
-					this.lastCharging || (this.config.targetCharging() && plan.energyWh() > 0), //
-					plan.quarters().isEmpty() ? 0 : plan.quarters().get(0).time().toEpochSecond(), //
-					plan.quarters().stream().map(q -> q.power() / 4).toList());
-		});
+		this.energyScheduleHandler = EnergyScheduler.buildEnergyScheduleHandler(this,
+				this::energySchedulerConfig);
+	}
+
+	/**
+	 * The forecast of the car for the energy optimizer: the energy of the charging
+	 * plan per quarter-hour, as soon as a car is plugged in. A car that takes
+	 * nothing for a long time (e.g. a full one) does not count.
+	 *
+	 * @return the config; null while the controller does not charge
+	 */
+	protected EnergyScheduler.Config energySchedulerConfig() {
+		if (!this.config.enabled() || !this.config.enabledCharging()
+				|| (this.config.chargeMode() != ChargeMode.EXCESS_POWER && !this.config.targetCharging())) {
+			return null;
+		}
+		final var plan = this.plan;
+		final var pluggedIn = Boolean.TRUE.equals(this.lastPluggedIn);
+		return new EnergyScheduler.Config(//
+				!this.carTakesNothing && (this.lastCharging || (pluggedIn && plan.energyWh() > 0)), //
+				plan.quarters().isEmpty() ? 0 : plan.quarters().get(0).time().toEpochSecond(), //
+				plan.quarters().stream().map(q -> q.power() / 4).toList());
 	}
 
 	@Override
@@ -259,10 +333,29 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.setGridBuyPrice(this.sum.getGridBuyPrice().get());
 
 		// A car plugged in or out changes the forecast for the energy optimizer
-		final var pluggedIn = isPluggedIn(this.evcs.getStatus());
-		if (pluggedIn != this.lastPluggedIn) {
+		final var evcsStatus = this.evcs.getStatus();
+		final var pluggedIn = isPluggedIn(evcsStatus);
+		if (evcsStatus == Status.UNDEFINED || evcsStatus == Status.STARTING) {
+			// not known yet, e.g. right after a restart
+		} else if (this.lastPluggedIn == null) {
+			this.lastPluggedIn = pluggedIn;
+		} else if (pluggedIn != this.lastPluggedIn) {
 			this.lastPluggedIn = pluggedIn;
 			this.planDirty = true;
+			// a new session, maybe another car: measure its power again
+			this.priceCarPower = 0;
+			this.carPowerLowSince = null;
+			this.carIdleSince = null;
+			this.carTakesNothing = false;
+			if (pluggedIn) {
+				this.chargingLowerThanTargetHandler.reset();
+				this.evcs._setMaximumPower(null);
+				this.requestTargetReplan("car plugged in");
+			} else if (evcsStatus == Status.NOT_READY_FOR_CHARGING && this.config.targetCharging()) {
+				// the car is gone: target charging ends, its plan is void
+				this.logInfo(this.log, "Car unplugged: target charging switches off");
+				this.configUpdateOnce("targetCharging", false);
+			}
 			if (this.energyScheduleHandler != null) {
 				this.energyScheduleHandler.triggerReschedule("ControllerEvcsPriceImpl::car plugged in/out",
 						RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
@@ -365,13 +458,21 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			nextChargePower = 0;
 		}
 
-		// Target charging ends at the target time: the switch goes off by itself
+		// Target charging ends at the target time or once the target is reached: the
+		// switch goes off by itself
 		final var targetMode = this.isTargetMode();
-		if (targetMode && !ZonedDateTime.now(this.clock).isBefore(this.targetDeadline)) {
+		if (targetMode && !ZonedDateTime.now(this.clock()).isBefore(this.targetDeadline)) {
 			this.logInfo(this.log, "Target time reached: target charging switches off");
+			this.configUpdateOnce("targetCharging", false);
+		} else if (targetMode && this.config.targetStartEnergy() >= 0 && this.targetRemainingWh() <= 0) {
+			this.logInfo(this.log, "Target reached: target charging switches off");
 			this.configUpdateOnce("targetCharging", false);
 		}
 		this.updateTargetStartEnergy(targetMode);
+		if (!this.config.targetCharging() && this.storedTargetPlan != null) {
+			// target charging is off: the plan is void
+			this.configUpdateOnce("targetPlan", StoredTargetPlan.NONE);
+		}
 
 		// Charge from grid depending on the price; the higher of excess power and
 		// price dependent power wins. Target charging follows its plan instead
@@ -417,7 +518,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			if (targetMode) {
 				// Target charging: the plan chose the cheapest quarter-hours until the
 				// target time, the price limits and the surplus do not count
-				final var quarter = this.plan.getAt(ZonedDateTime.now(this.clock));
+				final var quarter = this.plan.getAt(ZonedDateTime.now(this.clock()));
 				nextChargePower = quarter == null ? 0 : quarter.power();
 				// everything beyond the surplus is taken because of the plan, not the sun
 				priceCharging = quarter != null && quarter.power() > 0 && quarter.fromPv() < quarter.power();
@@ -595,9 +696,12 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.storageDischargeBlocked = this.readStorageDischargeBlocked();
 
 		// The charging plan, once per quarter-hour
+		this.checkCarPower();
+		this.checkCarIdle();
+		this.setCarTakesNothing(this.carTakesNothing);
 		this.updateChargingPlan(windows, energy);
 		final var plan = this.plan;
-		final var quarter = plan.getAt(ZonedDateTime.now(this.clock));
+		final var quarter = plan.getAt(ZonedDateTime.now(this.clock()));
 		final var targetWh = energy == null ? 0. : energy.usableWh() * this.config.storageTargetSocNet() / 100.;
 		this.planTargetWh = (int) Math.round(targetWh);
 		this.planUsableWh = energy == null ? 0 : energy.usableWh();
@@ -646,6 +750,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 								: plan.targetStatus().name());
 		this.setTargetDeadline(targetMode ? this.targetDeadline.toEpochSecond() : null);
 		this.setTargetRemainingEnergy(targetMode ? remaining : null);
+		final var stored = this.storedTargetPlan;
+		this.setTargetPlanTime(targetMode && stored != null ? stored.plannedAt() : null);
+		this.setTargetPlanQuarters(targetMode && stored != null ? stored.quarters() : null);
 		return storagePrice;
 	}
 
@@ -657,18 +764,22 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @param energy  the storage energy; possibly null
 	 */
 	private void updateChargingPlan(List<StorageWindow> windows, StorageEnergy energy) {
-		final var now = ZonedDateTime.now(this.clock);
-		final var quarter = now.truncatedTo(ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var now = ZonedDateTime.now(this.clock());
+		final var quarter = DateUtils.roundDownToQuarter(now);
 		if (!this.planDirty && quarter.equals(this.planQuarter)) {
 			return;
 		}
 		this.planDirty = false;
 		this.planQuarter = quarter;
+		this.checkTargetPlanDeviation(quarter);
 		try {
 			final var plans = this.calculateChargingPlan(quarter, windows, energy);
 			this.plan = plans.plan();
-			this.displayPlan = plans.display();
+			// the same time axis in every mode: 24 hours from the current quarter-hour
+			this.displayPlan = plans.display().until(quarter.plus(DISPLAY_HORIZON));
 			this.displayPlanHypothetical = plans.hypothetical();
+			this.announceTargetPlan();
+			this.announcePlan();
 		} catch (RuntimeException e) {
 			this.logWarn(this.log, "Unable to calculate the charging plan: " + e.getMessage());
 			this.plan = ChargingPlan.Result.EMPTY;
@@ -758,10 +869,17 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var hardwareMaxPower = Math.max(this.evcs.getMaximumPower()
 				.orElse(maxHardwarePower > 0 ? maxHardwarePower : this.config.priceChargePower()), minPower);
 		final var targetMode = this.isTargetMode();
-		// Target charging is limited by the configured full charge power
+		// Target charging is limited by the configured full charge power. It plans
+		// with the hardware, not with the lowered maximum: a car that takes less is
+		// measured while it charges and the rest is planned again with its power
+		// (see checkCarPower)
+		final var fullPower = Math.max(maxHardwarePower > 0 ? maxHardwarePower : this.config.priceChargePower(),
+				minPower);
 		final var maxPower = targetMode
-				? Math.max(Math.min(hardwareMaxPower, this.config.priceChargePower()), minPower)
-				: hardwareMaxPower;
+				? Math.max(Math.min(fullPower, this.config.priceChargePower()), minPower)
+				: this.priceCarPower > 0 //
+						? Math.min(hardwareMaxPower, Math.max(this.priceCarPower, minPower))
+						: hardwareMaxPower;
 		final var rules = new ChargingPlan.Rules(this.config.enablePriceCharging(), this.config.priceLimit(),
 				this.config.priceLimitFullPower(), this.config.priceChargePower(), this.config.priority(), minPower,
 				maxPower, this.config.pvPrice(), this.config.pvPrice() + this.config.storageLossSurcharge(),
@@ -774,18 +892,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				? Math.max(sessionLimit - this.evcs.getEnergySession().orElse(0), 0)
 				: null;
 		if (targetMode) {
-			// Target charging: the cheapest quarter-hours until the target time for the
-			// energy the session still misses
-			final var remaining = this.targetRemainingWh();
-			final var target = new ChargingPlan.Target(remaining, this.targetDeadline);
-			final var plan = ChargingPlan.calculateTarget(rules, storage, new ChargingPlan.Car(pluggedIn, remaining),
-					target, inputs);
-			if (pluggedIn) {
-				return new Plans(plan, plan, false);
-			}
-			final var display = ChargingPlan.calculateTarget(rules, storage, new ChargingPlan.Car(true, remaining),
-					target, inputs);
-			return new Plans(plan, display, true);
+			return this.calculateTargetPlan(quarter, rules, storage, inputs, pluggedIn);
 		}
 		final var plan = ChargingPlan.calculate(rules, storage, new ChargingPlan.Car(pluggedIn, remainingWh), inputs);
 		if (pluggedIn) {
@@ -794,6 +901,559 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// Without a car: what charging would cost, as if a car were plugged in now
 		final var display = ChargingPlan.calculate(rules, storage, new ChargingPlan.Car(true, remainingWh), inputs);
 		return new Plans(plan, display, true);
+	}
+
+	/**
+	 * The plan of target charging. A plan that was made and announced to the
+	 * energy optimizer stays: the controller follows it until the target time.
+	 * It plans again only without a plan, when the target changed, when the car
+	 * was plugged in or when the charged energy deviates from the plan.
+	 *
+	 * @param quarter   the current quarter-hour
+	 * @param rules     the rules
+	 * @param storage   the storage now
+	 * @param inputs    the forecast per quarter-hour
+	 * @param pluggedIn true if a car is plugged in
+	 * @return the plans
+	 */
+	private Plans calculateTargetPlan(ZonedDateTime quarter, ChargingPlan.Rules rules, ChargingPlan.Storage storage,
+			List<ChargingPlan.Input> inputs, boolean pluggedIn) {
+		final var remaining = this.targetRemainingWh();
+		final var deadline = this.targetDeadline;
+		final var target = new ChargingPlan.Target(remaining, deadline);
+		final var stored = this.storedTargetPlan;
+		final var zone = quarter.getZone();
+		String reason;
+		if (stored == null) {
+			reason = "no plan yet";
+		} else if (stored.deadline() != deadline.toEpochSecond() || stored.targetEnergy() != this.config.targetEnergy()) {
+			reason = "target changed";
+		} else if (this.targetReplan) {
+			reason = this.targetReplanReason;
+		} else {
+			return this.followTargetPlan(rules, storage, stored, target, inputs, pluggedIn);
+		}
+		// Whole quarter-hours only, like the optimizer: the plan starts with the next
+		// quarter-hour. The current one goes on as the old plan had it; the energy it
+		// still charges comes off the rest
+		final var now = ZonedDateTime.now(this.clock());
+		final var next = quarter.plus(QUARTER);
+		final var currentPower = stored == null ? 0 : stored.powerByTime(zone).getOrDefault(quarter, 0);
+		final var currentTakes = this.targetCarPower > 0 ? Math.min(currentPower, this.targetCarPower) : currentPower;
+		final var restOfQuarter = Math.max(Duration.between(now, next).toSeconds(), 0);
+		final var restWh = (int) Math.round(currentTakes * restOfQuarter / 3600.);
+		final var ahead = inputs.stream().filter(in -> !in.time().isBefore(next)).toList();
+		if (stored != null && !next.isBefore(deadline)) {
+			// no quarter-hour left before the target time: the stored plan goes on
+			this.targetReplan = false;
+			this.targetReplanReason = null;
+			this.targetCarPower = 0;
+			this.planDirty = false;
+			return this.followTargetPlan(rules, storage, stored, target, inputs, pluggedIn);
+		}
+		final var planTarget = new ChargingPlan.Target(Math.max(remaining - restWh, 0), deadline);
+		final var preferred = stored == null ? Set.<ZonedDateTime>of() : stored.powerByTime(zone).keySet();
+		// a measured car power limits the plan, not the quarter-hour that goes on
+		final var planRules = this.targetCarPower > 0 ? rules.withMaxPower(this.targetCarPower) : rules;
+		final var plan = ChargingPlan.calculateTarget(planRules, storage,
+				new ChargingPlan.Car(pluggedIn, planTarget.remainingWh()), planTarget, ahead, preferred);
+		final var status = plan.targetStatus();
+		if (pluggedIn && (status == ChargingPlan.TargetStatus.PLANNED
+				|| status == ChargingPlan.TargetStatus.UNREACHABLE)) {
+			// announce and keep: the plan goes to the configuration
+			final var made = StoredTargetPlan.of(now, deadline, this.config.targetEnergy(), quarter, currentPower, plan,
+					this.targetCarPower);
+			this.logInfo(this.log, "Target plan made (" + reason + "): " + made.quarters() + " quarter-hours, "
+					+ plan.energyWh() + " Wh from " + next.toLocalTime() + ", " + status
+					+ (this.targetCarPower > 0 ? ", car power " + this.targetCarPower + " W" : ""));
+			this.targetReplan = false;
+			this.targetReplanReason = null;
+			this.targetCarPower = 0;
+			this.configUpdateOnce("targetPlan", made.encode());
+			// this instance follows it from now on, whether or not the configuration
+			// change starts a new one
+			this.storedTargetPlan = made;
+			return this.followTargetPlan(rules, storage, made, target, inputs, pluggedIn);
+		}
+		if (pluggedIn) {
+			return new Plans(plan, plan, false);
+		}
+		final var display = ChargingPlan.calculateTarget(planRules, storage,
+				new ChargingPlan.Car(true, planTarget.remainingWh()), planTarget, ahead, preferred);
+		return new Plans(plan, display, true);
+	}
+
+	/**
+	 * Follows a stored target plan: the car charges the planned power per
+	 * quarter-hour and nothing else.
+	 *
+	 * @param rules     the rules
+	 * @param storage   the storage
+	 * @param stored    the stored plan
+	 * @param target    the target
+	 * @param inputs    the inputs from the current quarter-hour on
+	 * @param pluggedIn whether a car is plugged in
+	 * @return the plans
+	 */
+	private Plans followTargetPlan(ChargingPlan.Rules rules, ChargingPlan.Storage storage, StoredTargetPlan stored,
+			ChargingPlan.Target target, List<ChargingPlan.Input> inputs, boolean pluggedIn) {
+		final var fixed = stored.powerByTime(target.deadline().getZone());
+		final var remaining = target.remainingWh();
+		final var plan = ChargingPlan.applyTarget(rules, storage, new ChargingPlan.Car(pluggedIn, remaining), target,
+				inputs, fixed);
+		if (pluggedIn) {
+			return new Plans(plan, plan, false);
+		}
+		final var display = ChargingPlan.applyTarget(rules, storage, new ChargingPlan.Car(true, remaining), target,
+				inputs, fixed);
+		return new Plans(plan, display, true);
+	}
+
+	/**
+	 * Requests a new plan of target charging.
+	 *
+	 * @param reason the reason, for the log
+	 */
+	private void requestTargetReplan(String reason) {
+		if (!this.isTargetMode() || this.storedTargetPlan == null) {
+			return;
+		}
+		if (!this.targetReplan) {
+			this.logInfo(this.log, "Target plan is made again: " + reason);
+		}
+		this.targetReplan = true;
+		this.targetReplanReason = reason;
+		this.targetCarPower = 0;
+		this.planDirty = true;
+	}
+
+	/**
+	 * Target charging: the car may take less than the plan gives it, e.g. with a
+	 * single-phase charger. Once it does so by more than 1 kW for two minutes while
+	 * charging, the rest is planned again with the power it takes; the plan is
+	 * followed with that power until it is made again for another reason, then
+	 * the hardware counts again. 0 W is no car limit: the car has not started. A
+	 * plan made for this reason in the current quarter-hour is made again only
+	 * when the car takes 2 kW less than it.
+	 */
+	private void checkCarPower() {
+		if (!this.isTargetMode()) {
+			this.checkPriceCarPower();
+			return;
+		}
+		final var stored = this.storedTargetPlan;
+		if (stored == null || this.targetReplan) {
+			this.carPowerLowSince = null;
+			return;
+		}
+		final var now = ZonedDateTime.now(this.clock());
+		final var quarter = DateUtils.roundDownToQuarter(now);
+		if (quarter.plus(QUARTER).toEpochSecond() >= stored.deadline()) {
+			// no quarter-hour left before the target time: nothing to plan again
+			this.carPowerLowSince = null;
+			return;
+		}
+		final var planned = stored.powerByTime(now.getZone()).getOrDefault(quarter, 0);
+		final var actual = this.evcs.getActivePower().orElse(0);
+		final var minPower = this.evcs.getMinimumHardwarePower().orElse(0);
+		// a plan made with a car power in this quarter-hour keeps the current one at
+		// its old power: the car is measured against that car power, and it takes a
+		// further 2 kW less to plan again
+		final var madeHere = stored.carPower() > 0 && stored.plannedAt() >= quarter.toEpochSecond();
+		final var expected = madeHere ? Math.min(planned, stored.carPower()) : planned;
+		final var tolerance = (madeHere ? 2 : 1) * CAR_POWER_TOLERANCE;
+		if (planned <= minPower || actual < 500 || expected - actual <= tolerance) {
+			this.carPowerLowSince = null;
+			return;
+		}
+		if (this.carPowerLowSince == null) {
+			this.carPowerLowSince = now.toInstant();
+			return;
+		}
+		if (Duration.between(this.carPowerLowSince, now.toInstant()).compareTo(CAR_POWER_CONFIRMATION) < 0) {
+			return;
+		}
+		this.carPowerLowSince = null;
+		this.requestTargetReplan("the car takes " + actual + " W of the planned " + planned + " W");
+		this.targetCarPower = Math.max(actual, minPower);
+		this.planDirty = true;
+	}
+
+	/**
+	 * Price charging: the car may take less than it is offered, e.g. with a
+	 * single-phase charger. Once it does so by more than 1 kW for two minutes
+	 * while charging, the plan is made with the power it takes for the rest of
+	 * the session, at once, and the optimizer is told. Takes the car 1 kW more
+	 * than measured for two minutes, the hardware counts again.
+	 */
+	private void checkPriceCarPower() {
+		if (this.config.chargeMode() != ChargeMode.EXCESS_POWER || !Boolean.TRUE.equals(this.lastPluggedIn)) {
+			this.carPowerLowSince = null;
+			return;
+		}
+		final var now = Instant.now(this.clock());
+		final var offered = this.offeredPower();
+		final var actual = this.evcs.getActivePower().orElse(0);
+		final var minPower = this.evcs.getMinimumHardwarePower().orElse(0);
+		final var measured = this.priceCarPower;
+		final var more = measured > 0 && actual > measured + CAR_POWER_TOLERANCE;
+		final var less = offered > minPower && actual >= CAR_IDLE_POWER && offered - actual > CAR_POWER_TOLERANCE
+				&& (measured == 0 || measured - actual > CAR_POWER_TOLERANCE);
+		if (!more && !less) {
+			this.carPowerLowSince = null;
+			return;
+		}
+		if (this.carPowerLowSince == null) {
+			this.carPowerLowSince = now;
+			return;
+		}
+		if (Duration.between(this.carPowerLowSince, now).compareTo(CAR_POWER_CONFIRMATION) < 0) {
+			return;
+		}
+		this.carPowerLowSince = null;
+		if (more) {
+			this.priceCarPower = 0;
+			this.logInfo(this.log, "The car takes " + actual + " W, more than the measured " + measured
+					+ " W: the plan is made with the hardware again");
+		} else {
+			this.priceCarPower = Math.max(actual, minPower);
+			this.logInfo(this.log, "The car takes " + actual + " W of the offered " + offered
+					+ " W: the plan is made with its power");
+		}
+		this.planAnnounce = "car power";
+		this.planDirty = true;
+	}
+
+	/**
+	 * The car may take nothing although power is offered: it pauses, or it is
+	 * full; the wallbox cannot tell. After 45 minutes without power while at least
+	 * the minimum power is offered the car counts as taking nothing: the plan goes
+	 * on and the wallbox offers as before, so that a pausing car starts by itself,
+	 * but the plan does not count for the energy optimizer. Power again ends it,
+	 * with a new measurement of the car.
+	 */
+	private void checkCarIdle() {
+		final var now = Instant.now(this.clock());
+		final var actual = this.evcs.getActivePower().orElse(0);
+		if (!Boolean.TRUE.equals(this.lastPluggedIn) || !this.config.enabledCharging() || this.isPaused()) {
+			this.carIdleSince = null;
+			this.carTakesNothing = false;
+			return;
+		}
+		if (actual >= CAR_IDLE_POWER) {
+			this.carIdleSince = null;
+			if (this.carTakesNothing) {
+				this.carTakesNothing = false;
+				this.priceCarPower = 0;
+				this.logInfo(this.log, "The car takes " + actual + " W again: the plan counts for the optimizer again");
+				this.planAnnounce = "car takes power again";
+				this.planDirty = true;
+			}
+			return;
+		}
+		final var offered = this.offeredPower();
+		final var minPower = this.evcs.getMinimumHardwarePower().orElse(0);
+		if (offered <= 0 || offered < minPower) {
+			// nothing offered: no evidence either way
+			this.carIdleSince = null;
+			return;
+		}
+		if (this.carIdleSince == null) {
+			this.carIdleSince = now;
+			return;
+		}
+		if (!this.carTakesNothing && Duration.between(this.carIdleSince, now).compareTo(CAR_IDLE_CONFIRMATION) >= 0) {
+			this.carTakesNothing = true;
+			this.logInfo(this.log, "The car takes nothing for " + CAR_IDLE_CONFIRMATION.toMinutes() + " minutes although "
+					+ offered + " W are offered: the plan does not count for the optimizer");
+			this.planAnnounce = "car takes nothing";
+			this.planDirty = true;
+		}
+	}
+
+	/**
+	 * The power offered to the car in the last cycle.
+	 *
+	 * @return the power in [W]; 0 if none
+	 */
+	private int offeredPower() {
+		final Channel<Integer> channel = this.channel(ControllerEvcsPrice.ChannelId.CHARGE_POWER_LIMIT);
+		return channel.value().orElse(0);
+	}
+
+	/**
+	 * Tells the optimizer about a plan that changed between two quarter-hours
+	 * (the car power was measured, the car takes nothing or takes power again).
+	 */
+	private void announcePlan() {
+		final var reason = this.planAnnounce;
+		if (reason == null) {
+			return;
+		}
+		this.planAnnounce = null;
+		if (this.energyScheduleHandler != null) {
+			this.energyScheduleHandler.triggerReschedule("ControllerEvcsPriceImpl::" + reason,
+					RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
+		}
+	}
+
+	/**
+	 * Tells the optimizer about a new target plan, so that the Time-of-Use-Tariff
+	 * plans the storage with it at once instead of at its next quarter-hour. A
+	 * stored plan reaches the optimizer through the configuration: this instance
+	 * announces it with its first plan that follows it.
+	 */
+	private void announceTargetPlan() {
+		final var stored = this.storedTargetPlan;
+		final var plannedAt = this.isTargetMode() && stored != null ? stored.plannedAt() : 0;
+		if (plannedAt == this.announcedTargetPlanAt) {
+			return;
+		}
+		this.announcedTargetPlanAt = plannedAt;
+		if (this.energyScheduleHandler != null) {
+			this.energyScheduleHandler.triggerReschedule("ControllerEvcsPriceImpl::target plan",
+					RescheduleMode.DO_NOT_UPDATE_CURRENT_PERIOD);
+		}
+	}
+
+	/**
+	 * Once per quarter-hour: the stored plan expects a certain energy to be
+	 * missing from now on. If the real missing energy deviates by more than one
+	 * quarter-hour of minimum power, e.g. because the car took less than planned,
+	 * the rest is planned again.
+	 *
+	 * @param quarter the current quarter-hour
+	 */
+	private void checkTargetPlanDeviation(ZonedDateTime quarter) {
+		final var stored = this.storedTargetPlan;
+		if (!this.isTargetMode() || stored == null || this.targetReplan) {
+			return;
+		}
+		if (stored.plannedAt() >= quarter.toEpochSecond()) {
+			// made in this quarter-hour: nothing can have deviated yet
+			return;
+		}
+		if (quarter.plus(QUARTER).toEpochSecond() >= stored.deadline()) {
+			// no quarter-hour left before the target time: nothing to plan again
+			return;
+		}
+		final var expected = stored.remainingFrom(quarter);
+		final var actual = this.targetRemainingWh();
+		final var tolerance = Math.max(this.evcs.getMinimumHardwarePower().orElse(4140) / 4, 500);
+		if (Math.abs(actual - expected) > tolerance) {
+			this.requestTargetReplan("missing " + actual + " Wh, the plan expected " + expected + " Wh");
+		} else if (actual > expected && stored.hasFreeQuarterFrom(quarter)) {
+			// a little less than planned was charged, e.g. the car took less power or
+			// started late: the rest of the plan no longer covers the missing energy
+			// and there are free quarter-hours before the target time
+			this.requestTargetReplan("the plan covers " + expected + " Wh of the missing " + actual + " Wh");
+		}
+	}
+
+	/**
+	 * The plan of target charging as stored in the configuration: the planned
+	 * power per quarter-hour from its start on.
+	 *
+	 * @param plannedAt    when the plan was made, epoch seconds
+	 * @param deadline     the target time, epoch seconds
+	 * @param targetEnergy the target energy in [Wh]
+	 * @param start        the first quarter-hour, epoch seconds
+	 * @param powers       the power per quarter-hour in [W]
+	 */
+	protected record StoredTargetPlan(long plannedAt, long deadline, int targetEnergy, long start, int[] powers,
+			int carPower) {
+
+		/** The configuration value without a plan (an empty string is a default). */
+		public static final String NONE = "-";
+
+		/**
+		 * A plan made with the hardware power.
+		 *
+		 * @param plannedAt    when it was made, epoch seconds
+		 * @param deadline     the target time, epoch seconds
+		 * @param targetEnergy the target energy in [Wh]
+		 * @param start        the first quarter-hour, epoch seconds
+		 * @param powers       the power per quarter-hour in [W]
+		 */
+		public StoredTargetPlan(long plannedAt, long deadline, int targetEnergy, long start, int[] powers) {
+			this(plannedAt, deadline, targetEnergy, start, powers, 0);
+		}
+
+		/**
+		 * Builds the stored plan from a plan.
+		 *
+		 * @param plannedAt    now
+		 * @param deadline     the target time
+		 * @param targetEnergy the target energy in [Wh]
+		 * @param plan         the plan
+		 * @return the stored plan
+		 */
+		public static StoredTargetPlan of(ZonedDateTime plannedAt, ZonedDateTime deadline, int targetEnergy,
+				ChargingPlan.Result plan) {
+			return of(plannedAt, deadline, targetEnergy, plan, 0);
+		}
+
+		/**
+		 * Builds the stored plan from a plan made with a measured car power.
+		 *
+		 * @param plannedAt    now
+		 * @param deadline     the target time
+		 * @param targetEnergy the target energy in [Wh]
+		 * @param plan         the plan
+		 * @param carPower     the car power the plan was made with in [W]; 0 for the
+		 *                     hardware
+		 * @return the stored plan
+		 */
+		public static StoredTargetPlan of(ZonedDateTime plannedAt, ZonedDateTime deadline, int targetEnergy,
+				ChargingPlan.Result plan, int carPower) {
+			final var quarters = plan.quarters();
+			final var powers = new int[quarters.size()];
+			for (var i = 0; i < powers.length; i++) {
+				powers[i] = quarters.get(i).power();
+			}
+			return new StoredTargetPlan(plannedAt.toEpochSecond(), deadline.toEpochSecond(), targetEnergy,
+					quarters.isEmpty() ? 0 : quarters.get(0).time().toEpochSecond(), powers, carPower);
+		}
+
+		/**
+		 * Builds the stored plan from a plan that starts with the next quarter-hour,
+		 * with the current quarter-hour in front of it.
+		 *
+		 * @param plannedAt    now
+		 * @param deadline     the target time
+		 * @param targetEnergy the target energy in [Wh]
+		 * @param quarter      the current quarter-hour
+		 * @param currentPower the power of the current quarter-hour in [W]
+		 * @param plan         the plan from the next quarter-hour on
+		 * @param carPower     the car power the plan was made with in [W]; 0 for the
+		 *                     hardware
+		 * @return the stored plan
+		 */
+		public static StoredTargetPlan of(ZonedDateTime plannedAt, ZonedDateTime deadline, int targetEnergy,
+				ZonedDateTime quarter, int currentPower, ChargingPlan.Result plan, int carPower) {
+			final var quarters = plan.quarters();
+			final var powers = new int[quarters.size() + 1];
+			powers[0] = currentPower;
+			for (var i = 0; i < quarters.size(); i++) {
+				powers[i + 1] = quarters.get(i).power();
+			}
+			return new StoredTargetPlan(plannedAt.toEpochSecond(), deadline.toEpochSecond(), targetEnergy,
+					quarter.toEpochSecond(), powers, carPower);
+		}
+
+		/**
+		 * Parses the configuration value.
+		 *
+		 * @param value the value
+		 * @return the stored plan; null if none
+		 */
+		public static StoredTargetPlan decode(String value) {
+			if (value == null || value.isBlank() || value.equals(NONE)) {
+				return null;
+			}
+			try {
+				final var parts = value.split("\\|");
+				final var powers = parts.length < 5 || parts[4].isBlank() ? new int[0]
+						: java.util.Arrays.stream(parts[4].split(",")).mapToInt(Integer::parseInt).toArray();
+				return new StoredTargetPlan(Long.parseLong(parts[0]), Long.parseLong(parts[1]),
+						Integer.parseInt(parts[2]), Long.parseLong(parts[3]), powers,
+						parts.length > 5 ? Integer.parseInt(parts[5]) : 0);
+			} catch (RuntimeException e) {
+				return null;
+			}
+		}
+
+		/**
+		 * The configuration value.
+		 *
+		 * @return the value
+		 */
+		public String encode() {
+			final var b = new StringBuilder();
+			b.append(this.plannedAt).append('|').append(this.deadline).append('|').append(this.targetEnergy).append('|')
+					.append(this.start).append('|');
+			for (var i = 0; i < this.powers.length; i++) {
+				if (i > 0) {
+					b.append(',');
+				}
+				b.append(this.powers[i]);
+			}
+			b.append('|').append(this.carPower);
+			return b.toString();
+		}
+
+		/**
+		 * The planned power per quarter-hour start.
+		 *
+		 * @param zone the time zone
+		 * @return the powers in [W], only quarter-hours with power
+		 */
+		public Map<ZonedDateTime, Integer> powerByTime(ZoneId zone) {
+			final var result = new HashMap<ZonedDateTime, Integer>();
+			final var first = Instant.ofEpochSecond(this.start).atZone(zone);
+			for (var i = 0; i < this.powers.length; i++) {
+				if (this.powers[i] > 0) {
+					result.put(first.plus(QUARTER.multipliedBy(i)), this.powers[i]);
+				}
+			}
+			return result;
+		}
+
+		/**
+		 * The energy the plan still charges from a quarter-hour on.
+		 *
+		 * @param quarter the quarter-hour
+		 * @return the energy in [Wh]
+		 */
+		public int remainingFrom(ZonedDateTime quarter) {
+			var wh = 0.;
+			final var from = quarter.toEpochSecond();
+			for (var i = 0; i < this.powers.length; i++) {
+				if (this.start + QUARTER.toSeconds() * i >= from) {
+					// the plan was made within its first quarter-hour: only the rest of it
+					// charges
+					final var fraction = i == 0
+							? Math.max(Math.min(1 - (this.plannedAt - this.start) / (double) QUARTER.toSeconds(), 1), 0)
+							: 1;
+					wh += this.powers[i] * fraction / 4;
+				}
+			}
+			return (int) Math.round(wh);
+		}
+
+		/**
+		 * Whether the plan has a quarter-hour without charging before the target time,
+		 * from a quarter-hour on.
+		 *
+		 * @param quarter the quarter-hour
+		 * @return true if there is one
+		 */
+		public boolean hasFreeQuarterFrom(ZonedDateTime quarter) {
+			final var from = quarter.toEpochSecond();
+			for (var i = 0; i < this.powers.length; i++) {
+				final var time = this.start + QUARTER.toSeconds() * i;
+				if (time >= from && time < this.deadline && this.powers[i] <= 0) {
+					return true;
+				}
+			}
+			// the plan ends before the target time
+			return this.start + QUARTER.toSeconds() * this.powers.length < this.deadline;
+		}
+
+		/**
+		 * The number of quarter-hours with charging.
+		 *
+		 * @return the number
+		 */
+		public int quarters() {
+			var n = 0;
+			for (var p : this.powers) {
+				if (p > 0) {
+					n++;
+				}
+			}
+			return n;
+		}
 	}
 
 	/**
@@ -1000,7 +1660,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * Reads the "do not charge today" switch and keeps the pause until midnight.
 	 */
 	private void updatePause() {
-		final var now = ZonedDateTime.now(this.clock);
+		final var now = ZonedDateTime.now(this.clock());
 		final var before = this.isPaused();
 		final BooleanWriteChannel channel = this.channel(ControllerEvcsPrice.ChannelId.PAUSE_TODAY);
 		final var written = channel.getNextWriteValueAndReset();
@@ -1515,7 +2175,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private int applyHysteresis(int nextChargePower) {
 		int targetChargePower = nextChargePower;
 		boolean showWarning = false;
-		var now = Instant.now(this.clock);
+		var now = Instant.now(this.clock());
 
 		// Wait at least the EVCS-specific response time, required to increase and
 		// decrease the charging power
@@ -1617,12 +2277,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			}
 			c = this.cm.getConfiguration(pid, "?");
 			var properties = c.getProperties();
-			// a property at its default is not part of the configuration yet
-			var target = properties.get(targetProperty);
-			if (target == null || !target.toString().isEmpty()) {
-				properties.put(targetProperty, requiredValue);
-				c.update(properties);
-			}
+			properties.put(targetProperty, requiredValue);
+			c.update(properties);
 		} catch (IOException | SecurityException e) {
 			this.logError(this.log, "ERROR: " + e.getMessage());
 		}

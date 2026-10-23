@@ -22,6 +22,10 @@ export class StorageComponent extends AbstractFlatWidget {
     public isHybridEss: boolean[] = [];
     public emergencyReserveComponents: { [essId: string]: EdgeConfig.Component } = {};
     public chargeDischargeLimiterComponents: { [essId: string]: EdgeConfig.Component } = {};
+    /** ESS clusters (MetaEss), shown before their members */
+    public clusterComponents: EdgeConfig.Component[] = [];
+    /** Controller.Ess.ChargeDischargeLimiter.Cluster by the id of its cluster: gives the net SoC */
+    public clusterLimiters: { [essId: string]: EdgeConfig.Component } = {};
     public currentSoc: number[] = [];
     public isEmergencyReserveEnabled: boolean[] = [];
     public isChargeDischargeLimiterEnabled: boolean[] = [];
@@ -123,6 +127,28 @@ export class StorageComponent extends AbstractFlatWidget {
         }
 
         // Get emergencyReserves
+        // ESS clusters: the sum of their members, with the net SoC of their cluster limiter
+        this.clusterComponents = this.config
+            .getComponentsImplementingNature("io.openems.edge.ess.api.SymmetricEss")
+            .filter(
+                (component) =>
+                    component.isEnabled &&
+                    this.config
+                        .getNatureIdsByFactoryId(component.factoryId)
+                        .includes("io.openems.edge.ess.api.MetaEss"),
+            );
+        this.clusterLimiters = this.config
+            .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter.Cluster")
+            .filter((component) => component.isEnabled)
+            .reduce((result, component) => ({ ...result, [component.properties["ess.id"]]: component }), {});
+        // only clusters with a cluster controller get an entry
+        this.clusterComponents = this.clusterComponents.filter((cluster) => this.clusterLimiters[cluster.id] != null);
+        for (const cluster of this.clusterComponents) {
+            channelAddresses.push(new ChannelAddress(cluster.id, "Soc"), new ChannelAddress(cluster.id, "ActivePower"));
+        }
+        for (const limiter of Object.values(this.clusterLimiters)) {
+            channelAddresses.push(new ChannelAddress(limiter.id, "NetSoc"));
+        }
         this.emergencyReserveComponents = this.config
             .getComponentsByFactory("Controller.Ess.EmergencyCapacityReserve")
             .filter((component) => component.isEnabled)

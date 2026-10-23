@@ -9,6 +9,7 @@ import static io.openems.edge.common.sum.Sum.ChannelId.GRID_ACTIVE_POWER;
 import static io.openems.edge.common.sum.Sum.ChannelId.GRID_BUY_PRICE;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.BLENDED_PRICE;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.CAR_TAKES_NOTHING;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.HYSTERESIS_REMAINING;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PAUSE_TODAY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PLAN_ENERGY;
@@ -22,6 +23,7 @@ import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelI
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.SESSION_ENERGY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_DISCHARGE_LIMIT;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.STORAGE_LOCKED;
+import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.TARGET_PLAN_QUARTERS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.TARGET_REMAINING_ENERGY;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.TARGET_STATUS;
 import static io.openems.edge.controller.evcs.price.ControllerEvcsPrice.ChannelId.PRICE_CHARGING;
@@ -45,6 +47,7 @@ import static java.time.temporal.ChronoUnit.HOURS;
 import static java.time.temporal.ChronoUnit.MINUTES;
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1556,8 +1559,8 @@ public class ControllerEvcsPriceImplTest {
 				.deactivate();
 		assertEquals(22902, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetStartEnergy"));
 
-		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 10000, targetTime, 22902,
-				new DummyConfigurationAdmin()) //
+		final var cm2 = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 10000, targetTime, 22902, cm2) //
 				.next(new TestCase("3 kWh charged since switching on") //
 						.input(GRID_BUY_PRICE, 200.) //
 						.input(ESS_CAPACITY, 20000) //
@@ -1579,6 +1582,8 @@ public class ControllerEvcsPriceImplTest {
 						.output(TARGET_REMAINING_ENERGY, 0) //
 						.output(TARGET_STATUS, "REACHED")) //
 				.deactivate();
+		// the target is reached: the switch goes off by itself
+		assertEquals(false, cm2.getConfiguration("ctrlEvcs0").getProperties().get("targetCharging"));
 	}
 
 	@Test
@@ -1643,6 +1648,597 @@ public class ControllerEvcsPriceImplTest {
 						.output(SESSION_ENERGY, null)) //
 				.deactivate();
 		assertEquals(-1, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("sessionStartEnergy"));
+	}
+
+	@Test
+	public void targetPlanIsStoredAndFollowedTest() throws Exception {
+		// The first plan goes to the configuration. A stored plan is followed even
+		// if a fresh plan would wait for the cheaper second hour
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = i >= 4 && i < 8 ? 200. : 500.;
+		}
+		var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime, 0, cm) //
+				.next(new TestCase("first plan: made and stored") //
+						.input(GRID_BUY_PRICE, 500.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 0) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.deactivate();
+		final var stored = ControllerEvcsPriceImpl.StoredTargetPlan
+				.decode((String) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+		assertNotNull(stored);
+		assertEquals(deadline.toEpochSecond(), stored.deadline());
+		assertEquals(5000, stored.targetEnergy());
+		assertTrue(stored.quarters() > 0);
+		assertEquals(0, stored.powers()[0], "the expensive first quarter-hour is not planned");
+
+		// a stored plan that charges right now, although the prices say wait
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var plan = new ControllerEvcsPriceImpl.StoredTargetPlan(now.toEpochSecond(), deadline.toEpochSecond(),
+				5000, quarter.toEpochSecond(), new int[] { 11040, 8960, 0, 0, 0, 0, 0, 0 });
+		cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime, 0, cm, plan.encode()) //
+				.next(new TestCase("the stored plan is followed") //
+						.input(GRID_BUY_PRICE, 500.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 0) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(TARGET_PLAN_QUARTERS, 2) //
+						.output(PLAN_REASON, "TARGET_CHARGE") //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("the car is unplugged: target charging switches off") //
+						.input("evcs0", STATUS, Status.NOT_READY_FOR_CHARGING)) //
+				.deactivate();
+		assertEquals(plan.encode(), cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"),
+				"the plan is not made again");
+		assertEquals(false, cm.getConfiguration("ctrlEvcs0").getProperties().get("targetCharging"));
+	}
+
+	@Test
+	public void targetPlanMadeAgainOnDeviationTest() throws Exception {
+		// The stored plan charged in the past hour, but the car took nothing: the
+		// missing energy deviates from the plan, so the rest is planned again
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var old = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusHours(1).toEpochSecond(),
+				deadline.toEpochSecond(), 5000, quarter.minusHours(1).toEpochSecond(),
+				new int[] { 11040, 8960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime, 0, cm, old.encode()) //
+				.next(new TestCase("nothing charged: planned again") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 0) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(PLAN_ENERGY, 5000)) //
+				.deactivate();
+		final var made = ControllerEvcsPriceImpl.StoredTargetPlan
+				.decode((String) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+		assertNotNull(made);
+		assertTrue(made.plannedAt() > old.plannedAt(), "a new plan");
+		assertTrue(made.start() >= quarter.toEpochSecond(), "from now on");
+		assertTrue(made.quarters() > 0);
+	}
+
+	@Test
+	public void targetPlanMadeAgainWhenItNoLongerCoversTheRestTest() throws Exception {
+		// The car charged a little less than the plan expected, within the tolerance,
+		// but the rest of the plan no longer covers the missing energy: planned again
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 180) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		// two quarter-hours charged at minimum power, one more planned for 1035 Wh
+		final var old = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusHours(1).toEpochSecond(),
+				deadline.toEpochSecond(), 3000, quarter.minusMinutes(30).toEpochSecond(),
+				new int[] { 4140, 4140, 4140, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 3000, targetTime, 0, cm, old.encode()) //
+				.next(new TestCase("1800 of 2070 Wh charged: 1200 Wh missing, the plan covers 1035 Wh") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 1800) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(TARGET_REMAINING_ENERGY, 1200)) //
+				.deactivate();
+		final var made = ControllerEvcsPriceImpl.StoredTargetPlan
+				.decode((String) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+		assertNotNull(made);
+		assertTrue(made.plannedAt() > old.plannedAt(), "a new plan");
+		assertTrue(made.remainingFrom(quarter) >= 1200, "the new plan covers the rest");
+	}
+
+	@Test
+	public void targetPlanCoveringTheRestIsNotMadeAgainTest() throws Exception {
+		// The car charged a little less than the plan expected, but the rest of the
+		// plan still covers the missing energy: the plan stays
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 180) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var old = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusHours(1).toEpochSecond(),
+				deadline.toEpochSecond(), 3000, quarter.minusMinutes(30).toEpochSecond(),
+				new int[] { 4140, 4140, 4140, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 3000, targetTime, 0, cm, old.encode()) //
+				.next(new TestCase("2000 of 2070 Wh charged: 1000 Wh missing, the plan covers 1035 Wh") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 2000) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED") //
+						.output(TARGET_REMAINING_ENERGY, 1000)) //
+				.deactivate();
+		assertEquals(old.encode(), cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+	}
+
+	@Test
+	public void targetPlanMadeAgainWithTheCarPowerTest() throws Exception {
+		// The plan gives the car 11 kW, the car takes 4 kW for two minutes: the rest
+		// is planned again with the car power, the plan remembers it
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 240) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var old = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusMinutes(20).toEpochSecond(),
+				deadline.toEpochSecond(), 9000, quarter.toEpochSecond(),
+				new int[] { 11040, 11040, 11040, 2880, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 9000, targetTime, 0, cm, old.encode()) //
+				.next(new TestCase("the car takes 4 kW of 11 kW") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 500) //
+						.input(GRID_ACTIVE_POWER, 5000) //
+						.input("evcs0", ACTIVE_POWER, 4050) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "PLANNED")) //
+				.next(new TestCase("still after one minute: the plan stays") //
+						.timeleap(clock, 1, MINUTES) //
+						.output(TARGET_STATUS, "PLANNED")) //
+				.next(new TestCase("after two minutes: planned again with 4 kW") //
+						.timeleap(clock, 70, SECONDS) //
+						.output(TARGET_STATUS, "PLANNED")) //
+				.deactivate();
+		final var made = ControllerEvcsPriceImpl.StoredTargetPlan
+				.decode((String) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+		assertNotNull(made);
+		assertTrue(made.plannedAt() > old.plannedAt(), "a new plan");
+		assertEquals(4140, made.carPower());
+		// the current quarter-hour goes on as planned, the rest with the car power
+		assertEquals(11040, made.powers()[0]);
+		for (var i = 1; i < made.powers().length; i++) {
+			assertTrue(made.powers()[i] <= 4140, "no quarter-hour above the car power: " + made.powers()[i]);
+		}
+		assertTrue(made.remainingFrom(quarter) >= 8500 - 4140 / 4, "the new plan covers the rest");
+	}
+
+	@Test
+	public void priceCarPowerMeasuredTest() throws Exception {
+		// Price charging offers 11 kW, the car takes 4 kW for two minutes: the plan
+		// is made with the car power at once and reaches the optimizer; takes the car
+		// 9 kW later, the hardware counts again
+		final var clock = createDummyClock();
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		preparePricePlanTest(clock, controller, prices) //
+				.next(new TestCase("the car takes 4 kW of the offered 11 kW") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 500) //
+						.input(GRID_ACTIVE_POWER, 5000) //
+						.input("evcs0", ACTIVE_POWER, 4050) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("after one minute: the plan still has the hardware") //
+						.timeleap(clock, 1, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.onAfterControllersCallbacks(() -> {
+							final var plan = controller.getDisplayPlan();
+							assertTrue(plan.quarters().stream().anyMatch(q -> q.power() > 4140), "hardware power");
+						})) //
+				.next(new TestCase("after two minutes since the offer: the plan is made with 4 kW, the offer stays") //
+						.timeleap(clock, 130, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.onAfterControllersCallbacks(() -> {
+							final var plan = controller.getDisplayPlan();
+							assertTrue(plan.energyWh() > 0, "a plan");
+							assertTrue(plan.quarters().stream().allMatch(q -> q.power() <= 4140), "car power");
+							final var esh = controller.energySchedulerConfig();
+							assertNotNull(esh);
+							assertTrue(esh.charging(), "the plan counts for the optimizer");
+							assertTrue(esh.planWh().stream().allMatch(wh -> wh <= 4140 / 4), "car power");
+						})) //
+				.next(new TestCase("the car takes 9 kW") //
+						.input("evcs0", ACTIVE_POWER, 9000)) //
+				.next(new TestCase("after two minutes: the hardware counts again") //
+						.timeleap(clock, 140, SECONDS) //
+						.onAfterControllersCallbacks(() -> {
+							final var plan = controller.getDisplayPlan();
+							assertTrue(plan.quarters().stream().anyMatch(q -> q.power() > 4140), "hardware power");
+						})) //
+				.deactivate();
+	}
+
+	@Test
+	public void carTakesNothingTest() throws Exception {
+		// Price charging offers 11 kW to a plugged-in car that takes nothing: the plan
+		// counts for the optimizer for 45 minutes, then not; the offer stays. Power
+		// again: the plan counts again
+		final var clock = createDummyClock();
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		preparePricePlanTest(clock, controller, prices) //
+				.next(new TestCase("plugged in, nothing taken") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 500) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.output(CAR_TAKES_NOTHING, false)) //
+				.next(new TestCase("the plan counts as soon as the car is plugged in") //
+						.timeleap(clock, 1, SECONDS) //
+						.onAfterControllersCallbacks(() -> {
+							final var esh = controller.energySchedulerConfig();
+							assertNotNull(esh);
+							assertTrue(esh.charging(), "the plan counts for the optimizer");
+						})) //
+				.next(new TestCase("after 44 minutes: still") //
+						.timeleap(clock, 44, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.output(CAR_TAKES_NOTHING, false) //
+						.onAfterControllersCallbacks(() -> {
+							assertTrue(controller.energySchedulerConfig().charging());
+						})) //
+				.next(new TestCase("after 46 minutes: the car takes nothing, the offer stays") //
+						.timeleap(clock, 2, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.output(CAR_TAKES_NOTHING, true) //
+						.onAfterControllersCallbacks(() -> {
+							assertFalse(controller.energySchedulerConfig().charging(), "no consumption for the optimizer");
+						})) //
+				.next(new TestCase("the car takes power again") //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 5000) //
+						.output(CAR_TAKES_NOTHING, false) //
+						.onAfterControllersCallbacks(() -> {
+							assertTrue(controller.energySchedulerConfig().charging(), "the plan counts again");
+						})) //
+				.deactivate();
+	}
+
+	@Test
+	public void targetPlanKeptWhileTheCarTakesNothingTest() throws Exception {
+		// Target charging: the car takes nothing for 46 minutes: target charging and
+		// its plan stay, only the optimizer gets nothing; power again: it counts again
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 240) % (24 * 60);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var controller = new ControllerEvcsPriceImpl(clock);
+		final var cm = new DummyConfigurationAdmin();
+		// more than fits until the target time: every quarter-hour charges
+		prepareTargetTest(clock, controller, prices, 60000, targetTime, 0, cm) //
+				.next(new TestCase("plugged in, nothing taken") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 500) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_STATUS, "UNREACHABLE")) //
+				.next(new TestCase("the plan starts with the next quarter-hour") //
+						.timeleap(clock, 15, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("the plan counts") //
+						.timeleap(clock, 1, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.onAfterControllersCallbacks(() -> {
+							assertTrue(controller.energySchedulerConfig().charging());
+						})) //
+				.next(new TestCase("after 46 minutes: the car takes nothing, target charging stays") //
+						.timeleap(clock, 46, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040) //
+						.output(CAR_TAKES_NOTHING, true) //
+						.output(TARGET_STATUS, "UNREACHABLE") //
+						.onAfterControllersCallbacks(() -> {
+							assertFalse(controller.energySchedulerConfig().charging(), "no consumption for the optimizer");
+						})) //
+				.next(new TestCase("the car takes power again") //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 9000) //
+						.output(CAR_TAKES_NOTHING, false) //
+						.onAfterControllersCallbacks(() -> {
+							assertTrue(controller.energySchedulerConfig().charging(), "the plan counts again");
+						})) //
+				.deactivate();
+		assertEquals(true, cm.getConfiguration("ctrlEvcs0").getProperties().get("targetCharging"));
+	}
+
+	@Test
+	public void targetPlanWithTheCarPowerIsNotMadeAgainInTheSameQuarterTest() throws Exception {
+		// A plan made with the car power keeps the current quarter-hour at the old
+		// 11 kW; the car still takes 4 kW: measured against the car power, no new plan
+		final var clock = createDummyClock();
+		clock.leap(3, MINUTES);
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 240) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var made = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusMinutes(1).toEpochSecond(),
+				deadline.toEpochSecond(), 9000, quarter.toEpochSecond(),
+				new int[] { 11040, 4140, 4140, 4140, 4140, 4140, 4140, 4140, 0, 0, 0, 0, 0, 0, 0, 0 }, 4140);
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 9000, targetTime, 0, cm, made.encode()) //
+				.next(new TestCase("the car takes 4 kW of the kept 11 kW") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 200) //
+						.input(GRID_ACTIVE_POWER, 5000) //
+						.input("evcs0", ACTIVE_POWER, 4050) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("still after three minutes: the plan stays") //
+						.timeleap(clock, 3, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.deactivate();
+		assertEquals(made.encode(), cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+	}
+
+	@Test
+	public void targetPlanInTheLastQuarterIsNotMadeAgainTest() throws Exception {
+		// The target time is the end of the current quarter-hour: the car takes less
+		// than planned, but there is no quarter-hour left to plan; the plan goes on
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 15) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var made = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusMinutes(20).toEpochSecond(),
+				deadline.toEpochSecond(), 3000, quarter.minusMinutes(15).toEpochSecond(),
+				new int[] { 11040, 11040 }, 0);
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 3000, targetTime, 0, cm, made.encode()) //
+				.next(new TestCase("the car takes 4 kW of 11 kW in the last quarter-hour") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 0) //
+						.input(GRID_ACTIVE_POWER, 5000) //
+						.input("evcs0", ACTIVE_POWER, 4050) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.next(new TestCase("still after three minutes: the plan goes on") //
+						.timeleap(clock, 3, MINUTES) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.deactivate();
+		assertEquals(made.encode(), cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+	}
+
+	@Test
+	public void targetTimePassedWhileOffSwitchesOffTest() throws Exception {
+		// The stored plan's target time passed while the controller was off: it
+		// switches target charging off instead of planning for the next day
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 24 * 60 - 60) % (24 * 60); // an hour ago
+		final var passed = now.minusHours(1);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var old = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusHours(3).toEpochSecond(),
+				passed.toEpochSecond(), 5000, now.minusHours(3).toEpochSecond(),
+				new int[] { 0, 11040, 11040, 0, 0, 0, 0, 0 }, 0);
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime, 0, cm, old.encode()) //
+				.next(new TestCase("target time passed: off") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 2000) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.deactivate();
+		assertEquals(false, cm.getConfiguration("ctrlEvcs0").getProperties().get("targetCharging"));
+	}
+
+	@Test
+	public void targetPlanInTheLastQuarterIsNotMadeAgainOnDeviationTest() throws Exception {
+		// The last quarter-hour before the target time begins and the car is far
+		// behind the plan: there is no quarter-hour left to plan, the plan goes on
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 15) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		final var made = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusMinutes(20).toEpochSecond(),
+				deadline.toEpochSecond(), 5000, quarter.minusMinutes(15).toEpochSecond(),
+				new int[] { 11040, 4140 }, 4140);
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime, 0, cm, made.encode()) //
+				.next(new TestCase("1 of 2.76 kWh charged: the plan goes on with 4140 W") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 1000) //
+						.input(GRID_ACTIVE_POWER, 5000) //
+						.input("evcs0", ACTIVE_POWER, 4000) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				.next(new TestCase("a second later still") //
+						.timeleap(clock, 1, SECONDS) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				.deactivate();
+		assertEquals(made.encode(), cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
+	}
+
+	@Test
+	public void targetPlanMadeMidQuarterIsNotMadeAgainTest() throws Exception {
+		// A plan made 10 minutes into the quarter-hour holds only a third of the
+		// first quarter-hour; followed in the same quarter-hour it is not made again
+		final var clock = createDummyClock();
+		clock.leap(10, MINUTES);
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
+		final var deadline = ControllerEvcsPriceImpl.nextDeadline(now, targetTime);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var quarter = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusMinutes(now.getMinute() / 15 * 15);
+		// 11040 W for the remaining 5 minutes = 920 Wh, then 4 x 1020 Wh
+		final var plan = new ControllerEvcsPriceImpl.StoredTargetPlan(now.toEpochSecond(), deadline.toEpochSecond(),
+				5000, quarter.toEpochSecond(), new int[] { 11040, 4080, 4080, 4080, 4080, 0, 0, 0 });
+		assertEquals(920 + 4080, plan.remainingFrom(quarter));
+		final var cm = new DummyConfigurationAdmin();
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 5000, targetTime, 0, cm, plan.encode()) //
+				.next(new TestCase("followed, not made again") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 0) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output(TARGET_PLAN_QUARTERS, 5) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 11040)) //
+				.deactivate();
+		assertEquals(plan.encode(), cm.getConfiguration("ctrlEvcs0").getProperties().get("targetPlan"));
 	}
 
 	@Test
@@ -1719,6 +2315,24 @@ public class ControllerEvcsPriceImplTest {
 	private static ControllerTest prepareTargetTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
 			Double[] prices, int targetEnergy, int targetTime, int targetStartEnergy, DummyConfigurationAdmin cm)
 			throws Exception {
+		return prepareTargetTest(clock, controller, prices, targetEnergy, targetTime, targetStartEnergy, cm, "");
+	}
+
+	private static ControllerTest prepareTargetTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			Double[] prices, int targetEnergy, int targetTime, int targetStartEnergy, DummyConfigurationAdmin cm,
+			String targetPlan) throws Exception {
+		return prepareModeTest(clock, controller, prices, true, targetEnergy, targetTime, targetStartEnergy, cm,
+				targetPlan);
+	}
+
+	private static ControllerTest preparePricePlanTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			Double[] prices) throws Exception {
+		return prepareModeTest(clock, controller, prices, false, 0, 0, -1, new DummyConfigurationAdmin(), "");
+	}
+
+	private static ControllerTest prepareModeTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			Double[] prices, boolean targetCharging, int targetEnergy, int targetTime, int targetStartEnergy,
+			DummyConfigurationAdmin cm, String targetPlan) throws Exception {
 		final var now = Instant.now(clock);
 		final var componentManager = new DummyComponentManager(clock);
 		final var sum = new DummySum();
@@ -1756,10 +2370,11 @@ public class ControllerEvcsPriceImplTest {
 						.setPriceLimitFullPower(20) //
 						.setPriceChargePower(11040) //
 						.setUseStorageSurplus(false) //
-						.setTargetCharging(true) //
+						.setTargetCharging(targetCharging) //
 						.setTargetEnergy(targetEnergy) //
 						.setTargetTime(targetTime) //
 						.setTargetStartEnergy(targetStartEnergy) //
+						.setTargetPlan(targetPlan) //
 						.build());
 	}
 }

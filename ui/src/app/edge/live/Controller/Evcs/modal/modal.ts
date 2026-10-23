@@ -66,6 +66,7 @@ export class ModalComponent extends AbstractModal {
     protected storageDischargeBlocked: boolean | null = null;
     /** Current state of the price controller for the forecast chart; replaced only when a value changes */
     protected live: EvcsPriceForecast.Live | null = null;
+    protected readonly Zone = EvcsPriceForecast.Zone;
     /** "Do not charge today" (channel PauseToday of the controller); null if not available */
     protected pauseToday: boolean | null = null;
     // Controller.Evcs.Price: configuration values used by the forecast chart
@@ -86,7 +87,11 @@ export class ModalComponent extends AbstractModal {
     /** Energy still missing for the target in [Wh]; null while target charging is off */
     private targetRemaining: number | null = null;
     private storageLocked: boolean = false;
+    /** The car takes nothing although power is offered (e.g. full): the plan does not count for the optimizer */
+    private carTakesNothing: boolean = false;
     private sessionEnergy: number | null = null;
+    private targetPlanTime: number | null = null;
+    private targetPlanQuarters: number | null = null;
     /** Energy of the charging plan in [Wh]; null without a plan */
     private planEnergy: number | null = null;
     /** Part of the planned energy from the storage in [Wh] */
@@ -186,6 +191,16 @@ export class ModalComponent extends AbstractModal {
      *
      * @param event The toggle event
      */
+    /**
+     * The colour dot in front of a line of the colour explanation.
+     *
+     * @param zone the zone
+     * @returns the style of the dot
+     */
+    protected zoneDot(zone: EvcsPriceForecast.Zone): string {
+        return "display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:2px;vertical-align:baseline;background-color:" + EvcsPriceForecast.ZONE_COLORS[zone];
+    }
+
     protected setPauseToday(event: CustomEvent): void {
         if (this.edge == null || this.controller == null) {
             return;
@@ -321,7 +336,10 @@ export class ModalComponent extends AbstractModal {
                 new ChannelAddress(this.controller.id, "TargetDeadline"),
                 new ChannelAddress(this.controller.id, "TargetRemainingEnergy"),
                 new ChannelAddress(this.controller.id, "StorageLocked"),
+                new ChannelAddress(this.controller.id, "CarTakesNothing"),
                 new ChannelAddress(this.controller.id, "SessionEnergy"),
+                new ChannelAddress(this.controller.id, "TargetPlanTime"),
+                new ChannelAddress(this.controller.id, "TargetPlanQuarters"),
                 new ChannelAddress(this.controller.id, "PlanEnergy"),
                 new ChannelAddress(this.controller.id, "PlanEnergyFromStorage"),
                 new ChannelAddress(this.controller.id, "PlanEnergyFromGrid"),
@@ -397,7 +415,10 @@ export class ModalComponent extends AbstractModal {
         this.targetDeadline = currentData.allComponents[this.controller?.id + "/TargetDeadline"] ?? null;
         this.targetRemaining = currentData.allComponents[this.controller?.id + "/TargetRemainingEnergy"] ?? null;
         this.storageLocked = ModalComponent.isTrue(currentData.allComponents[this.controller?.id + "/StorageLocked"]);
+        this.carTakesNothing = ModalComponent.isTrue(currentData.allComponents[this.controller?.id + "/CarTakesNothing"]);
         this.sessionEnergy = currentData.allComponents[this.controller?.id + "/SessionEnergy"] ?? null;
+        this.targetPlanTime = currentData.allComponents[this.controller?.id + "/TargetPlanTime"] ?? null;
+        this.targetPlanQuarters = currentData.allComponents[this.controller?.id + "/TargetPlanQuarters"] ?? null;
         this.planEnergy = currentData.allComponents[this.controller?.id + "/PlanEnergy"] ?? null;
         this.planFromStorage = currentData.allComponents[this.controller?.id + "/PlanEnergyFromStorage"] ?? null;
         this.planFromGrid = currentData.allComponents[this.controller?.id + "/PlanEnergyFromGrid"] ?? null;
@@ -758,6 +779,17 @@ export class ModalComponent extends AbstractModal {
      *
      * @returns The shares in [kWh]
      */
+    /** "Plan from 13:02, 5 quarter-hours": when the target plan was made. */
+    private getTargetPlanInfo(): string | null {
+        if (this.targetPlanTime == null || this.targetPlanQuarters == null) {
+            return null;
+        }
+        return this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.PLAN_INFO", {
+            time: this.formatDeadline(this.targetPlanTime),
+            quarters: this.targetPlanQuarters,
+        });
+    }
+
     private getPlanShares(): string {
         if (this.planEnergy == null) {
             return "-";

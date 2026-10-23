@@ -1,0 +1,5 @@
+= ESS Charge/Discharge Limiter Cluster
+
+Reports the SoC window and the currently allowed power of an ESS cluster to the energy optimizer (Time-of-Use-Tariff): the sum over the Charge/Discharge Limiters of the cluster members. The limiters of the members keep controlling their ESS; this controller controls nothing. Its state is inherited from the members: a member that limits, balances or reports an error sets the state of the cluster.
+
+https://github.com/DerWahreKlinki/openemsForkKlinki/tree/develop/io.openems.edge.controller.ess.chargedischargelimiter.cluster[Source Code icon:github[]]

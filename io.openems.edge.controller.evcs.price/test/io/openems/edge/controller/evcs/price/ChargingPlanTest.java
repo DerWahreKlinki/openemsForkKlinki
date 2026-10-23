@@ -10,6 +10,8 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -405,6 +407,128 @@ public class ChargingPlanTest {
 		assertTrue(free.fromStorageWh() >= 1500, "storage " + free.fromStorageWh());
 		assertTrue(free.fromGridWh() < 500, "grid " + free.fromGridWh());
 		assertTrue(free.quarters().stream().noneMatch(Quarter::storageLocked));
+	}
+
+	@Test
+	public void targetPrefersPlannedQuarters() {
+		// equal prices all night: without a previous plan the earliest quarter-hours
+		// are taken, with a previous plan its quarter-hours
+		final var inputs = night(30., StorageMode.NO_DISCHARGE, 0);
+		final var deadline = START.plusHours(2);
+		final var fresh = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 4000),
+				new Target(4000, deadline), inputs);
+		assertTrue(fresh.quarters().get(0).power() > 0, "earliest quarter-hour first");
+		final var previous = Set.of(START.plusMinutes(60), START.plusMinutes(75));
+		final var again = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 4000),
+				new Target(4000, deadline), inputs, previous);
+		assertEquals(0, again.quarters().get(0).power());
+		assertTrue(again.quarters().get(4).power() > 0, "previously planned quarter-hour first");
+		assertTrue(again.energyWh() >= 4000, "energy " + again.energyWh());
+	}
+
+	@Test
+	public void targetUsesCheapNightWithoutForecast() {
+		// the forecast ends after two hours, the prices go on: the cheap night
+		// quarter-hours without forecast are usable at the grid price
+		final var inputs = new ArrayList<Input>();
+		for (var i = 0; i < 16; i++) {
+			final var time = START.plusMinutes(15L * i);
+			final var price = i < 8 ? 47. : 35.;
+			inputs.add(i < 8 ? new Input(time, price, 0, 1000, StorageMode.NO_DISCHARGE, 0)
+					: new Input(time, price, null, null, StorageMode.NO_DISCHARGE, 0));
+		}
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 5000),
+				new Target(5000, START.plusHours(4)), inputs);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		assertTrue(r.energyWh() >= 5000, "energy " + r.energyWh());
+		for (var q : r.quarters()) {
+			if (q.power() > 0) {
+				assertTrue(q.time().isAfter(START.plusMinutes(105)), "cheap night at " + q.time());
+				assertEquals(Reason.TARGET_CHARGE, q.reason());
+				assertEquals(35., q.blendedPrice(), 1e-6);
+			}
+		}
+	}
+
+	@Test
+	public void resultUntilKeepsTheTotals() {
+		final var inputs = new ArrayList<Input>();
+		for (var i = 0; i < 8; i++) {
+			inputs.add(new Input(START.plusMinutes(15L * i), 20., 0, 1000, StorageMode.NO_DISCHARGE, 0));
+		}
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 4000),
+				new Target(4000, START.plusMinutes(8 * 15)), inputs);
+		assertEquals(8, r.quarters().size());
+		final var cut = r.until(START.plusMinutes(4 * 15));
+		assertEquals(4, cut.quarters().size());
+		assertTrue(cut.quarters().get(3).time().isBefore(START.plusMinutes(4 * 15)));
+		assertEquals(r.energyWh(), cut.energyWh());
+		assertEquals(r.targetStatus(), cut.targetStatus());
+		// nothing to cut: the same plan
+		assertEquals(r, r.until(START.plusMinutes(8 * 15)));
+	}
+
+	@Test
+	public void targetEndsWithTheLastWholeQuarterBeforeTheTargetTime() {
+		// the target time is 5 minutes into a quarter-hour: that quarter-hour charges
+		// only 5 minutes before it, so it does not count; the one before it does
+		final var inputs = new ArrayList<Input>();
+		for (var i = 0; i < 8; i++) {
+			// the last quarter-hour is the cheapest, the one before the second cheapest
+			final var price = i == 7 ? 20. : i == 6 ? 30. : 40.;
+			inputs.add(new Input(START.plusMinutes(15L * i), price, 0, 1000, StorageMode.NO_DISCHARGE, 0));
+		}
+		final var r = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 2000),
+				new Target(2000, START.plusMinutes(7 * 15 + 5)), inputs);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		// the cut quarter-hour is shown as after the target time, not planned
+		assertEquals(8, r.quarters().size());
+		assertEquals(Reason.AFTER_TARGET, r.quarters().get(7).reason());
+		for (var q : r.quarters()) {
+			if (q.power() > 0) {
+				assertEquals(START.plusMinutes(6 * 15), q.time());
+			}
+		}
+	}
+
+	@Test
+	public void targetUsesTheStorageSurplusOnlyOnce() {
+		// PV day, 1 kW house, storage 2 kWh above its evening target: the car may
+		// take about these 2 kWh at the storage price, not 2 kWh in every
+		// quarter-hour. What the car takes at noon is missing in the afternoon
+		final var inputs = day(1000);
+		final var deadline = START.plusHours(16);
+		final var r = ChargingPlan.calculateTarget(rules(Priority.STORAGE), storage(TARGET + 2000),
+				new Car(true, 12000), new Target(12000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		assertTrue(r.energyWh() >= 12000, "energy " + r.energyWh());
+		assertTrue(r.fromStorageWh() <= 2000 + 2760, "storage " + r.fromStorageWh());
+		// the storage ends the PV day at its target or above
+		assertTrue(r.storageAtPvEndWh() >= TARGET - 500, "at PV end " + r.storageAtPvEndWh());
+	}
+
+	@Test
+	public void applyTargetFollowsTheStoredPlan() {
+		// a stored plan charges in the third quarter-hour, whatever the prices say
+		final var inputs = night(30., StorageMode.NO_DISCHARGE, 0);
+		final var deadline = START.plusHours(2);
+		final var fixed = Map.of(START.plusMinutes(30), 11040);
+		final var r = ChargingPlan.applyTarget(rules(Priority.CAR), storage(5000), new Car(true, 2000),
+				new Target(2000, deadline), inputs, fixed);
+		assertEquals(TargetStatus.PLANNED, r.targetStatus());
+		assertEquals(0, r.quarters().get(0).power());
+		assertEquals(0, r.quarters().get(1).power());
+		assertTrue(r.quarters().get(2).power() >= 4140, "charges in the planned quarter-hour");
+		assertEquals(Reason.TARGET_CHARGE, r.quarters().get(2).reason());
+		assertEquals(0, r.quarters().get(3).power());
+		// not enough in the plan for the missing energy
+		final var unreachable = ChargingPlan.applyTarget(rules(Priority.CAR), storage(5000), new Car(true, 9000),
+				new Target(9000, deadline), inputs, fixed);
+		assertEquals(TargetStatus.UNREACHABLE, unreachable.targetStatus());
+		// reached
+		final var reached = ChargingPlan.applyTarget(rules(Priority.CAR), storage(5000), new Car(true, 0),
+				new Target(0, deadline), inputs, fixed);
+		assertEquals(TargetStatus.REACHED, reached.targetStatus());
 	}
 
 	@Test

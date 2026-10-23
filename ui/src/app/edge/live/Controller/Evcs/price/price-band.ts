@@ -75,10 +75,7 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
     /** Total storage capacity in [Wh]; null if unknown */
     @Input() public storageCapacity: number | null = null;
 
-    protected readonly COLOR_FULL = ChartConstants.Colors.GREEN;
-    protected readonly COLOR_REDUCED = ChartConstants.Colors.ORANGE;
-    protected readonly COLOR_NONE = ChartConstants.Colors.RED;
-    protected readonly COLOR_NO_SURPLUS = "rgb(169, 169, 169)";
+    protected readonly ZONE_COLORS = EvcsPriceForecast.ZONE_COLORS;
     protected readonly COLOR_SURPLUS = ChartConstants.Colors.BLUE;
 
     protected segments: Segment[] = [];
@@ -139,14 +136,7 @@ export class EvcsPriceBandComponent implements OnInit, OnChanges, OnDestroy {
         const time = (date: Date): string => date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 
         this.segments = slots.map((slot) => ({
-            color:
-                slot.zone === EvcsPriceForecast.Zone.FULL
-                    ? this.COLOR_FULL
-                    : slot.zone === EvcsPriceForecast.Zone.REDUCED
-                      ? this.COLOR_REDUCED
-                      : slot.zone === EvcsPriceForecast.Zone.NONE
-                        ? this.COLOR_NONE
-                        : this.COLOR_NO_SURPLUS,
+            color: EvcsPriceForecast.ZONE_COLORS[slot.zone],
             hasSurplus: settings != null && slot.surplus >= settings.minPower,
             title: time(slot.timestamp) + ": " + formatNumber(slot.effectivePrice, locale, "1.0-1") + " ct/kWh",
         }));

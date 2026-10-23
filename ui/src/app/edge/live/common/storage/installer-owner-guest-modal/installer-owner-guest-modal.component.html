@@ -441,6 +441,66 @@
         </ng-container>
       </ion-card-content>
 
+      <!-- ESS clusters: SoC, capacity and power of the cluster, and the state its cluster limiter reports -->
+      <ng-container *ngIf="clusterComponents?.length > 0 && (edge.currentData | async)['channel'] as currentData">
+        <ng-container *ngFor="let component of clusterComponents">
+          <ion-card-content class="underline">
+            <table class="full_width">
+              <tr>
+                <td style="width: 100%">{{ component.alias }} ({{ "EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.CLUSTER" | translate }})</td>
+              </tr>
+              <div style="padding-top: 5px"></div>
+              <tr>
+                <td style="width: 65%" translate>GENERAL.SOC</td>
+                <td style="width: 35%" class="align_right">{{ currentData[component.id + "/Soc"] | unitvalue: "%" }}</td>
+              </tr>
+              <tr>
+                <td style="width: 65%" translate>GENERAL.CAPACITY</td>
+                <td style="width: 35%" class="align_right">{{ currentData[component.id + "/Capacity"] | unitvalue: "kWh" }}</td>
+              </tr>
+              @let clusterPower = currentData[component.id + "/ActivePower"];
+              <tr>
+                <td style="width: 65%" translate>GENERAL.CHARGE</td>
+                <td style="width: 35%" class="align_right">{{ (clusterPower <= 0 ? clusterPower * -1 : null) | unitvalue: "W" }}</td>
+              </tr>
+              <tr>
+                <td style="width: 65%" translate>GENERAL.DISCHARGE</td>
+                <td style="width: 35%" class="align_right">{{ (clusterPower > 0 ? clusterPower : null) | unitvalue: "W" }}</td>
+              </tr>
+            </table>
+            @if (clusterLimiters[component.id]; as limiter) {
+              @let clusterState = currentData[limiter.id + "/StateMachine"];
+              @if (clusterState != null) {
+                <ion-item [color]="clusterStateColor(clusterState)" style="margin-top: 2%">
+                  <ion-label>
+                    <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.STATE_' + clusterStateKey(clusterState)) | translate"></oe-modal-line>
+                    @if (currentData[limiter.id + "/Trigger"]; as trigger) {
+                      <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.TRIGGER' | translate" [value]="trigger"></oe-modal-line>
+                    }
+                  </ion-label>
+                </ion-item>
+              }
+              <table class="full_width" style="margin-top: 2%">
+                @if (currentData[limiter.id + "/_PropertyReportToEnergyScheduler"] === false || currentData[limiter.id + "/_PropertyReportToEnergyScheduler"] === 0) {
+                  <tr>
+                    <td style="width: 100%" translate>EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.REPORTS_OFF</td>
+                  </tr>
+                } @else {
+                  <tr>
+                    <td style="width: 65%" translate>EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.MAX_CHARGE_POWER</td>
+                    <td style="width: 35%" class="align_right">{{ currentData[limiter.id + "/ChargePowerAllowed"] | unitvalue: "W" }}</td>
+                  </tr>
+                  <tr>
+                    <td style="width: 65%" translate>EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.MAX_DISCHARGE_POWER</td>
+                    <td style="width: 35%" class="align_right">{{ currentData[limiter.id + "/DischargePowerAllowed"] | unitvalue: "W" }}</td>
+                  </tr>
+                }
+              </table>
+            }
+          </ion-card-content>
+        </ng-container>
+      </ng-container>
+
       <ng-container *ngIf="(edge.currentData | async)['channel'] as currentData">
         <ng-container *ngFor="let component of essComponents">
           <ng-container *ngIf="config.factories[component.factoryId] as factory">

@@ -94,6 +94,11 @@
                   <timeOfUseTariffWidget [componentId]="widget.componentId"></timeOfUseTariffWidget>
                 </ion-col>
               }
+              @case ("Controller.Evcs.Price") {
+                <ion-col size="12" size-md="6" size-lg="4" size-xl="3">
+                  <oe-evcs-price-history-widget [componentId]="widget.componentId"></oe-evcs-price-history-widget>
+                </ion-col>
+              }
               @case ("Controller.Clever-PV") {
                 <ion-col size="12" size-md="6" size-lg="4" size-xl="3">
                   <enerixControlWidget [componentId]="widget.componentId"></enerixControlWidget>

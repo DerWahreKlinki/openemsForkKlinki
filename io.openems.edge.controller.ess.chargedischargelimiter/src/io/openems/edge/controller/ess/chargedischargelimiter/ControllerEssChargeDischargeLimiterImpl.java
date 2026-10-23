@@ -146,11 +146,33 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		this.updateConfig(config);
 
 		this.energyScheduleHandler = io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler
-				.buildEnergyScheduleHandler(this,
-						() -> this.config.enabled()
-								? new io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler.Config(
-										this.config.minSoc(), this.config.maxSoc())
-								: null);
+				.buildEnergyScheduleHandler(this, this::energySchedulerConfig);
+	}
+
+	/**
+	 * What this limiter tells the energy optimizer: the SoC window in energy and
+	 * the power allowed right now. A cluster is reported by
+	 * Controller.Ess.ChargeDischargeLimiter.Cluster, not by its members.
+	 *
+	 * @return the config; null if this limiter does not report
+	 */
+	protected io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler.Config energySchedulerConfig() {
+		final var config = this.config;
+		if (config == null || !config.enabled() || !config.reportToEnergyScheduler()) {
+			return null;
+		}
+		return ownEnergySchedulerConfig(this);
+	}
+
+	private static io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler.Config ownEnergySchedulerConfig(
+			ControllerEssChargeDischargeLimiter limiter) {
+		final var min = limiter.getMinEnergy().get();
+		final var max = limiter.getMaxEnergy().get();
+		if (min == null || max == null) {
+			return null;
+		}
+		return new io.openems.edge.controller.ess.chargedischargelimiter.EnergyScheduler.Config(min, max,
+				limiter.getChargePowerAllowed().orElse(-1), limiter.getDischargePowerAllowed().orElse(-1));
 	}
 
 	@Override
@@ -679,6 +701,33 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	}
 
 
+	/**
+	 * The battery power this controller allows right now, for the energy
+	 * optimizer: 0 in the direction that is blocked, the reduced power while
+	 * approaching a limit, the full allowed power otherwise.
+	 *
+	 * @param calculatedPower the constraint being applied; null for none
+	 */
+	private void updatePowerAllowed(Integer calculatedPower) {
+		final var fullDischarge = Math.max(this.fullDischargePower, 0);
+		final var fullCharge = Math.max(-this.fullChargePower, 0);
+		final int discharge = switch (this.state) {
+		case MIN_SOC_REACHED, BELOW_MIN_SOC, BALANCING_ACTIVE, FORCE_CHARGE_ACTIVE -> 0;
+		case APPROACHING_MIN_SOC, BALANCING_WANTED -> calculatedPower == null ? fullDischarge
+				: Math.min(Math.max(calculatedPower, 0), fullDischarge);
+		default -> fullDischarge;
+		};
+		final int charge = switch (this.state) {
+		case MAX_SOC_REACHED, ABOVE_MAX_SOC -> 0;
+		case APPROACHING_MAX_SOC -> calculatedPower == null ? fullCharge
+				: Math.min(Math.max(-calculatedPower, 0), fullCharge);
+		case BALANCING_WANTED -> this.currentSoc != null && this.currentSoc >= this.maxSoc ? 0 : fullCharge;
+		default -> fullCharge;
+		};
+		this._setDischargePowerAllowed(discharge);
+		this._setChargePowerAllowed(charge);
+	}
+
 	private String formatAcPower(int acPower, int batteryPower) {
 		return acPower + "W (battery " + batteryPower + "W + PV " + this.pvPower + "W)";
 	}
@@ -705,6 +754,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_LIMITED).setNextValue(chargeLimited);
 		this.channel(ControllerEssChargeDischargeLimiter.ChannelId.LIMITED_BATTERY_POWER)
 				.setNextValue(dischargeLimited || chargeLimited ? calculatedPower : null);
+		this.updatePowerAllowed(calculatedPower);
 
 
 		if (this.ess == null) {
@@ -1042,6 +1092,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		double usableCapacityRange = (maxSocPercentage - minSocPercentage) / 100.0;
 		int totalUsableCapacityWh = (int) (totalCapacityWh * usableCapacityRange);
+		// the window and the energy of the ESS in [Wh], for the energy optimizer
+		this._setMinEnergy((int) Math.round(totalCapacityWh * minSocPercentage / 100.));
+		this._setMaxEnergy((int) Math.round(totalCapacityWh * maxSocPercentage / 100.));
+		this._setCurrentEnergy((int) Math.round(totalCapacityWh * soc / 100.));
 
 		int useableCapacityWh = (int) (totalUsableCapacityWh * (useableSoc / 100.0));
 

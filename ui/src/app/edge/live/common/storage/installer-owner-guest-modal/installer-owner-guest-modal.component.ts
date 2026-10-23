@@ -51,6 +51,10 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
     protected isTargetTimeInValid: Map<string, boolean> = new Map();
     protected config: EdgeConfig;
     protected essComponents: EdgeConfig.Component[] | null = null;
+    /** ESS clusters (MetaEss), shown after the sum with their cluster limiter */
+    protected clusterComponents: EdgeConfig.Component[] = [];
+    /** Controller.Ess.ChargeDischargeLimiter.Cluster by the id of its cluster */
+    protected clusterLimiters: { [essId: string]: EdgeConfig.Component } = {};
     protected chargerComponents!: EdgeConfig.Component[];
     protected readonly environment: Environment = environment;
 
@@ -75,6 +79,21 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                             .includes("io.openems.edge.ess.api.MetaEss"),
                 );
 
+            this.clusterComponents = this.config
+                .getComponentsImplementingNature("io.openems.edge.ess.api.SymmetricEss")
+                .filter(
+                    (component) =>
+                        component.isEnabled &&
+                        this.config
+                            .getNatureIdsByFactoryId(component.factoryId)
+                            .includes("io.openems.edge.ess.api.MetaEss"),
+                );
+            this.clusterLimiters = this.config
+                .getComponentsByFactory("Controller.Ess.ChargeDischargeLimiter.Cluster")
+                .filter((component) => component.isEnabled)
+                .reduce((result, component) => ({ ...result, [component.properties["ess.id"]]: component }), {});
+            // only clusters with a cluster controller get a card
+            this.clusterComponents = this.clusterComponents.filter((cluster) => this.clusterLimiters[cluster.id] != null);
             this.chargerComponents = this.config
                 .getComponentsImplementingNature("io.openems.edge.ess.dccharger.api.EssDcCharger")
                 .filter((component) => component.isEnabled);
@@ -101,6 +120,24 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
 
             const channelAddresses: ChannelAddress[] = [];
             channelAddresses.push(...this.chargerComponents.map((comp) => new ChannelAddress(comp.id, "ActualPower")));
+            for (const cluster of this.clusterComponents) {
+                channelAddresses.push(
+                    new ChannelAddress(cluster.id, "Soc"),
+                    new ChannelAddress(cluster.id, "ActivePower"),
+                    new ChannelAddress(cluster.id, "Capacity"),
+                );
+            }
+            for (const limiter of Object.values(this.clusterLimiters)) {
+                channelAddresses.push(
+                    new ChannelAddress(limiter.id, "StateMachine"),
+                    new ChannelAddress(limiter.id, "Trigger"),
+                    new ChannelAddress(limiter.id, "MinEnergy"),
+                    new ChannelAddress(limiter.id, "MaxEnergy"),
+                    new ChannelAddress(limiter.id, "ChargePowerAllowed"),
+                    new ChannelAddress(limiter.id, "DischargePowerAllowed"),
+                    new ChannelAddress(limiter.id, "_PropertyReportToEnergyScheduler"),
+                );
+            }
             channelAddresses.push(new ChannelAddress("_meta", "IsEssChargeFromGridAllowed"));
 
             for (const essId in prepareBatteryExtensionCtrl) {
@@ -407,5 +444,38 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
 
     ngOnDestroy() {
         this.edge.unsubscribeChannels(this.websocket, "storage");
+    }
+
+    /**
+     * The translation key of a state of Controller.Ess.ChargeDischargeLimiter.Cluster.
+     *
+     * @param state the StateMachine channel value
+     * @returns the key
+     */
+    protected clusterStateKey(state: number | null | undefined): string {
+        switch (state) {
+            case 0: return "NORMAL";
+            case 1: return "MEMBER_LIMITED";
+            case 2: return "MEMBER_BALANCING";
+            case 3: return "MEMBER_ERROR";
+            case 4: return "NO_MEMBERS";
+            default: return "UNDEFINED";
+        }
+    }
+
+    /**
+     * The colour of a state of Controller.Ess.ChargeDischargeLimiter.Cluster.
+     *
+     * @param state the StateMachine channel value
+     * @returns the ionic colour
+     */
+    protected clusterStateColor(state: number | null | undefined): string {
+        switch (state) {
+            case 0: return "success";
+            case 1:
+            case 2: return "warning";
+            case 4: return "medium";
+            default: return "danger";
+        }
     }
 }

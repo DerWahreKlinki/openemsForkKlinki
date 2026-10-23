@@ -145,6 +145,12 @@
             @if (storageLocked) {
               <oe-modal-info-line [info]="[{ text: 'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.STORAGE_LOCKED' | translate }]"></oe-modal-info-line>
             }
+            @if (carTakesNothing) {
+              <oe-modal-info-line [info]="[{ text: 'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.CAR_TAKES_NOTHING' | translate, lineStyle: 'color: #d32f2f' }]"></oe-modal-info-line>
+            }
+            @if (getTargetPlanInfo(); as planInfo) {
+              <oe-modal-info-line [info]="[{ text: planInfo }]" style="font-size: small"></oe-modal-info-line>
+            }
             @if (targetRemaining != null) {
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.REMAINING' | translate" [value]="targetRemaining" [converter]="CONVERT_TO_KILO_WATT_HOURS"></oe-modal-line>
             }
@@ -159,6 +165,15 @@
             <oe-modal-horizontal-line></oe-modal-horizontal-line>
             <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_TITLE' | translate"></oe-modal-info-line>
             <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower" [storagePrice]="storagePrice" [storageReleased]="storageTargetReachable" [storageCapacity]="storageCapacity" [priority]="formGroup.value['priority']" [enablePriceCharging]="formGroup.value['enablePriceCharging']" [live]="live"> </oe-evcs-price-chart>
+            <div style="font-size: small; padding: 0 16px 8px 16px; color: var(--ion-color-medium)">
+              <div><i [style]="zoneDot(Zone.NONE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_NONE" | translate }}</div>
+              <div><i [style]="zoneDot(Zone.GRID_PRICE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_GRID_PRICE" | translate }}</div>
+              <div><i [style]="zoneDot(Zone.UNPLANNABLE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_UNPLANNABLE" | translate }}</div>
+              @if (targetCharging) {
+                <div><i [style]="zoneDot(Zone.AFTER_TARGET)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_AFTER_TARGET" | translate }}</div>
+              }
+              <div>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_BARS" | translate }}</div>
+            </div>
           }
           <oe-modal-horizontal-line></oe-modal-horizontal-line>
         }
@@ -186,8 +201,16 @@
           <!--Price settings of Controller.Evcs.Price-->
           @if (controller.factoryId === "Controller.Evcs.Price") {
             <oe-modal-horizontal-line></oe-modal-horizontal-line>
-            <!--Grid power by price: off = surplus (and storage reserve) only-->
-            <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_CHARGING' | translate" [formGroup]="formGroup" [component]="controller" controlName="enablePriceCharging" [control]="{ type: 'TOGGLE' }" leftColumnWidth="100"></oe-modal-line>
+            <!--Grid power by price: off = surplus (and storage reserve) only; target charging overrides it while active-->
+            @if (carTakesNothing && !targetCharging) {
+              <oe-modal-info-line [info]="[{ text: 'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.CAR_TAKES_NOTHING' | translate, lineStyle: 'color: #d32f2f' }]" style="font-size: small"></oe-modal-info-line>
+            }
+            @if (targetCharging) {
+              <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.PRICE_CHARGING_PAUSED' | translate" style="font-size: small"></oe-modal-info-line>
+            }
+            <div [style.opacity]="targetCharging ? 0.4 : 1" [style.pointer-events]="targetCharging ? 'none' : 'auto'">
+              <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_CHARGING' | translate" [formGroup]="formGroup" [component]="controller" controlName="enablePriceCharging" [control]="{ type: 'TOGGLE' }" leftColumnWidth="100"></oe-modal-line>
+            </div>
             <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_CHARGING_INFO' | translate" style="font-size: small"></oe-modal-info-line>
             @if (formGroup.controls["enablePriceCharging"].value === true) {
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_LIMIT' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['priceLimit']" [converter]="CONVERT_TO_CENT_PER_KWH"></oe-modal-line>
@@ -223,7 +246,15 @@
               <oe-modal-horizontal-line></oe-modal-horizontal-line>
               <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_TITLE' | translate"></oe-modal-info-line>
               <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower" [storagePrice]="storagePrice" [storageReleased]="storageTargetReachable" [storageCapacity]="storageCapacity" [priority]="formGroup.value['priority']" [enablePriceCharging]="formGroup.value['enablePriceCharging']" [live]="live"> </oe-evcs-price-chart>
-              <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_NOTE' | translate" style="font-size: small"></oe-modal-info-line>
+              <div style="font-size: small; padding: 0 16px 8px 16px; color: var(--ion-color-medium)">
+                <div><i [style]="zoneDot(Zone.NONE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_NONE" | translate }}</div>
+                <div><i [style]="zoneDot(Zone.GRID_PRICE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_GRID_PRICE" | translate }}</div>
+                <div><i [style]="zoneDot(Zone.UNPLANNABLE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_UNPLANNABLE" | translate }}</div>
+                @if (targetCharging) {
+                  <div><i [style]="zoneDot(Zone.AFTER_TARGET)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_AFTER_TARGET" | translate }}</div>
+                }
+                <div>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_BARS" | translate }}</div>
+              </div>
             }
           }
           <oe-modal-horizontal-line></oe-modal-horizontal-line>

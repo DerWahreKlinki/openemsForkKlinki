@@ -1,7 +1,7 @@
 package io.openems.edge.simulator.evcs;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -18,6 +18,7 @@ import org.osgi.service.metatype.annotations.Designate;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.MeterType;
+import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.evcs.api.AbstractManagedEvcsComponent;
@@ -46,6 +47,9 @@ public class SimulatorEvcsImpl extends AbstractManagedEvcsComponent
 
 	@Reference
 	private ConfigurationAdmin cm;
+
+	@Reference
+	private ComponentManager componentManager;
 
 	private Config config;
 
@@ -90,28 +94,30 @@ public class SimulatorEvcsImpl extends AbstractManagedEvcsComponent
 		}
 	}
 
-	private LocalDateTime lastUpdate = LocalDateTime.now();
+	// by the clock of the component manager, so that a simulated clock counts;
+	// null until the first update
+	private Instant lastUpdate = null;
 	private double exactEnergySession = 0;
 
 	private void updateChannels() {
 		int chargePowerLimit = this.getSetChargePowerLimit().orElse(0);
-		this._setActivePower(chargePowerLimit);
 
 		/*
-		 * Set Simulated "meter" Active Power
+		 * Set Simulated "meter" Active Power: what the car takes of the limit
 		 */
-		this._setActivePower(chargePowerLimit);
+		this._setActivePower(this.carPower(chargePowerLimit));
 
 		/*
 		 * Set calculated energy
 		 */
-		var timeDiff = ChronoUnit.MILLIS.between(this.lastUpdate, LocalDateTime.now());
+		final var now = Instant.now(this.componentManager.getClock());
+		var timeDiff = this.lastUpdate == null ? 0 : ChronoUnit.MILLIS.between(this.lastUpdate, now);
 		var energyTransfered = timeDiff / 1000.0 / 60.0 / 60.0 * this.getActivePower().orElse(0);
 
 		this.exactEnergySession = this.exactEnergySession + energyTransfered;
 		this._setEnergySession((int) this.exactEnergySession);
 
-		this.lastUpdate = LocalDateTime.now();
+		this.lastUpdate = now;
 	}
 
 	@Override
@@ -153,9 +159,21 @@ public class SimulatorEvcsImpl extends AbstractManagedEvcsComponent
 	@Override
 	public boolean applyChargePowerLimit(int power) throws OpenemsException {
 		this._setSetChargePowerLimit(power);
-		this._setActivePower(power);
+		this._setActivePower(this.carPower(power));
 		this._setStatus(power > 0 ? Status.CHARGING : Status.CHARGING_REJECTED);
 		return true;
+	}
+
+	/**
+	 * The power the simulated car takes of the offered limit: a car with a smaller
+	 * charger takes less than the charger allows.
+	 *
+	 * @param limit the charge power limit in [W]
+	 * @return the power in [W]
+	 */
+	private int carPower(int limit) {
+		final var carMaxPower = this.config.carMaxPower();
+		return carMaxPower > 0 ? Math.min(limit, carMaxPower) : limit;
 	}
 
 	@Override

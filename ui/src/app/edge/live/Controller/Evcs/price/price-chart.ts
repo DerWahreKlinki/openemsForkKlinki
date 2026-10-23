@@ -51,6 +51,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     private currencyUnit: Currency.Unit | undefined = undefined;
     /** Slots as shown: the forecast with the running quarter-hour replaced by the live state */
     private slots: EvcsPriceForecast.Slot[] = [];
+    /** Index of the grey grid-price segment in the datasets; the tooltip shows it differently */
+    private gridPriceIndex = -1;
     /** Slots of the forecast only */
     private forecastSlots: EvcsPriceForecast.Slot[] = [];
     private settings: EvcsPriceForecast.Settings | null = null;
@@ -234,11 +236,13 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             borderColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.GREY, 0.6),
         };
 
-        return [
-            bar(EvcsPriceForecast.Zone.FULL, "ZONE_FULL", ChartConstants.Colors.GREEN),
-            bar(EvcsPriceForecast.Zone.REDUCED, "ZONE_REDUCED", ChartConstants.Colors.ORANGE),
-            bar(EvcsPriceForecast.Zone.NONE, "ZONE_NONE", ChartConstants.Colors.RED),
-            bar(EvcsPriceForecast.Zone.NO_SURPLUS, "ZONE_NO_SURPLUS", ChartConstants.Colors.DARK_GREY),
+        const datasets: Chart.ChartDataset[] = [
+            bar(EvcsPriceForecast.Zone.FULL, "ZONE_FULL", EvcsPriceForecast.ZONE_COLORS.FULL),
+            bar(EvcsPriceForecast.Zone.REDUCED, "ZONE_REDUCED", EvcsPriceForecast.ZONE_COLORS.REDUCED),
+            bar(EvcsPriceForecast.Zone.NONE, "ZONE_NONE", EvcsPriceForecast.ZONE_COLORS.NONE),
+            bar(EvcsPriceForecast.Zone.GRID_PRICE, "ZONE_GRID_PRICE", EvcsPriceForecast.ZONE_COLORS.GRID_PRICE),
+            bar(EvcsPriceForecast.Zone.UNPLANNABLE, "ZONE_UNPLANNABLE", EvcsPriceForecast.ZONE_COLORS.UNPLANNABLE),
+            bar(EvcsPriceForecast.Zone.AFTER_TARGET, "ZONE_AFTER_TARGET", EvcsPriceForecast.ZONE_COLORS.AFTER_TARGET),
             gridPrice,
             {
                 // Expected charge power of the car, same axis as the PV production
@@ -285,6 +289,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 borderColor: ColorUtils.rgbStringToRgba(ChartConstants.Colors.BLUE, 1),
             },
         ];
+        this.gridPriceIndex = datasets.indexOf(gridPrice);
+        return datasets;
     }
 
     private createOptions(): Chart.ChartOptions {
@@ -345,7 +351,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 if (item.dataset.yAxisID === ChartAxis.RIGHT_2) {
                     return label + ": " + formatNumber(value, locale, "1.0-0") + " %";
                 }
-                if (item.datasetIndex === 4) {
+                if (item.datasetIndex === this.gridPriceIndex) {
                     // grey segment: show the grid price itself, not the difference
                     const slot = this.slots[item.dataIndex];
                     return (

@@ -65,7 +65,7 @@ export const OemMeta: BaseMeta = {
     },
     images: {
         EVSE: {
-            KEBA_P30: null,
+            KEBA_P30: "assets/img/product_pictures/byd-atto3-evo.webp",
             KEBA_P40: null,
             HARDY_BARTH: null,
             ALPITRONIC: null,

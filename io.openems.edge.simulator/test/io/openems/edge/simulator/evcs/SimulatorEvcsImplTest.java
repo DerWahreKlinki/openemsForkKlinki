@@ -6,6 +6,7 @@ import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.test.DummyConfigurationAdmin;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
+import io.openems.edge.common.test.DummyComponentManager;
 import io.openems.edge.evcs.test.DummyEvcsPower;
 
 public class SimulatorEvcsImplTest {
@@ -14,6 +15,7 @@ public class SimulatorEvcsImplTest {
 	void test() throws OpenemsException, Exception {
 		new ComponentTest(new SimulatorEvcsImpl()) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("evcsPower", new DummyEvcsPower()) //
 				.activate(MyConfig.create() //
 						.setId("evcs0") //

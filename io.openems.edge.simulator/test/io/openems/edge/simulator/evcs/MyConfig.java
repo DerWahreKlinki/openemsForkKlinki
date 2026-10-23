@@ -9,6 +9,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private String id;
 		private int maxHwPower;
 		private int minHwPower;
+		private int carMaxPower;
 
 		private Builder() {
 		}
@@ -25,6 +26,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setMinHwPower(int minHwPower) {
 			this.minHwPower = minHwPower;
+			return this;
+		}
+
+		public Builder setCarMaxPower(int carMaxPower) {
+			this.carMaxPower = carMaxPower;
 			return this;
 		}
 
@@ -57,6 +63,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int minHwPower() {
 		return this.builder.minHwPower;
+	}
+
+	@Override
+	public int carMaxPower() {
+		return this.builder.carMaxPower;
 	}
 
 }

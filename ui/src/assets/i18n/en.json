@@ -370,6 +370,16 @@
                     "RELATION_ERROR": "Charge limit must be greater than the Discharge limit",
                     "SELL_TO_GRID_POWER_LIMIT": "Charge above"
                 },
+                "ENERGY_PRICE": {
+                    "CHARGED_GRID": "Charged from the grid",
+                    "CHARGED_PV": "Charged from PV",
+                    "EFFICIENCY": "Efficiency (measured)",
+                    "GRID": "from the grid",
+                    "PRICE_MISSING": "No grid buy price known: charged energy counts without price.",
+                    "PV": "from PV",
+                    "TITLE": "Stored energy",
+                    "UNKNOWN": "unknown"
+                },
                 "ENERIX_CONTROL": {
                     "CHARGE_CONSUMPTION": "<b>ATTENTION:</b> Actively charging the battery from grid beyond the technically necessary maintenance charging, requires an appropriate registration of the storage system. If in doubt, please verify with your installer. By pressing the blue \"Save\" button you confirm that this verification has been done.<br/><br/><b>Be aware:</b> Precondition for the German Renewable Energy Sources Act (EEG 2023) grant is that only energy from renewable sources and/or pit gas is stored in the battery. By activating this function the battery is charged with energy from the grid. This energy is, depending on the individual power-supply contract, probably generated from fossil and/or nuclear power sources. Thus we cannot guarantee that the battery is exclusively charged with energy gained from renewable sources and/or pit gas.",
                     "CHARGE_FROM_GRID": "Charge from grid",
@@ -492,8 +502,8 @@
                         "CHARGE_POWER": "Charge power",
                         "NOTE_AFTER_TARGET": "After the target time: target charging ends at the target time. These quarter-hours are not evaluated, afterwards price charging applies again, if enabled.",
                         "NOTE_BARS": "Bar height is the grid price, the coloured base the blended price. \"Now\" is the current state, everything after it is forecast.",
-                        "NOTE_GRID_PRICE": "Too expensive (grid price): the storage needs the surplus for its evening target. Charging would be at the grid price, which is above the limit.",
-                        "NOTE_NONE": "Too expensive (blended price): the blended price of surplus, storage and grid is above the price limit.",
+                        "NOTE_GRID_PRICE": "Too expensive (grid price): no surplus and no storage power for the car, e.g. because the storage needs the surplus for its evening target. Charging would be at the grid price, which is above the limit.",
+                        "NOTE_NONE": "Too expensive (blended price): surplus or storage power lower the price, but the blended price is still above the price limit.",
                         "NOTE_UNPLANNABLE": "Not plannable: session limit reached, grid connection at its limit or forecast unknown. With target charging: quarter-hour not chosen.",
                         "CHART_TITLE": "Charge forecast: effective charge price and PV production",
                         "CHEAPEST_WINDOW": "Cheapest 3 h",
@@ -505,8 +515,9 @@
                         "SURPLUS": "Surplus",
                         "ZONE_AFTER_TARGET": "After the target time",
                         "ZONE_FULL": "Full charge power",
-                        "ZONE_NONE": "Too expensive",
-                        "ZONE_NO_SURPLUS": "No surplus",
+                        "ZONE_NONE": "Too expensive (blended price)",
+                        "ZONE_GRID_PRICE": "Too expensive (grid price)",
+                        "ZONE_UNPLANNABLE": "Not plannable",
                         "ZONE_REDUCED": "Reduced charge power"
                     },
                     "PRIORITIZATION": "Prioritization",

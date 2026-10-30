@@ -58,6 +58,13 @@ public class PredictorWeatherForecastModelImpl extends AbstractPredictor
 	private String apiUrl;
 	private JsonObject json;
 	private int targetArraySize = 192; // 48hours
+	// The last forecast that was fetched successfully: Open-Meteo answers with 503 now
+	// and then (regularly at the full and half hour). Without this the predictor would
+	// answer EMPTY, and the PredictorManager would hand the caller the next predictor
+	// in rank, whose forecast is a different one. The caller keeps its plan for a
+	// quarter-hour, so one failed fetch would spoil a whole quarter-hour.
+	private Prediction lastGoodPrediction = null;
+	private ZonedDateTime lastGoodPredictionAt = null;
 
 	private String forecastModel = "global_tilted_irradiance";
 	private String weatherModel;
@@ -100,11 +107,11 @@ public class PredictorWeatherForecastModelImpl extends AbstractPredictor
 	}
 
 	protected Prediction createNewPrediction(ChannelAddress channelAddress) {
+		// Get the current time
+		ZonedDateTime now = ZonedDateTime.now(this.componentManager.getClock());
 		try {
 			// Initialize OpenMeteoForecast
 			// this.openMeteoForecast = new OpenMeteoForecast(config.debugMode());
-			// Get the current time
-			ZonedDateTime now = ZonedDateTime.now(this.componentManager.getClock());
 
 			ZonedDateTime startOfDay = now.truncatedTo(ChronoUnit.DAYS);
 
@@ -150,9 +157,9 @@ public class PredictorWeatherForecastModelImpl extends AbstractPredictor
 				combinedRadiation.add(pv1Value + pv2Value + pv3Value);
 			}
 
-			// If no data was fetched, return empty prediction
-			if (combinedRadiation.isEmpty()) {
-				return Prediction.EMPTY_PREDICTION;
+			// If no data was fetched, the last good forecast is better than a day of zeros
+			if (pv1Radiation.isEmpty() && pv2Radiation.isEmpty() && pv3Radiation.isEmpty()) {
+				return this.fallbackPrediction(now, "Weather API returned no radiation data");
 			}
 
 			// Calculate the index corresponding to the current 15-minute interval
@@ -202,16 +209,37 @@ public class PredictorWeatherForecastModelImpl extends AbstractPredictor
 			        .plusMinutes(currentIntervalIndex * 15)
 			        .toInstant();
 
-			return Prediction.from(baseTime, values);			
+			final var prediction = Prediction.from(baseTime, values);
+			this.lastGoodPrediction = prediction;
+			this.lastGoodPredictionAt = now;
+			return prediction;
 			
 			// ToDo 2026 03 27
 			// Return the prediction starting from the calculated time
 			//return Prediction.from(startOfDay.plusMinutes(currentIntervalIndex * 15), values);
 
 		} catch (Exception e) {
-			log.error("Error creating prediction: ", e);
+			return this.fallbackPrediction(now, "Error creating prediction: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * The forecast to answer with when fetching fails: the last good forecast from
+	 * the current quarter-hour on, as long as it reaches that far. Only without one
+	 * the answer is EMPTY (and the PredictorManager asks the next predictor).
+	 *
+	 * @param now    the current time
+	 * @param reason why the fetch failed, for the log
+	 * @return the forecast
+	 */
+	private Prediction fallbackPrediction(ZonedDateTime now, String reason) {
+		final var fallback = Prediction.from(now.toInstant(), this.lastGoodPrediction);
+		if (fallback.isEmpty()) {
+			this.logError(this.log, reason + " - no earlier forecast to fall back on");
 			return Prediction.EMPTY_PREDICTION;
 		}
+		this.logWarn(this.log, reason + " - using the forecast fetched at " + this.lastGoodPredictionAt.toLocalTime().withNano(0));
+		return fallback;
 	}
 
 	/**

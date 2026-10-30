@@ -22,6 +22,8 @@ export class StorageComponent extends AbstractFlatWidget {
     public isHybridEss: boolean[] = [];
     public emergencyReserveComponents: { [essId: string]: EdgeConfig.Component } = {};
     public chargeDischargeLimiterComponents: { [essId: string]: EdgeConfig.Component } = {};
+    /** Ess.EnergyPrice by the id of its ESS: the price of the stored energy */
+    public energyPriceComponents: { [essId: string]: EdgeConfig.Component } = {};
     /** ESS clusters (MetaEss), shown before their members */
     public clusterComponents: EdgeConfig.Component[] = [];
     /** Controller.Ess.ChargeDischargeLimiter.Cluster by the id of its cluster: gives the net SoC */
@@ -42,6 +44,20 @@ export class StorageComponent extends AbstractFlatWidget {
      */
     public convertChargePower = (value: any): string => {
         return this.convertPower(Utils.multiplySafely(value, -1), true);
+    };
+
+    /**
+     * Converts the price of a delivered kWh from [Currency/MWh] to a text in [ct/kWh]
+     *
+     * @param value the channel value
+     * @returns the text
+     */
+    public convertPrice = (value: any): string => {
+        if (value == null || isNaN(value)) {
+            return "-";
+        }
+        const locale = Language.getByKey(localStorage.LANGUAGE)?.i18nLocaleKey ?? "de";
+        return formatNumber(value / 10, locale, "1.1-1") + "\u00A0ct/kWh";
     };
 
     /**
@@ -191,6 +207,15 @@ export class StorageComponent extends AbstractFlatWidget {
             );
         }
         //console.log("chargeDischargeLimiterComponents geladen:", this.chargeDischargeLimiterComponents);
+
+        // Ess.EnergyPrice: the price of the stored energy, by ESS
+        this.energyPriceComponents = this.config
+            .getComponentsByFactory("Ess.EnergyPrice")
+            .filter((component) => component.isEnabled)
+            .reduce((result, component) => ({ ...result, [component.properties["ess.id"]]: component }), {});
+        for (const component of Object.values(this.energyPriceComponents)) {
+            channelAddresses.push(new ChannelAddress(component.id, "Price"));
+        }
 
         // Get Chargers
         // TODO should be moved to Modal

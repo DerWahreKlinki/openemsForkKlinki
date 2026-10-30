@@ -365,7 +365,27 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.input("ess0", ACTIVE_POWER, 0) //
 						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
 						.output(STATE_MACHINE, State.NORMAL) //
+						.output(AWAITING_HYSTERESIS, true) //
 						.output(BALANCING_DEFERRAL_REASON, BalancingDeferralReason.PRICE_LIMIT)) //
+				// the deferred balancing is shown as BALANCING_WANTED once the hysteresis
+				// passed, with the reason; the storage keeps working normally meanwhile
+				.next(new TestCase("After hysteresis: BALANCING_WANTED with reason PRICE_LIMIT, no constraint") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.BALANCING_WANTED) //
+						.output(BALANCING_DEFERRAL_REASON, BalancingDeferralReason.PRICE_LIMIT) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, null) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null)) //
+				// at the upper limit charging is blocked while the balancing waits
+				.next(new TestCase("At maxSoc while deferred: charging blocked") //
+						.input("ess0", SOC, 90) //
+						.input("ess0", ACTIVE_POWER, -1000) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.BALANCING_WANTED) //
+						.output(BALANCING_DEFERRAL_REASON, BalancingDeferralReason.PRICE_LIMIT) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 0)) //
 				.deactivate();
 	}
 

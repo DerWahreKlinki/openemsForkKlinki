@@ -148,6 +148,10 @@
 
 
             <!-- Show if ess has chargeDischargeLimiterController assigned-->
+            @if (energyPriceComponents[component.id]; as energyPrice) {
+              <!-- Ess.EnergyPrice: content by origin and price of a delivered kWh -->
+              <oe-storage-energy-price [componentId]="energyPrice.id" [currentData]="currentData.channel"></oe-storage-energy-price>
+            }
             <ng-container [formGroupName]="'chargeDischargeLimiterController'" *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']">
               <ion-item [color]="getBackgroundClass(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateNumber)">
                 <ion-label>
@@ -444,10 +448,10 @@
       <!-- ESS clusters: SoC, capacity and power of the cluster, and the state its cluster limiter reports -->
       <ng-container *ngIf="clusterComponents?.length > 0 && (edge.currentData | async)['channel'] as currentData">
         <ng-container *ngFor="let component of clusterComponents">
-          <ion-card-content class="underline">
+          <ion-card-content class="underline" style="border-top: 3px solid var(--ion-color-medium)">
             <table class="full_width">
               <tr>
-                <td style="width: 100%">{{ component.alias }} ({{ "EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.CLUSTER" | translate }})</td>
+                <td style="width: 100%; font-weight: 700; font-size: 1.2em; padding: 6px 0 4px 0">{{ component.alias }} ({{ "EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.CLUSTER" | translate }})</td>
               </tr>
               <div style="padding-top: 5px"></div>
               <tr>
@@ -504,10 +508,10 @@
       <ng-container *ngIf="(edge.currentData | async)['channel'] as currentData">
         <ng-container *ngFor="let component of essComponents">
           <ng-container *ngIf="config.factories[component.factoryId] as factory">
-            <ion-card-content [class.underline]="chargerComponents?.length > 0 || !isLastElement(component, essComponents)">
+            <ion-card-content [class.underline]="chargerComponents?.length > 0 || !isLastElement(component, essComponents)" style="border-top: 3px solid var(--ion-color-medium)">
               <table class="full_width">
                 <tr>
-                  <td style="width: 100%">
+                  <td style="width: 100%; font-weight: 700; font-size: 1.2em; padding: 6px 0 4px 0">
                     {{ component.alias }}
                   </td>
                 </tr>
@@ -519,9 +523,9 @@
                   </td>
                 </tr>
               </table>
-              <!-- Symmetric ESS -->
+              <!-- Symmetric ESS; a hybrid ESS shows its battery power, its ActivePower includes the PV -->
               <ng-container>
-                @let value = currentData[component.id + "/ActivePower"];
+                @let value = factory.natureIds.includes("io.openems.edge.ess.api.HybridEss") ? currentData[component.id + "/DcDischargePower"] : currentData[component.id + "/ActivePower"];
                 <table *ngIf="factory.natureIds.includes('io.openems.edge.ess.api.SymmetricEss') && value !== null && value !== undefined" class="full_width">
                   <tr>
                     <td style="width: 65%" translate>GENERAL.CHARGE</td>
@@ -619,7 +623,11 @@
 
 
                 <!-- Show if ess has chargeDischargeLimiterController assigned-->
-                <ng-container [formGroupName]="'chargeDischargeLimiterController'" *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']">
+                @if (energyPriceComponents[component.id]; as energyPrice) {
+                <!-- Ess.EnergyPrice: content by origin and price of a delivered kWh -->
+                <oe-storage-energy-price [componentId]="energyPrice.id" [currentData]="currentData"></oe-storage-energy-price>
+              }
+              <ng-container [formGroupName]="'chargeDischargeLimiterController'" *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']">
                   <ion-item [color]="getBackgroundClass(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateNumber)">
                     <ion-label>
                       <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.' + (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey ?? 'UNDEFINED')) | translate"></oe-modal-line>
@@ -806,27 +814,18 @@
     <!-- DC Charger -->
     <ng-container *ngIf="chargerComponents?.length !== 0 && essComponents?.length !== 1">
       <ng-container *ngFor="let component of chargerComponents">
-        <ion-card-content [class.underline]="!isLastElement(component, chargerComponents)">
+        <ion-card-content [class.underline]="!isLastElement(component, chargerComponents)" style="border-top: 3px solid var(--ion-color-medium)">
           <table *ngIf="(edge.currentData | async)['channel'] as currentData" class="full_width">
             <ng-container>
               @let value = currentData[component.id + "/ActualPower"];
               <ng-container *ngIf="value !== null && value !== undefined">
                 <tr>
-                  <td style="width: 100%">{{ component.alias }}</td>
+                  <td style="width: 100%; font-weight: 700; font-size: 1.2em; padding: 6px 0 4px 0">{{ component.alias }}</td>
                 </tr>
+                <!-- the PV side of a hybrid inverter: its power is production, not storage power -->
                 <tr>
-                  <td style="width: 20%" translate>GENERAL.CHARGE</td>
-                  <td style="width: 30%"></td>
-                  <td style="width: 35%" class="align_right">
-                    {{ (value > 0 ? value : null) | unitvalue: "W" }}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="width: 20%" translate>GENERAL.DISCHARGE</td>
-                  <td style="width: 30%"></td>
-                  <td style="width: 35%" class="align_right">
-                    {{ value <= 0 ? value * -1 : (null | unitvalue: "W") }}
-                  </td>
+                  <td style="width: 65%" translate>GENERAL.PRODUCTION</td>
+                  <td style="width: 35%" class="align_right">{{ value | unitvalue: "W" }}</td>
                 </tr>
               </ng-container>
             </ng-container>

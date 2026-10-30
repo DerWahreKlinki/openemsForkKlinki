@@ -394,7 +394,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				this.changeState(State.MIN_SOC_REACHED);
 				calculatedPower =0;					
 				break;
-			} else if (this.balanceDecision == BalancingDecision.YES) {
+			} else if (this.balanceDecision == BalancingDecision.YES
+					|| this.balanceDecision == BalancingDecision.YES_DEFERRED) {
+				// balancing is due: BALANCING_WANTED shows it, also while it is deferred
+				// (price limit, peak shaving), so that the UI can tell why it waits
 				this.changeState(State.BALANCING_WANTED);
 				break;
 			} else if (this.currentSoc > this.maxSoc) {
@@ -492,7 +495,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		case MAX_SOC_REACHED:
 
 			//
-			if (this.balanceDecision == BalancingDecision.YES) {
+			if (this.balanceDecision == BalancingDecision.YES
+					|| this.balanceDecision == BalancingDecision.YES_DEFERRED) {
 				this.changeState(State.BALANCING_WANTED);
 				calculatedPower = 0; // keep blocking further charge until BALANCING_WANTED takes over
 				break;
@@ -531,7 +535,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			break;
 		case ABOVE_MAX_SOC:
 
-			if (this.balanceDecision == BalancingDecision.YES) {
+			if (this.balanceDecision == BalancingDecision.YES
+					|| this.balanceDecision == BalancingDecision.YES_DEFERRED) {
 				this.changeState(State.BALANCING_WANTED);
 				calculatedPower = 0; // keep blocking further charge until BALANCING_WANTED takes over
 				break;
@@ -641,8 +646,10 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			}
 
 			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
-				// Avoid discharge below minSoc
+				// Avoid discharge below minSoc and charge above maxSoc while waiting
 				if (this.currentSoc <= this.minSoc) { // min guard
+					calculatedPower = 0;
+				} else if (this.currentSoc >= this.maxSoc) { // max guard
 					calculatedPower = 0;
 				} else if (currentBatteryPower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
 					this.logDebug(this.log, "Approaching min. SoC limit : " + this.currentSoc + "%/" + this.minSoc + "%");

@@ -1,3 +1,5 @@
 = io.openems.edge.predictor.weather.forecast
 
 https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.predictor.weather.forecast[Source Code icon:github[]]
+
+Predicts the PV production from the Open-Meteo irradiance forecast (global tilted irradiance per PV area, times a factor per area), fetched anew every quarter-hour. When a fetch fails (Open-Meteo answers 503 now and then, regularly at the full and half hour) the predictor answers with the last good forecast from the current quarter-hour on instead of an empty one, so that the PredictorManager does not hand the caller the next predictor in rank for a quarter-hour.

@@ -25,7 +25,7 @@ import java.util.Set;
  * price while PV can refill it before the end of the running PV block, and it
  * is only allowed as long as the storage still reaches its evening target at the
  * end of that block. Where it does not, the storage price is withdrawn from the
- * charging quarter-hours with the smallest PV share first until the target
+ * charging quarter-hours with the highest blended price first until the target
  * holds: such a quarter-hour keeps no storage budget, its storage share costs
  * the grid price, and it still charges if the blended price stays below the
  * limit, like the controller does live. Surplus the storage cannot take is
@@ -990,7 +990,7 @@ public final class ChargingPlan {
 	/*
 	 * Finds the quarter-hour to withdraw the storage budget from: in the first PV
 	 * block that misses the target, the charging quarter-hour with storage budget
-	 * and the smallest PV share.
+	 * and the highest blended price, so that the cheapest quarter-hours keep it.
 	 */
 	private static Integer findQuarterToDrop(Result result, Rules rules, List<int[]> blocks, Set<Integer> dropped) {
 		for (var b : blocks) {
@@ -998,18 +998,20 @@ public final class ChargingPlan {
 				continue;
 			}
 			Integer best = null;
-			var bestRatio = Double.MAX_VALUE;
+			var bestPrice = -Double.MAX_VALUE;
 			for (var i = b[0]; i <= b[1]; i++) {
 				final var q = result.quarters().get(i);
 				if (q.power() <= 0 || q.storageBudget() <= 0 || dropped.contains(i)) {
 					continue;
 				}
-				// the smallest PV share first; among equals the latest, so that the car
-				// takes what it may take as early as possible
-				final var ratio = q.fromPv() / (double) q.power();
-				if (ratio <= bestRatio) {
+				// the most expensive first: a quarter-hour whose storage share is partly a
+				// discharge below the target (priced like grid) goes before one that only
+				// displaces PV charging. Among equals the latest, so that the car takes what
+				// it may take as early as possible
+				final var price = q.blendedPrice() == null ? Double.MAX_VALUE : q.blendedPrice();
+				if (price >= bestPrice) {
 					best = i;
-					bestRatio = ratio;
+					bestPrice = price;
 				}
 			}
 			if (best != null) {

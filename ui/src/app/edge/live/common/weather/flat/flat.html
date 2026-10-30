@@ -31,9 +31,8 @@
                   class="weather-icon"></ion-icon>
               </ion-row>
               <ion-row class="ion-justify-content-end">
-                <ion-text translate>
-                  {{ (currentHourlyForecast.weatherCode | weatherCodeDescription:currentHourlyForecast.isDay) }}
-                </ion-text>
+                <!-- Fork (klinki): [translate] binding instead of interpolated content. The bare translate directive keeps the first key it saw and never re-translates when the weather code changes (first load, hour or day/night change). Drop this once upstream fixes it. -->
+                <ion-text [translate]="currentHourlyForecast.weatherCode | weatherCodeDescription:currentHourlyForecast.isDay"></ion-text>
               </ion-row>
               <ion-row class="ion-align-items-center ion-justify-content-end sunshine-row">
                 <ion-text [translate]="'SUNSHINE_DURATION_LABEL'"></ion-text>

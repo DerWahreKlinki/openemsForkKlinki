@@ -379,7 +379,7 @@ export namespace EvcsPriceForecast {
             chargePower = Math.max(slot.chargePower, settings.minPower);
         }
         const effectivePrice = live.blendedPrice ?? slot.effectivePrice;
-        const zone = getZone(chargePower, effectivePrice, settings);
+        const zone = getZone(chargePower, effectivePrice, slot.price, settings);
         const result = [...slots];
         result[index] = {
             ...slot,
@@ -393,18 +393,35 @@ export namespace EvcsPriceForecast {
     }
 
     /**
+     * Is the effective price a real blend, i.e. below the grid price because of a PV or storage share?
+     * Without a share the "blended price" is simply the grid price.
+     *
+     * @param effectivePrice The effective price in [Cent/kWh]
+     * @param price The grid price in [Cent/kWh]
+     * @returns true if a share lowers the price
+     */
+    export function hasMix(effectivePrice: number, price: number): boolean {
+        return effectivePrice < price - 0.005;
+    }
+
+    /**
      * Gets the zone of a quarter-hour: the price the bar shows decides between "too expensive" and "nothing
      * available" - the latter only if the price would be fine but there is nothing to charge with.
      *
      * @param chargePower The expected charge power in [W]; 0 if the controller would not charge
      * @param effectivePrice The effective price in [Cent/kWh]
+     * @param price The grid price in [Cent/kWh]
      * @param settings The settings
      * @returns The zone
      */
-    function getZone(chargePower: number, effectivePrice: number, settings: Settings): Zone {
+    function getZone(chargePower: number, effectivePrice: number, price: number, settings: Settings): Zone {
         if (chargePower <= 0) {
             // without price-based charging the price is never the reason
-            return settings.enablePriceCharging && effectivePrice >= settings.priceLimit ? Zone.NONE : Zone.UNPLANNABLE;
+            if (!settings.enablePriceCharging || effectivePrice < settings.priceLimit) {
+                return Zone.UNPLANNABLE;
+            }
+            // too expensive: red only if a PV or storage share lowers the price, otherwise it is just the grid price
+            return hasMix(effectivePrice, price) ? Zone.NONE : Zone.GRID_PRICE;
         }
         if (chargePower >= getFullPower(settings)) {
             return Zone.FULL;
@@ -515,7 +532,7 @@ export namespace EvcsPriceForecast {
                 storagePrice,
             );
 
-            const zone = getZone(chargePower, effectivePrice, settings);
+            const zone = getZone(chargePower, effectivePrice, price, settings);
 
             result.push({
                 timestamp: timestamp,
@@ -658,19 +675,21 @@ export namespace EvcsPriceForecast {
             const referencePower = q.power > 0 ? q.power : settings.minPower;
             const effectivePrice = q.blendedPrice != null ? q.blendedPrice / 10 : price;
             const storageAboveTarget = q.storageBudget > 0;
-            // TOO_EXPENSIVE: blended price above the limit; TARGET: the storage needs the surplus for the
-            // evening, everything counts at the grid price; the rest (limit, grid limit, unknown, not chosen
-            // by target charging) is not plannable
+            // TOO_EXPENSIVE: blended price above the limit (red only with a PV or storage share, else it is the
+            // grid price); TARGET: the storage needs the surplus for the evening, everything counts at the grid
+            // price; the rest (limit, grid limit, unknown, not chosen by target charging) is not plannable
             const zone =
                 q.power <= 0
                     ? q.reason === "TOO_EXPENSIVE"
-                        ? Zone.NONE
+                        ? hasMix(effectivePrice, price)
+                            ? Zone.NONE
+                            : Zone.GRID_PRICE
                         : q.reason === "TARGET"
                           ? Zone.GRID_PRICE
                           : q.reason === "AFTER_TARGET"
                             ? Zone.AFTER_TARGET
                             : Zone.UNPLANNABLE
-                    : getZone(q.power, effectivePrice, settings);
+                    : getZone(q.power, effectivePrice, price, settings);
             result.push({
                 timestamp: timestamp,
                 price: price,

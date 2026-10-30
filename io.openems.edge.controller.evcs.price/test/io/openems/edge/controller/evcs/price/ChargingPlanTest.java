@@ -119,13 +119,13 @@ public class ChargingPlanTest {
 		final var r = ChargingPlan.calculate(rules(Priority.STORAGE), storage(10847), new Car(true, null),
 				day(2500));
 		assertNotNull(r.start());
-		// no charging before the storage can no longer take the surplus
-		// the car takes the margin above the target as early as possible: from 10:45
-		// on the storage charging it displaces covers enough of the minimum power, the
-		// storage catches up later. Before that a discharge below the target would
-		// make the house buy from grid at 45 ct: too expensive
-		assertEquals(10, r.start().getHour(), "start " + r.start());
-		assertEquals(45, r.start().getMinute(), "start " + r.start());
+		// the margin above the target goes to the cheapest quarter-hours: from 12:00
+		// on the storage charging the car displaces covers the whole minimum power at
+		// the storage price. Earlier the car would partly discharge the storage below
+		// its target, priced like grid at 45 ct, so those quarter-hours lose the
+		// storage budget first
+		assertEquals(12, r.start().getHour(), "start " + r.start());
+		assertEquals(0, r.start().getMinute(), "start " + r.start());
 		assertTrue(r.energyWh() > 5000, "energy " + r.energyWh());
 		assertEquals(r.energyWh(), r.fromPvWh() + r.fromStorageWh() + r.fromGridWh(), 2);
 		// the storage reaches its evening target: at most 15 % of the capacity for the car
@@ -146,6 +146,8 @@ public class ChargingPlanTest {
 			}
 			if (q.power() > 0) {
 				assertTrue(q.blendedPrice() < 30, "blended " + q.blendedPrice() + " at " + q.time());
+				// the whole storage share is displaced PV charging at the storage price
+				assertEquals(q.fromStorage(), q.storageBudget(), "storage share priced like grid at " + q.time());
 			}
 		}
 		// evening: too expensive

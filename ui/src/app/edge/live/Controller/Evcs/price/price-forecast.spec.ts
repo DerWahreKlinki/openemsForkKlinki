@@ -149,12 +149,13 @@ describe("EvcsPriceForecast", () => {
 
     it("#calculate with priority STORAGE: no charging while the storage takes the surplus", () => {
         // 06.10.2026 10:00: PV 5 kW, house 1 kW, storage charges 4 kW (balancing), 42 ct; the controller
-        // prices the storage like grid (no reserve) -> the bar shows 42 ct: too expensive
+        // prices the storage like grid (no reserve) -> the bar shows 42 ct: too expensive, and as nothing
+        // lowers the price it is the plain grid price (grey, not red)
         const settings: EvcsPriceForecast.Settings = { ...SETTINGS, priority: "STORAGE", useStorageSurplus: true, storagePrice: 42 };
         const slot = EvcsPriceForecast.calculate([entry("10:00", 420, 5000, 1000, -4000)], settings, NOW)[0];
         expect(slot.surplus).toBe(0);
         expect(slot.storageCharge).toBe(4000);
-        expect(slot.zone).toBe(EvcsPriceForecast.Zone.NONE);
+        expect(slot.zone).toBe(EvcsPriceForecast.Zone.GRID_PRICE);
         expect(slot.chargePower).toBe(0);
         expect(slot.effectivePrice).toBe(42);
     });
@@ -225,7 +226,8 @@ describe("EvcsPriceForecast", () => {
         expect(slots[2].effectivePrice).toBe(8);
         expect(slots[3].storageSurplus).toBe(-1800);
         expect(slots[3].storageAboveTarget).toBe(false);
-        expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.NONE);
+        // storage at the grid price and no PV: not a blend, just the grid price
+        expect(slots[3].zone).toBe(EvcsPriceForecast.Zone.GRID_PRICE);
         expect(slots[3].storagePrice).toBe(50);
     });
 

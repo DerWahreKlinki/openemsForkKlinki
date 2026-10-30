@@ -96,7 +96,13 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// continuously while not charging (charging); used for the start (stop)
 	// hysteresis
 	private Instant startWantedSince = null;
-	private Instant stopWantedSince = null;
+	// The balance of the stop wish while charging: grows with the time the charge
+	// power is zero, shrinks with the time it is above zero, never below zero. At
+	// the stop confirmation time charging stops. A gap-free timer would never
+	// run out under a cloudy sky with single minutes of sun
+	private Duration stopWanted = Duration.ZERO;
+	// The last cycle the hysteresis was evaluated in, for the time per cycle
+	private Instant hysteresisLast = null;
 
 	// The Time-of-Use-Tariff controller blocks the storage discharge right now:
 	// it delays the discharge or charges from grid
@@ -116,6 +122,28 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// Storage power the plan allows for the car at the storage price in the
 	// running quarter-hour; 0 while the storage is blocked
 	private int planStoragePower = 0;
+	// The same before the storage path is checked: the budget of the plan, 0 while
+	// the storage is blocked. While the budget is withheld because the storage lies
+	// behind the path, charging it carried ends through the stop hysteresis, like
+	// a cloud, not at once like a decision of the plan
+	private int planStorageBudget = 0;
+	// Whether the last log line said the budget is withheld, for one line per change
+	private boolean budgetWithheldLogged = false;
+	// The stored energy and the time the charging plan was calculated with: the
+	// start of the storage path the plan expects (see calculateExpectedStoredWh);
+	// the stored energy includes the deficit carried over from the plan before
+	private double planStoredAtStartWh = 0;
+	private double planUsableAtStartWh = 0;
+	private ZonedDateTime planComputedAt = null;
+	// Charge power the storage could still take right now (its allowed charge
+	// power within the SoC windows minus what it charges), while the
+	// Time-of-Use-Tariff controller lets it take the surplus; 0 otherwise
+	private int storageChargeRoom = 0;
+	// Surplus the car takes away from the storage: PV the storage could charge
+	private int displacedPvPower = 0;
+	// The charge power of the car measured in the last cycle, for the energy
+	// optimizer; read from its thread
+	private volatile int measuredCarPower = 0;
 	// Evening target and usable capacity the plan was calculated with, for the UI
 	private int planTargetWh = 0;
 	// Stored energy within the usable windows in [Wh]; null if unknown
@@ -304,10 +332,65 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		}
 		final var plan = this.plan;
 		final var pluggedIn = Boolean.TRUE.equals(this.lastPluggedIn);
+		final var charging = this.lastCharging;
+		final var optimizerPlan = planEnergyForOptimizer(plan,
+				DateUtils.roundDownToQuarter(ZonedDateTime.now(this.clock())), charging ? this.measuredCarPower : 0);
 		return new EnergyScheduler.Config(//
-				!this.carTakesNothing && (this.lastCharging || (pluggedIn && plan.energyWh() > 0)), //
-				plan.quarters().isEmpty() ? 0 : plan.quarters().get(0).time().toEpochSecond(), //
-				plan.quarters().stream().map(q -> q.power() / 4).toList());
+				!this.carTakesNothing && (charging || (pluggedIn && plan.energyWh() > 0)), //
+				optimizerPlan.start(), //
+				optimizerPlan.wh());
+	}
+
+	/**
+	 * The energy of the car per quarter-hour for the energy optimizer.
+	 *
+	 * @param start the first quarter-hour as epoch seconds; 0 without quarter-hours
+	 * @param wh    the energy per quarter-hour in [Wh]
+	 */
+	protected record OptimizerPlan(long start, List<Integer> wh) {
+	}
+
+	/**
+	 * The energy of the car per quarter-hour for the energy optimizer: the
+	 * charging plan from its first quarter-hour on. While the car charges, the
+	 * running and the next quarter-hour carry at least the measured power: the
+	 * plan may hold nothing there (the car charges on surplus the plan did not
+	 * foresee, or there is no plan), and the optimizer plans from the next
+	 * quarter-hour on. Further ahead nobody knows how long the car charges, there
+	 * the plan counts alone.
+	 *
+	 * @param plan     the charging plan
+	 * @param now      the running quarter-hour
+	 * @param carPower the measured charge power of the car in [W]; 0 while it does
+	 *                 not charge
+	 * @return the start and the energy per quarter-hour
+	 */
+	protected static OptimizerPlan planEnergyForOptimizer(ChargingPlan.Result plan, ZonedDateTime now,
+			int carPower) {
+		final var quarters = plan.quarters();
+		final var measuredWh = Math.max(carPower, 0) / 4;
+		if (quarters.isEmpty() && measuredWh == 0) {
+			return new OptimizerPlan(0, List.of());
+		}
+		final var start = quarters.isEmpty() || now.isBefore(quarters.get(0).time()) ? now : quarters.get(0).time();
+		final var wh = new ArrayList<Integer>();
+		for (final var q : quarters) {
+			// the plan begins at its own quarter-hour and start is never after it
+			final var index = (int) Duration.between(start, q.time()).toMinutes() / 15;
+			while (wh.size() <= index) {
+				wh.add(0);
+			}
+			wh.set(index, q.power() / 4);
+		}
+		if (measuredWh > 0) {
+			final var index = (int) Duration.between(start, now).toMinutes() / 15;
+			while (wh.size() <= index + 1) {
+				wh.add(0);
+			}
+			wh.set(index, Math.max(wh.get(index), measuredWh));
+			wh.set(index + 1, Math.max(wh.get(index + 1), measuredWh));
+		}
+		return new OptimizerPlan(start.toEpochSecond(), wh);
 	}
 
 	@Override
@@ -431,6 +514,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		/*
 		 * Calculates the next charging power depending on the charge mode and priority
 		 */
+		// With priority STORAGE the surplus the storage could still charge is the
+		// storage's, even while the car draws it already: the car's own draw must
+		// not look like surplus once it runs
+		this.storageChargeRoom = chargeMode == ChargeMode.EXCESS_POWER && priority == Priority.STORAGE
+				? this.readStorageChargeRoom()
+				: 0;
+		this.displacedPvPower = 0;
+		this.setStorageChargeRoom(this.storageChargeRoom);
 		var nextChargePower = chargeMode == null //
 				? 0 //
 				: switch (chargeMode) {
@@ -442,7 +533,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 						if (this.sum.getEssSoc().orElse(100) > 97) {
 							yield calculateChargePowerFromExcessPower(this.sum, this.evcs);
 						} else {
-							yield calculateExcessPowerAfterEss(this.sum, this.evcs);
+							final var excess = calculateExcessPowerAfterEss(this.sum, this.evcs);
+							this.displacedPvPower = Math.min(excess, this.storageChargeRoom);
+							yield excess - this.displacedPvPower;
 						}
 					}
 					};
@@ -523,7 +616,11 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 					this.storageDischargeBlocked, this.planStoragePower, minimumHardwarePower);
 			final var pvPower = excessPower;
 			this.setStoragePowerForCar(storagePower);
-			final var plannedStoragePower = Math.min(storagePower, this.planStoragePower);
+			this.setStorageDisplacedPower(this.displacedPvPower);
+			// Surplus the car takes away from the storage is storage power as well: PV
+			// that would charge the storage. It costs what storage power costs
+			final var storageShare = storagePower + this.displacedPvPower;
+			final var plannedStoragePower = Math.min(storageShare, this.planStoragePower);
 			final var blendedPrice = calculateBlendedPrice(gridBuyPrice, pvPower, plannedStoragePower,
 					carPower > 0 ? carPower : minimumHardwarePower, this.config.pvPrice(), storagePrice);
 			this.setBlendedPrice(blendedPrice == null ? null : blendedPrice * 10);
@@ -547,13 +644,17 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 							? available && blendedPrice != null && blendedPrice < onOffLimit
 							: isBlendedPriceBelowLimit(gridBuyPrice, pvPower, minimumHardwarePower,
 									this.config.pvPrice(), onOffLimit);
-					if (this.config.useStorageSurplus() && this.planStoragePower > 0) {
+					if (this.config.useStorageSurplus() && this.planStorageBudget > 0) {
 						// storage and grid alone below the limit, e.g. storage the optimizer
 						// releases at night: charging by price, the surplus is not needed.
 						// The storage share of the plan counts, not the measured one: a house
-						// load that takes the storage for a moment is a cloud, not a price
-						final var withoutPv = calculateBlendedPrice(gridBuyPrice, 0, this.planStoragePower,
-								minimumHardwarePower, this.config.pvPrice(), storagePrice);
+						// load that takes the storage for a moment is a cloud, not a price.
+						// A budget withheld because the storage lies behind the path still
+						// counts here: the clouds that caused it end charging through the
+						// stop hysteresis, not at once
+						final var withoutPv = calculateBlendedPrice(gridBuyPrice, 0, this.planStorageBudget,
+								minimumHardwarePower, this.config.pvPrice(),
+								(double) this.config.pvPrice() + this.config.storageLossSurcharge());
 						priceDriven = priceDriven || withoutPv != null && withoutPv < onOffLimit;
 					}
 				} else {
@@ -574,6 +675,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.setStoragePrice(null);
 			this.setBlendedPrice(null);
 			this.setStoragePowerForCar(null);
+			this.setStorageDisplacedPower(this.displacedPvPower);
 			this.setStorageDischargeBlocked(null);
 		}
 		this.setPriceCharging(priceCharging);
@@ -629,7 +731,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 
 		// The car becomes a consumer for the energy optimizer with the start of
 		// charging and disappears with its end
-		final var charging = nextChargePower > 0 && this.evcs.getActivePower().orElse(0) > 0;
+		this.measuredCarPower = Math.max(this.evcs.getActivePower().orElse(0), 0);
+		final var charging = nextChargePower > 0 && this.measuredCarPower > 0;
 		if (charging != this.lastCharging) {
 			this.lastCharging = charging;
 			if (this.energyScheduleHandler != null) {
@@ -725,9 +828,27 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.checkCarPower();
 		this.checkCarIdle();
 		this.setCarTakesNothing(this.carTakesNothing);
-		this.updateChargingPlan(windows, energy);
+		final var now = ZonedDateTime.now(this.clock());
+		final var capacityChanged = energy != null && !this.plan.quarters().isEmpty()
+				&& Math.abs(energy.usableWh() - this.planUsableAtStartWh) > 1;
+		if (capacityChanged) {
+			// The usable capacity changed, e.g. the SoC windows of the limiters arrive
+			// after a restart: the stored energy means something else now, the path
+			// of the plan would show the storage behind or ahead for no reason
+			this.planDirty = true;
+		}
+		// A new plan starts from the measured storage: made at the quarter-hour while
+		// the storage lies behind, it would put the storage on its path at once and
+		// release the budget, with the stop hysteresis, although the clouds stay.
+		// The path of the new plan starts where the old one expected the storage
+		// instead: the deficit carries over and dissolves over the first
+		// quarter-hour unless the shortfall goes on
+		final var carriedWh = energy == null || capacityChanged ? 0
+				: calculateStorageDeficitWh(this.plan, this.planStoredAtStartWh, this.planComputedAt, now,
+						energy.storedWh());
+		this.updateChargingPlan(windows, energy, carriedWh);
 		final var plan = this.plan;
-		final var quarter = plan.getAt(ZonedDateTime.now(this.clock()));
+		final var quarter = plan.getAt(now);
 		final var targetWh = energy == null ? 0. : energy.usableWh() * this.config.storageTargetSocNet() / 100.;
 		this.planTargetWh = (int) Math.round(targetWh);
 		this.planUsableWh = energy == null ? 0 : energy.usableWh();
@@ -737,12 +858,32 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				: (int) Math.round(plan.storageAtPvEndWh() - targetWh);
 		final var targetReachable = !plan.quarters().isEmpty() && plan.targetReached();
 
+		// The storage path of the plan: where the storage should be right now. Behind
+		// it by more than the tolerance (clouds the forecast did not see), the
+		// storage budget is withheld: the car gets the surplus only, until the next
+		// plan decides anew with the measured storage
+		final var expectedWh = energy == null ? null
+				: calculateExpectedStoredWh(plan, this.planStoredAtStartWh, this.planComputedAt, now);
+		final var behindWh = expectedWh == null ? null
+				: (int) Math.round(Math.max(expectedWh - energy.storedWh(), 0));
+		final var budgetWithheld = expectedWh != null
+				&& isStorageBehindPlan(expectedWh, energy.storedWh(), energy.usableWh());
+		this.setStorageBehindPlan(behindWh);
+		this.setStorageBudgetWithheld(quarter == null ? null : budgetWithheld);
+		if (quarter != null && budgetWithheld != this.budgetWithheldLogged) {
+			this.budgetWithheldLogged = budgetWithheld;
+			this.logInfo(this.log, budgetWithheld
+					? "Storage budget withheld: the storage lies " + behindWh + " Wh behind the charging plan"
+					: "Storage budget released: the storage is back on the path of the charging plan");
+		}
+
 		// Storage power the plan allows for the car in this quarter-hour: PV refills
 		// it before the evening, so it costs the PV price plus the loss surcharge.
 		// Everything else from the storage costs the grid buy price
-		this.planStoragePower = quarter == null || this.storageDischargeBlocked //
+		this.planStorageBudget = quarter == null || this.storageDischargeBlocked //
 				? 0
 				: quarter.storageBudget();
+		this.planStoragePower = budgetWithheld ? 0 : this.planStorageBudget;
 		final Double storagePrice;
 		if (gridBuyPrice == null) {
 			storagePrice = null;
@@ -786,10 +927,13 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * Recalculates the charging plan once per quarter-hour, after plugging in or
 	 * out and after a configuration change.
 	 *
-	 * @param windows the storage windows
-	 * @param energy  the storage energy; possibly null
+	 * @param windows         the storage windows
+	 * @param energy          the storage energy; possibly null
+	 * @param carriedBehindWh the deficit of the storage against the path of the
+	 *                        plan before, carried into the path of the new one in
+	 *                        [Wh]
 	 */
-	private void updateChargingPlan(List<StorageWindow> windows, StorageEnergy energy) {
+	private void updateChargingPlan(List<StorageWindow> windows, StorageEnergy energy, double carriedBehindWh) {
 		final var now = ZonedDateTime.now(this.clock());
 		final var quarter = DateUtils.roundDownToQuarter(now);
 		if (!this.planDirty && quarter.equals(this.planQuarter)) {
@@ -801,6 +945,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		try {
 			final var plans = this.calculateChargingPlan(quarter, windows, energy);
 			this.plan = plans.plan();
+			this.planStoredAtStartWh = energy == null ? 0 : energy.storedWh() + carriedBehindWh;
+			this.planUsableAtStartWh = energy == null ? 0 : energy.usableWh();
+			this.planComputedAt = now;
 			// the same time axis in every mode: 24 hours from the current quarter-hour
 			this.displayPlan = plans.display().until(quarter.plus(DISPLAY_HORIZON));
 			this.displayPlanHypothetical = plans.hypothetical();
@@ -1657,6 +1804,111 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
+	 * Reads the charge power the storage could still take right now: the allowed
+	 * charge power of the storages behind the ChargeDischargeLimiters (nothing for
+	 * one at the top of its SoC window; the maximum apparent power of _sum without
+	 * limiters) minus what the storage charges already. Only while the storage
+	 * takes the surplus: without a Time-of-Use-Tariff controller the balancing
+	 * gives it the surplus; with one, see {@link #isSurplusChargingState(String)}.
+	 * What another controller would do with the surplus is unknown: then the room
+	 * is 0 and the car takes the measured surplus as before.
+	 *
+	 * @return the room in [W]; 0 if the storage does not take the surplus
+	 */
+	private int readStorageChargeRoom() {
+		if (!this.readStorageTakesSurplus()) {
+			return 0;
+		}
+		var allowed = 0;
+		var found = false;
+		try {
+			for (var component : this.componentManager.getEnabledComponents()) {
+				if (!LIMITER_FACTORY_PID.equals(component.serviceFactoryPid())) {
+					continue;
+				}
+				final var essId = this.<String>readChannelValue(component, "_PropertyEssId");
+				if (essId == null) {
+					continue;
+				}
+				final var ess = this.componentManager.getComponent(essId);
+				found = true;
+				final var maxSoc = this.<Integer>readChannelValue(component, "_PropertyMaxSoc");
+				final var soc = this.<Integer>readChannelValue(ess, "Soc");
+				if (maxSoc != null && soc != null && soc >= maxSoc) {
+					continue;
+				}
+				final Integer allowedCharge = this.readChannelValue(ess, "AllowedChargePower");
+				final Integer maxApparent = this.readChannelValue(ess, "MaxApparentPower");
+				allowed += Math.abs(allowedCharge != null ? allowedCharge : maxApparent != null ? maxApparent : 0);
+			}
+		} catch (OpenemsNamedException | RuntimeException e) {
+			this.logDebug(this.log, "Unable to read the storage charge room: " + e.getMessage());
+			return 0;
+		}
+		if (!found) {
+			allowed = this.sum.getEssMaxApparentPower().orElse(0);
+		}
+		return calculateStorageChargeRoom(allowed, this.sum.getEssDischargePower().orElse(0));
+	}
+
+	/**
+	 * Calculates the charge power the storage could still take.
+	 *
+	 * @param allowedChargePower the allowed charge power in [W], as a positive
+	 *                           number
+	 * @param essDischargePower  the measured storage discharge in [W]; negative
+	 *                           while the storage charges
+	 * @return the room in [W]
+	 */
+	protected static int calculateStorageChargeRoom(int allowedChargePower, int essDischargePower) {
+		return Math.max(allowedChargePower - Math.max(-essDischargePower, 0), 0);
+	}
+
+	/**
+	 * Reads whether the storage takes the surplus right now: without a
+	 * Time-of-Use-Tariff controller it does (balancing), with one it depends on
+	 * its state.
+	 *
+	 * @return true if the storage takes the surplus; false if unknown
+	 */
+	private boolean readStorageTakesSurplus() {
+		final var id = this.config.timeOfUseTariff_id();
+		if (id == null || id.isBlank()) {
+			return true;
+		}
+		try {
+			final var value = this.componentManager.getComponent(id).channel("StateMachine").value();
+			if (!value.isDefined()) {
+				return false;
+			}
+			final OptionsEnum state = value.asEnum();
+			return isSurplusChargingState(state instanceof Enum<?> e ? e.name() : null);
+		} catch (OpenemsNamedException | RuntimeException e) {
+			this.logDebug(this.log, "Unable to read the Time-of-Use-Tariff state: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Decides from the state of the Time-of-Use-Tariff controller whether the
+	 * storage charges from surplus: in BALANCING it takes the surplus, while the
+	 * discharge is delayed it still charges from surplus, and charging from grid
+	 * takes the surplus on top. The other states limit the charging or discharge.
+	 *
+	 * @param state the name of the {@code StateMachine} value; possibly null
+	 * @return true if the storage charges from surplus
+	 */
+	protected static boolean isSurplusChargingState(String state) {
+		if (state == null) {
+			return false;
+		}
+		return switch (state) {
+		case "BALANCING", "DELAY_DISCHARGE", "CHARGE_GRID", "PEAK_SHAVING" -> true;
+		default -> false;
+		};
+	}
+
+	/**
 	 * Calculates the power the storage delivers to the car.
 	 *
 	 * <p>
@@ -1988,6 +2240,87 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
+	 * The storage may lie this part of the usable capacity behind the path of the
+	 * charging plan before the storage budget is withheld: a few minutes of cloud
+	 * or a kettle must not withdraw it.
+	 */
+	protected static final double STORAGE_PATH_TOLERANCE = 0.02;
+
+	/**
+	 * Calculates the stored energy the charging plan expects right now: the plan
+	 * knows the stored energy at the end of every quarter-hour; within a
+	 * quarter-hour the path runs linearly from the end of the previous one (or,
+	 * in the quarter-hour the plan was calculated in, from the stored energy and
+	 * the time of the calculation) to the end of this one.
+	 *
+	 * @param plan            the charging plan
+	 * @param storedAtStartWh the stored energy the plan was calculated with in [Wh]
+	 * @param computedAt      the time the plan was calculated; possibly null
+	 * @param now             the time
+	 * @return the expected stored energy in [Wh]; null if the plan does not cover
+	 *         the time
+	 */
+	protected static Double calculateExpectedStoredWh(ChargingPlan.Result plan, double storedAtStartWh,
+			ZonedDateTime computedAt, ZonedDateTime now) {
+		final var quarters = plan.quarters();
+		for (var i = 0; i < quarters.size(); i++) {
+			final var q = quarters.get(i);
+			final var end = q.time().plusMinutes(15);
+			if (now.isBefore(q.time()) || !now.isBefore(end)) {
+				continue;
+			}
+			final double fromWh;
+			final ZonedDateTime from;
+			if (i == 0) {
+				fromWh = storedAtStartWh;
+				from = computedAt == null || computedAt.isBefore(q.time()) ? q.time() : computedAt;
+			} else {
+				fromWh = quarters.get(i - 1).storageWh();
+				from = q.time();
+			}
+			final var total = Duration.between(from, end).toMillis();
+			if (total <= 0) {
+				return q.storageWh();
+			}
+			final var elapsed = Math.min(Math.max(Duration.between(from, now).toMillis(), 0), total);
+			return fromWh + (q.storageWh() - fromWh) * elapsed / total;
+		}
+		return null;
+	}
+
+	/**
+	 * Decides whether the storage lies behind the path of the charging plan by more
+	 * than the tolerance.
+	 *
+	 * @param expectedWh the stored energy the plan expects in [Wh]
+	 * @param storedWh   the measured stored energy in [Wh]
+	 * @param usableWh   the usable capacity in [Wh]
+	 * @return true if the storage budget is to be withheld
+	 */
+	protected static boolean isStorageBehindPlan(double expectedWh, double storedWh, double usableWh) {
+		return expectedWh - storedWh > usableWh * STORAGE_PATH_TOLERANCE;
+	}
+
+	/**
+	 * Calculates how far the storage lies behind the path of the charging plan: the
+	 * deficit a plan made anew carries into its own path, so that clouds that stay
+	 * keep the budget withheld across the quarter-hour.
+	 *
+	 * @param plan            the charging plan before
+	 * @param storedAtStartWh the start of its path in [Wh]
+	 * @param computedAt      the time it was calculated; possibly null
+	 * @param now             the time
+	 * @param storedWh        the measured stored energy in [Wh]
+	 * @return the deficit in [Wh]; 0 if the storage is on or ahead of the path or
+	 *         the plan does not cover the time
+	 */
+	protected static double calculateStorageDeficitWh(ChargingPlan.Result plan, double storedAtStartWh,
+			ZonedDateTime computedAt, ZonedDateTime now, double storedWh) {
+		final var expectedWh = calculateExpectedStoredWh(plan, storedAtStartWh, computedAt, now);
+		return expectedWh == null ? 0 : Math.max(expectedWh - storedWh, 0);
+	}
+
+	/**
 	 * Calculates the stored and the usable energy of all storages within their SoC
 	 * windows.
 	 *
@@ -2227,7 +2560,9 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		// Power the storage is discharging is not excess power: without this the
 		// storage feeds the car and the car's own consumption looks like excess
 		// (grid stays at zero). Charging of the storage is not subtracted: the
-		// storage has priority, so that power is not available for the car.
+		// storage has priority, so that power is not available for the car. What
+		// the storage could charge on top is taken off by the caller (see
+		// readStorageChargeRoom): once the car runs, its draw is no surplus either.
 		int essDischarge = Math.max(sum.getEssDischargePower().orElse(0), 0);
 
 		var result = evcsCharge - buyFromGrid - essDischarge;
@@ -2246,7 +2581,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.lastChargePower = 0;
 		this.priceDrivenCharging = false;
 		this.startWantedSince = null;
-		this.stopWantedSince = null;
+		this.stopWanted = Duration.ZERO;
+		this.hysteresisLast = null;
 		this.setHysteresisRemaining(null);
 		this.channel(ControllerEvcsPrice.ChannelId.AWAITING_HYSTERESIS).setNextValue(false);
 	}
@@ -2297,26 +2633,33 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.startWantedSince = null;
 		}
 
-		// Pause charging by limiting to zero: the charge power has to stay at zero
-		// for the stop hysteresis; a short cloud must not end a charge process that
-		// would then need the start hysteresis again. Charging by price ends at once
-		// when the price or the plan no longer carries it, not when a house load
-		// takes the storage share for a moment
+		// Pause charging by limiting to zero: the stop wish has to outweigh the wish
+		// to charge by the stop hysteresis; a short cloud must not end a charge
+		// process that would then need the start hysteresis again, a cloudy noon
+		// with single minutes of sun must. Charging by price ends at once when the
+		// price or the plan no longer carries it, not when a house load takes the
+		// storage share for a moment
+		final var sinceLastCycle = this.hysteresisLast == null || this.hysteresisLast.isAfter(now) //
+				? Duration.ZERO
+				: Duration.between(this.hysteresisLast, now);
+		this.hysteresisLast = now;
 		if (this.lastChargePower > 0 && nextChargePower <= 0 && (!this.priceDrivenCharging || priceDriven)) {
-			if (this.stopWantedSince == null) {
-				this.stopWantedSince = now;
-			}
-			var hysteresis = Duration.ofSeconds(this.config.stopConfirmationTime());
-			final var until = this.stopWantedSince.plus(hysteresis);
-			if (until.isAfter(now)) {
+			this.stopWanted = this.stopWanted.plus(sinceLastCycle);
+			final var hysteresis = Duration.ofSeconds(this.config.stopConfirmationTime());
+			if (this.stopWanted.compareTo(hysteresis) < 0) {
 				showWarning = true;
 				targetChargePower = this.lastChargePower;
-				remaining = (int) Duration.between(now, until).getSeconds();
+				remaining = (int) hysteresis.minus(this.stopWanted).getSeconds();
 			} else {
 				targetChargePower = 0;
+				this.stopWanted = Duration.ZERO;
 			}
+		} else if (this.lastChargePower > 0 && nextChargePower > 0) {
+			// charging goes on: the balance shrinks, a short cloud is forgotten
+			final var less = this.stopWanted.minus(sinceLastCycle);
+			this.stopWanted = less.isNegative() ? Duration.ZERO : less;
 		} else {
-			this.stopWantedSince = null;
+			this.stopWanted = Duration.ZERO;
 		}
 
 		// Apply results

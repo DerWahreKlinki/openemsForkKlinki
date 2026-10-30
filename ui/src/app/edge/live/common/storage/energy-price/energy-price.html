@@ -1,0 +1,58 @@
+<!-- Content of the ESS by origin, price of a delivered kWh in the middle (Ess.EnergyPrice) -->
+<table class="full_width" style="margin-top: 2%">
+  <tr>
+    <ion-item-divider color="light">
+      <td style="width: 100%" class="align_left" translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.TITLE</td>
+    </ion-item-divider>
+  </tr>
+</table>
+<div style="position: relative; width: 170px; height: 170px; margin: 8px auto 4px auto">
+  <canvas baseChart type="doughnut" [data]="data" [options]="options"></canvas>
+  <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center">
+    <div style="font-size: 1.15em; font-weight: 600">
+      @if (price !== null) {
+        {{ price | number: "1.1-1" }}&nbsp;ct/kWh
+      } @else {
+        -
+      }
+    </div>
+    <div style="font-size: 0.8em; opacity: 0.8">{{ storedEnergy | unitvalue: "kWh" }}</div>
+  </div>
+</div>
+<table class="full_width">
+  <tr>
+    <td style="width: 8%"><span [style.background]="colors[0]" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%"></span></td>
+    <td style="width: 52%" translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.GRID</td>
+    <td style="width: 40%" class="align_right">{{ gridEnergy | unitvalue: "kWh" }}@if (share(gridEnergy) !== null) { ({{ share(gridEnergy) }}&nbsp;%)}</td>
+  </tr>
+  <tr>
+    <td><span [style.background]="colors[1]" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%"></span></td>
+    <td translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.PV</td>
+    <td class="align_right">{{ pvEnergy | unitvalue: "kWh" }}@if (share(pvEnergy) !== null) { ({{ share(pvEnergy) }}&nbsp;%)}</td>
+  </tr>
+  @if (unpricedEnergy !== null && unpricedEnergy > 0) {
+    <tr>
+      <td><span [style.background]="colors[2]" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%"></span></td>
+      <td translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.UNKNOWN</td>
+      <td class="align_right">{{ unpricedEnergy | unitvalue: "kWh" }}@if (share(unpricedEnergy) !== null) { ({{ share(unpricedEnergy) }}&nbsp;%)}</td>
+    </tr>
+  }
+  <tr>
+    <td></td>
+    <td translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.EFFICIENCY</td>
+    <td class="align_right">{{ efficiency | unitvalue: "%" }}</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.CHARGED_GRID</td>
+    <td class="align_right">{{ chargedGridEnergy | unitvalue: "kWh" }}</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.CHARGED_PV</td>
+    <td class="align_right">{{ chargedPvEnergy | unitvalue: "kWh" }}</td>
+  </tr>
+</table>
+@if (priceMissing) {
+  <ion-note class="ion-text-wrap"><small translate>EDGE.INDEX.WIDGETS.ENERGY_PRICE.PRICE_MISSING</small></ion-note>
+}

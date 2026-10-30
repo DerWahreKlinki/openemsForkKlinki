@@ -352,15 +352,22 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                     return label + ": " + formatNumber(value, locale, "1.0-0") + " %";
                 }
                 if (item.datasetIndex === this.gridPriceIndex) {
-                    // grey segment: show the grid price itself, not the difference
+                    // grey segment: show the grid price itself, not the difference; without a segment
+                    // (no PV or storage share) the coloured bar already is the grid price
+                    if (value <= 0) {
+                        return undefined;
+                    }
                     const slot = this.slots[item.dataIndex];
                     return (
                         label + ": " + formatNumber(slot?.price ?? value, locale, ChartConstants.NumberFormat.TWO) + " " + currencyLabel
                     );
                 }
-                // Bars: "Blended price: 8.00 ct/kWh (Charging locked)"
+                // Bars: "Blended price: 8.00 ct/kWh (Charging locked)"; without a PV or storage share
+                // the bar is simply the grid price
+                const slot = this.slots[item.dataIndex];
+                const isBlended = slot == null || EvcsPriceForecast.hasMix(slot.effectivePrice, slot.price);
                 return (
-                    this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.BLENDED_PRICE") +
+                    this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST." + (isBlended ? "BLENDED_PRICE" : "GRID_PRICE")) +
                     ": " +
                     formatNumber(value, locale, ChartConstants.NumberFormat.TWO) +
                     " " +

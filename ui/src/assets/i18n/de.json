@@ -370,6 +370,16 @@
                     "RELATION_ERROR": "Beladungsgrenze muss größer der Entladungsgrenze sein",
                     "SELL_TO_GRID_POWER_LIMIT": "Beladung über"
                 },
+                "ENERGY_PRICE": {
+                    "CHARGED_GRID": "Geladen aus dem Netz",
+                    "CHARGED_PV": "Geladen aus PV",
+                    "EFFICIENCY": "Wirkungsgrad (gemessen)",
+                    "GRID": "aus dem Netz",
+                    "PRICE_MISSING": "Kein Strompreis bekannt: Ladung zählt ohne Preis.",
+                    "PV": "aus PV",
+                    "TITLE": "Speicherstrom",
+                    "UNKNOWN": "unbekannt"
+                },
                 "ENERIX_CONTROL": {
                     "CHARGE_CONSUMPTION": "<b>ACHTUNG:</b> Die aktive Beladung der Batterie aus dem Netz über die technisch notwendige Erhaltungsladung hinaus erfordert eine entsprechende Anmeldung des Speichersystems. Im Zweifel wende dich hierzu bitte an deinen Installateur. Mit Betätigung des blauen \"Speichern\"-Buttons bestätigst du, dass diese Prüfung durchgeführt wurde.<br/><br/><b>Beachte:</b> Voraussetzung für die Inanspruchnahme einer Förderung nach dem Gesetz für den Ausbau erneuerbarer Energien (EEG 2023) ist, dass im Speicher ausschließlich Strom zwischengespeichert wird, der aus erneuerbaren Energien und/oder Grubengas stammt. Bei Aktivierung dieser Funktion wird der Speicher mit Netzstrom geladen. Dieser Netzstrom wird, je nach Stromlieferungsvertrag, ggf. auch aus fossilen Energieträgern und/oder Atomkraft gewonnen. Daher können wir nicht gewährleisten, dass der Speicher ausschließlich mit Strom aus erneuerbaren Energien und/oder Grubengas geladen wird.",
                     "CHARGE_FROM_GRID": "Beladung vom Netz erzwungen",
@@ -492,8 +502,8 @@
                         "CHARGE_POWER": "Ladeleistung",
                         "NOTE_AFTER_TARGET": "Nach Zielzeit: Das Zielladen ist zur Zielzeit beendet. Diese Viertelstunden sind nicht bewertet, danach gilt wieder das Preisladen, falls eingeschaltet.",
                         "NOTE_BARS": "Balkenhöhe ist der Strompreis, der farbige Sockel der Mischpreis. „Jetzt“ ist der aktuelle Zustand, alles danach Prognose.",
-                        "NOTE_GRID_PRICE": "Zu teuer (Netzpreis): Der Speicher braucht den Überschuss für sein Abendziel. Laden ginge nur zum Netzbezugspreis, und der liegt über der Grenze.",
-                        "NOTE_NONE": "Zu teuer (Mischpreis): Der Mischpreis aus Überschuss, Speicher und Netz liegt über der Preisgrenze.",
+                        "NOTE_GRID_PRICE": "Zu teuer (Netzpreis): Kein Überschuss und kein Speicherstrom für das Auto, etwa weil der Speicher den Überschuss für sein Abendziel braucht. Laden ginge nur zum Netzbezugspreis, und der liegt über der Grenze.",
+                        "NOTE_NONE": "Zu teuer (Mischpreis): Überschuss oder Speicherstrom senken den Preis, der Mischpreis liegt aber trotzdem über der Preisgrenze.",
                         "NOTE_UNPLANNABLE": "Nicht planbar: Limit pro Ladevorgang erreicht, Netzanschluss ausgelastet oder Prognose unbekannt. Beim Zielladen: Viertelstunde nicht gewählt.",
                         "CHART_TITLE": "Ladeprognose: effektiver Ladepreis und PV-Erzeugung",
                         "CHEAPEST_WINDOW": "Günstigste 3 h",

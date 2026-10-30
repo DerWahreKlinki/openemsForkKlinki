@@ -112,6 +112,42 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 				.persistencePriority(HIGH) //
 				.text("Power the storage delivers to the car")), //
 		/**
+		 * Charge power the storage could still take: its allowed charge power within
+		 * the SoC windows minus what it charges, while the Time-of-Use-Tariff
+		 * controller lets it take the surplus. With priority STORAGE this much of the
+		 * surplus is not the car's.
+		 */
+		STORAGE_CHARGE_ROOM(Doc.of(INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(HIGH) //
+				.text("Charge power the storage could still take")), //
+		/**
+		 * Surplus the car takes away from the storage: PV that would charge the
+		 * storage. It counts as storage power in the blended price.
+		 */
+		STORAGE_DISPLACED_POWER(Doc.of(INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(HIGH) //
+				.text("Surplus the car takes away from the storage")), //
+		/**
+		 * Energy the storage lies behind the path of the charging plan: the plan
+		 * expected more in the storage by now, e.g. because clouds took the forecast
+		 * PV. 0 while the storage is on or ahead of the path; empty without a plan.
+		 */
+		STORAGE_BEHIND_PLAN(Doc.of(INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Energy the storage lies behind the charging plan")), //
+		/**
+		 * True while the storage budget of the charging plan is withheld because the
+		 * storage lies behind the path of the plan by more than the tolerance: the
+		 * car gets the surplus only. Empty without a plan for the running
+		 * quarter-hour.
+		 */
+		STORAGE_BUDGET_WITHHELD(Doc.of(BOOLEAN) //
+				.persistencePriority(HIGH) //
+				.text("Storage budget withheld: the storage lies behind the charging plan")), //
+		/**
 		 * Seconds until the running start or stop hysteresis elapses; empty while no
 		 * hysteresis is running.
 		 */
@@ -312,8 +348,24 @@ public interface ControllerEvcsPrice extends OpenemsComponent {
 		this.channel(ChannelId.STORAGE_POWER_FOR_CAR).setNextValue(val);
 	}
 
+	public default void setStorageChargeRoom(Integer val) {
+		this.channel(ChannelId.STORAGE_CHARGE_ROOM).setNextValue(val);
+	}
+
+	public default void setStorageDisplacedPower(Integer val) {
+		this.channel(ChannelId.STORAGE_DISPLACED_POWER).setNextValue(val);
+	}
+
 	public default void setStorageDischargeBlocked(Boolean val) {
 		this.channel(ChannelId.STORAGE_DISCHARGE_BLOCKED).setNextValue(val);
+	}
+
+	public default void setStorageBehindPlan(Integer val) {
+		this.channel(ChannelId.STORAGE_BEHIND_PLAN).setNextValue(val);
+	}
+
+	public default void setStorageBudgetWithheld(Boolean val) {
+		this.channel(ChannelId.STORAGE_BUDGET_WITHHELD).setNextValue(val);
 	}
 
 	public default void setHysteresisRemaining(Integer val) {

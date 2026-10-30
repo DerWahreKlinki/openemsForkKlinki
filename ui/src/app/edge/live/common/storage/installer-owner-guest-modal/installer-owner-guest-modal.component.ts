@@ -17,6 +17,7 @@ import { Role } from "src/app/shared/type/role";
 import { DateTimeUtils } from "src/app/shared/utils/datetime/datetime-utils";
 import { NumberUtils } from "src/app/shared/utils/number/number-utils";
 import { environment, Environment } from "src/environments";
+import { StorageEnergyPriceComponent } from "../energy-price/energy-price";
 
 @Component({
     selector: "storage-modal",
@@ -34,6 +35,7 @@ import { environment, Environment } from "src/environments";
         ModalComponentsModule,
         LocaleProvider,
         LiveDataServiceProvider,
+        StorageEnergyPriceComponent,
     ],
 })
 export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestroy {
@@ -55,6 +57,8 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
     protected clusterComponents: EdgeConfig.Component[] = [];
     /** Controller.Ess.ChargeDischargeLimiter.Cluster by the id of its cluster */
     protected clusterLimiters: { [essId: string]: EdgeConfig.Component } = {};
+    /** Ess.EnergyPrice by the id of its ESS: the content by origin and its price */
+    protected energyPriceComponents: { [essId: string]: EdgeConfig.Component } = {};
     protected chargerComponents!: EdgeConfig.Component[];
     protected readonly environment: Environment = environment;
 
@@ -97,6 +101,11 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
             this.chargerComponents = this.config
                 .getComponentsImplementingNature("io.openems.edge.ess.dccharger.api.EssDcCharger")
                 .filter((component) => component.isEnabled);
+
+            this.energyPriceComponents = this.config
+                .getComponentsByFactory("Ess.EnergyPrice")
+                .filter((component) => component.isEnabled)
+                .reduce((result, component) => ({ ...result, [component.properties["ess.id"]]: component }), {});
 
             this.isAtLeastInstaller = this.edge.roleIsAtLeast(Role.INSTALLER);
             const emergencyReserveCtrl = this.config.getComponentsByFactory("Controller.Ess.EmergencyCapacityReserve");
@@ -173,6 +182,36 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                 );
             }
 
+            for (const component of Object.values(this.energyPriceComponents)) {
+                channelAddresses.push(
+                    new ChannelAddress(component.id, "Price"),
+                    new ChannelAddress(component.id, "StoredEnergy"),
+                    new ChannelAddress(component.id, "StoredGridEnergy"),
+                    new ChannelAddress(component.id, "StoredPvEnergy"),
+                    new ChannelAddress(component.id, "UnpricedEnergy"),
+                    new ChannelAddress(component.id, "Efficiency"),
+                    new ChannelAddress(component.id, "ChargeGridEnergy"),
+                    new ChannelAddress(component.id, "ChargePvEnergy"),
+                    new ChannelAddress(component.id, "PriceMissing"),
+                );
+            }
+
+            // The power of the ESS cards: a hybrid ESS shows its battery power (DcDischargePower),
+            // its ActivePower includes the PV; an asymmetric ESS shows its phases
+            for (const component of this.essComponents) {
+                const natureIds = this.config.getNatureIdsByFactoryId(component.factoryId);
+                if (natureIds.includes("io.openems.edge.ess.api.HybridEss")) {
+                    channelAddresses.push(new ChannelAddress(component.id, "DcDischargePower"));
+                } else if (natureIds.includes("io.openems.edge.ess.api.AsymmetricEss")) {
+                    channelAddresses.push(
+                        new ChannelAddress(component.id, "ActivePowerL1"),
+                        new ChannelAddress(component.id, "ActivePowerL2"),
+                        new ChannelAddress(component.id, "ActivePowerL3"),
+                    );
+                } else {
+                    channelAddresses.push(new ChannelAddress(component.id, "ActivePower"));
+                }
+            }
             this.edge.subscribeChannels(this.websocket, "storage", channelAddresses);
 
             this.edge.currentData.subscribe((currentData) => {

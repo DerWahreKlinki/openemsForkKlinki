@@ -1,0 +1,11 @@
+= Ess Energy Price
+
+Keeps the price of the energy stored in one ESS: a running inventory of the content with its volume-weighted average purchase price. Every cycle the charged energy is split into the share bought from the grid (the grid purchase at the same moment, shared between all ESS that charge in proportion to their charge power) and the share from PV (the rest, valued at the configured feed-in tariff). The grid share counts at the grid buy price of the current quarter-hour, read from a channel (default: the Time-of-Use-Tariff controller). Discharging removes energy at the average price; the price does not change. Every cycle the content is calibrated to SoC times capacity of the ESS, the price stays. The content is therefore independent of SoC limits of other controllers.
+
+The channel `Price` is the price of a delivered kWh in [Currency/MWh], losses included: the round-trip efficiency is measured from the charge and discharge energy of the ESS over a configurable period (SoC-corrected, refreshed daily) and split symmetrically between charging and discharging.
+
+For a hybrid ESS (DC-coupled PV) the DC battery power and the DC energy counters are used, for an AC ESS the AC values.
+
+On start the content is rebuilt from the Timedata history; without history the content has no price until the first charge. Both the history and the efficiency measurement wait until the ESS reports its capacity and Timedata is available; the state channels `CapacityMissing` and `TimedataMissing` show the wait.
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.ess.energyprice[Source Code icon:github[]]

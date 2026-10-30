@@ -77,6 +77,12 @@
           [channelAddress]="component.id + '/DcDischargePower'" [converter]="convertDischargePower">
         </oe-flat-widget-line>
       }
+      @if (energyPriceComponents[component.id]; as energyPrice) {
+        <!-- Ess.EnergyPrice: price of a delivered kWh from this ESS -->
+        <oe-flat-widget-line [name]="'EDGE.INDEX.WIDGETS.ENERGY_PRICE.TITLE' | translate"
+          [channelAddress]="energyPrice.id + '/Price'" [converter]="convertPrice">
+        </oe-flat-widget-line>
+      }
       @if (possibleBatteryExtensionMessage.get(component.id); as message) {
         <oe-flat-widget-horizontal-line></oe-flat-widget-horizontal-line>
         <oe-flat-widget-line [name]="message.text" leftColumnWidth="100"

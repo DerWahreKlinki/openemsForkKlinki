@@ -15,8 +15,8 @@ public class EnergySchedulerTest {
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"), () -> null);
 		var t = EnergyScheduleTester.from(esh);
 
-		assertEquals(4000 /* no discharge limitation */, t.simulatePeriodIndex(0).ef().setEss(4000));
-		assertEquals(-3894 /* no charge limitation */, t.simulatePeriodIndex(0).ef().setEss(-4000));
+		assertEquals(4000 /* no discharge limitation */, t.simulatePeriodIndex(0).ef().commitEss(4000));
+		assertEquals(-3894 /* no charge limitation */, t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 
 	@Test
@@ -39,7 +39,7 @@ public class EnergySchedulerTest {
 		 * allowedDischarge = 5000 - 4400 = 600 Wh
 		 */
 		assertEquals(600 /* discharge limited by minSoc */,
-				t.simulatePeriodIndex(0).ef().setEss(4000));
+				t.simulatePeriodIndex(0).ef().commitEss(4000));
 
 		/*
 		 * maxSoc = 90 % -> maxEnergy = 19800 Wh
@@ -47,7 +47,7 @@ public class EnergySchedulerTest {
 		 * by this controller.
 		 */
 		assertEquals(-3894 /* no charge limitation by maxSoc */,
-				t.simulatePeriodIndex(0).ef().setEss(-4000));
+				t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 
 	@Test
@@ -57,8 +57,8 @@ public class EnergySchedulerTest {
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
 				() -> new EnergyScheduler.Config(0, 22000, 8000, 2000));
 		var t = EnergyScheduleTester.from(esh);
-		assertEquals(500 /* 2000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().setEss(4000));
-		assertEquals(-2000 /* 8000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().setEss(-4000));
+		assertEquals(500 /* 2000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().commitEss(4000));
+		assertEquals(-2000 /* 8000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 
 	@Test
@@ -67,8 +67,8 @@ public class EnergySchedulerTest {
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
 				() -> new EnergyScheduler.Config(0, 22000, -1, 0));
 		var t = EnergyScheduleTester.from(esh);
-		assertEquals(0, t.simulatePeriodIndex(0).ef().setEss(4000));
-		assertEquals(-3894, t.simulatePeriodIndex(0).ef().setEss(-4000));
+		assertEquals(0, t.simulatePeriodIndex(0).ef().commitEss(4000));
+		assertEquals(-3894, t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 
 	@Test
@@ -89,6 +89,6 @@ public class EnergySchedulerTest {
 		 * Charging must therefore be blocked.
 		 */
 		assertEquals(0 /* charging blocked by maxSoc */,
-				t.simulatePeriodIndex(0).ef().setEss(-4000));
+				t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 }

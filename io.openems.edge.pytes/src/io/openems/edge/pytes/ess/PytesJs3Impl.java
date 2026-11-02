@@ -1627,7 +1627,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		int ratedPower = this.getMaxApparentPower().orElse(this.config.maxApparentPower());
 		Integer limit = null;
 		if (meter != null && this.meta.getGridFeedInLimitationType() == GridFeedInLimitationType.DYNAMIC_LIMITATION) {
-			int hardLimit = this.meta.getGridSellHardLimit();
+			int hardLimit = this.meta.getGridLimit().gridSellHardLimit();
 			limit = hardLimit < ratedPower ? Math.max(0, hardLimit) : null;
 		}
 		var result = this.pvLimitHandler.compute(meter != null ? meter.getActivePower().get() : null,
@@ -1673,7 +1673,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 		// with both at the same value the EMS side never sees an export above
 		// the limit and cannot act at all (measured 2026-09-23).
 		if (this.config.feedPowerEnable() == EnableDisable.ENABLE && this.meta != null) {
-			int hardLimit = this.meta.getGridSellHardLimit() + Math.max(0, this.config.feedInBackstopReserve());
+			int hardLimit = this.meta.getGridLimit().gridSellHardLimit() + Math.max(0, this.config.feedInBackstopReserve());
 			if (hardLimit < maxApparentPower) {
 				limit = Math.max(0, hardLimit);
 			}

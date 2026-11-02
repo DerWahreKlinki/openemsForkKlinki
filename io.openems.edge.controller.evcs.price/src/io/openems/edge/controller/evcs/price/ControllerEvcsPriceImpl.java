@@ -1058,7 +1058,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 				maxPower, this.config.pvPrice(), this.config.pvPrice() + this.config.storageLossSurcharge(),
 				this.config.useStorageSurplus(),
 				(int) Math.round(energy.usableWh() * this.config.storageTargetSocNet() / 100.), CHARGE_POWER_BUFFER,
-				meta == null ? 0 : meta.getGridBuyLimit().hard().power(), this.config.priceHysteresis(),
+				meta == null ? 0 : meta.getGridLimit().gridBuyHardLimit(), this.config.priceHysteresis(),
 				this.priceDrivenCharging);
 		final var pluggedIn = isPluggedIn(this.evcs.getStatus(), this.evcsPlug()) && !this.isPaused();
 		final var sessionLimit = this.config.energySessionLimit();
@@ -1746,7 +1746,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		if (nextChargePower <= 0 || meta == null) {
 			return nextChargePower;
 		}
-		final var limit = meta.getGridBuyLimit().hard().power();
+		final var limit = meta.getGridLimit().gridBuyHardLimit();
 		if (limit <= 0) {
 			return nextChargePower;
 		}

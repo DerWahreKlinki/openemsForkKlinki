@@ -51,8 +51,9 @@ public class EnergyScheduler {
 					if (coc.maxChargePower() >= 0) {
 						allowedCharge = min(allowedCharge, period.duration().convertPowerToEnergy(coc.maxChargePower()));
 					}
-					ef.setEssMaxDischarge(allowedDischarge);
-					ef.setEssMaxCharge(allowedCharge);
+					// ESS energy per period: positive = discharge, negative = charge
+					ef.setEssLessOrEquals(allowedDischarge);
+					ef.setEssGreaterOrEquals(-allowedCharge);
 				})
 				.build();
 	}

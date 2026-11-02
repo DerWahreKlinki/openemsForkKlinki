@@ -339,10 +339,12 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 const slot = items.length > 0 ? this.slots[items[0].dataIndex] : null;
                 return slot?.live ? label + " (" + this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOW") + ")" : label;
             };
-            tooltipCallbacks.label = (item: Chart.TooltipItem<any>): string | undefined => {
+            // Chart.js falls back to its default label ("Label: 0") when the callback returns undefined,
+            // so a line that should not appear has to be an empty string
+            tooltipCallbacks.label = (item: Chart.TooltipItem<any>): string => {
                 const value = item.dataset.data[item.dataIndex];
                 if (value == null) {
-                    return undefined;
+                    return "";
                 }
                 const label = item.dataset.label ?? "";
                 if (item.dataset.yAxisID === ChartAxis.RIGHT) {
@@ -355,7 +357,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                     // grey segment: show the grid price itself, not the difference; without a segment
                     // (no PV or storage share) the coloured bar already is the grid price
                     if (value <= 0) {
-                        return undefined;
+                        return "";
                     }
                     const slot = this.slots[item.dataIndex];
                     return (

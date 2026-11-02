@@ -199,7 +199,7 @@ public interface SolarEdgeHybridEss extends OpenemsComponent {
 		 */
 		BATT_MAX_CAPACITY(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.WATT_HOURS) //
-				.persistencePriority(PersistencePriority.LOW)),
+				.persistencePriority(PersistencePriority.HIGH)),
 
 		/**
 		 * Max. battery temperature.
@@ -682,7 +682,7 @@ public interface SolarEdgeHybridEss extends OpenemsComponent {
 		 */
 		SOH(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.PERCENT) //
-				.persistencePriority(PersistencePriority.LOW)),
+				.persistencePriority(PersistencePriority.HIGH)),
 
 		/**
 		 * Storage Backup Reserved Setting sets the percentage of reserved battery SOE

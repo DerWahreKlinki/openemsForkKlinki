@@ -358,10 +358,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// side: with DC-coupled PV the AC power is positive while the battery is
 		// charging from PV.
 		final int currentBatteryPower = currentActivePower - this.pvPower;
-		Integer calculatedPower = null; // No constraints; battery power, negative = charge
 
 		this.updateUsableSocAndCapacity(this.currentSoc);
-		balanceDecision = this.shouldBalance();
+		this.balanceDecision = this.shouldBalance();
 
 		float taperFactor = 0f;
 		float lin = 0f;
@@ -369,6 +368,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		// Remember: Negative values for Charge; positive for Discharge
 		this.logDebug(this.log, "Number of Peakshaving controllers found: " + this.ctrlEssThresholdPeakshavers.size());
 
+		Integer calculatedPower = null; // No constraints; battery power, negative = charge
 		switch (this.state) {
 		case UNDEFINED:
 			if (this.ess == null) {
@@ -392,7 +392,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			} else if (this.currentSoc.equals(this.minSoc)) {
 				this.changeState(State.MIN_SOC_REACHED);
-				calculatedPower =0;					
+				calculatedPower = 0;
 				break;
 			} else if (this.balanceDecision == BalancingDecision.YES
 					|| this.balanceDecision == BalancingDecision.YES_DEFERRED) {
@@ -406,7 +406,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			} else if (this.currentSoc.equals(this.maxSoc)) {
 				this.changeState(State.MAX_SOC_REACHED);
-				calculatedPower =0;	
+				calculatedPower = 0;
 				break;
 			}
 			// Tapering logic: Gradual power reduction as we approach maxSoc
@@ -460,11 +460,11 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				// allow full discharge for a few seconds right above minSoc
 				this.changeState(this.currentSoc <= (this.minSoc + TAPER_PERCENT) ? State.APPROACHING_MIN_SOC
 						: State.NORMAL);
-				calculatedPower =0;
+				calculatedPower = 0;
 				break;
 			} else if (this.currentSoc < this.minSoc) {
 				this.changeState(State.BELOW_MIN_SOC,true);
-				calculatedPower =0;				
+				calculatedPower = 0;
 				break;
 			}
 			calculatedPower = 0;
@@ -482,7 +482,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			}
 			if (this.currentSoc > this.maxSoc) {
 				this.changeState(State.ABOVE_MAX_SOC,true);
-				calculatedPower =0;
+				calculatedPower = 0;
 				break;
 			}			
 			// Left by SoC only, see APPROACHING_MIN_SOC; the constraint limits
@@ -513,7 +513,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				calculatedPower = 0;
 				break;
 			}
-			calculatedPower =0;
+			calculatedPower = 0;
 
 			break;
 		case BELOW_MIN_SOC:
@@ -565,12 +565,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			// force charge with forceChargePower
 			// Charge battery with desired power
 			// Check wether it has reached desired SOC
-			if (balanceDecision == BalancingDecision.NO) {
+			if (this.balanceDecision == BalancingDecision.NO) {
 				this.changeState(State.NORMAL);
 				break;
 			}
 
-			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
+			if (this.balanceDecision == BalancingDecision.YES_DEFERRED) {
 				this.changeState(State.BALANCING_WANTED);
 				break;
 			}
@@ -592,13 +592,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				// ToDo: channel for balancing remaining time needed for UI modal
 			}
 
-			if (balanceDecision == BalancingDecision.NO) {
+			if (this.balanceDecision == BalancingDecision.NO) {
 				this.resetBalancingTimers(false);
 				this.changeState(State.NORMAL);
 				break;
 			}
 
-			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
+			if (this.balanceDecision == BalancingDecision.YES_DEFERRED) {
 				this.resetBalancingTimers(false);
 				this.changeState(State.BALANCING_WANTED);				
 				break;
@@ -640,12 +640,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 			calculatedPower = null;
 			// Check again if balancing is necessary
-			if (balanceDecision == BalancingDecision.NO) {
+			if (this.balanceDecision == BalancingDecision.NO) {
 				this.changeState(State.NORMAL);
 				break;
 			}
 
-			if (balanceDecision == BalancingDecision.YES_DEFERRED) {
+			if (this.balanceDecision == BalancingDecision.YES_DEFERRED) {
 				// Avoid discharge below minSoc and charge above maxSoc while waiting
 				if (this.currentSoc <= this.minSoc) { // min guard
 					calculatedPower = 0;
@@ -664,7 +664,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 
-			if (balanceDecision == BalancingDecision.YES) {
+			if (this.balanceDecision == BalancingDecision.YES) {
 				this.changeState(State.FORCE_CHARGE_ACTIVE);
 			}
 			break;
@@ -878,8 +878,6 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	}
 
 	private boolean isWithinPriceLimit() {
-		Integer currentPrice = 0;
-
 		if (this.config.maxPrice() == 0) {
 			return true;
 		}
@@ -894,7 +892,7 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			this.log.warn("TimeOfUseTariff has no price data available.");
 			return true; // Ignore check if no price can be obtained
 		}
-		currentPrice = (int) Math.round(firstPrice / 10); // Price in €/MWh. Divided to ct/kWh
+		final int currentPrice = (int) Math.round(firstPrice / 10); // Price in €/MWh. Divided to ct/kWh
 		// balancing is not desired
 		if (currentPrice > this.config.maxPrice()) {
 			this.logDebug(this.log, "Balancing is deactivated due to high price. Configured limit: "
@@ -968,7 +966,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	/**
 	 * Changes the state if hysteresis time passed, to avoid too quick changes.
 	 *
-	 * @param nextState the target state
+	 * @param nextState      the target state
+	 * @param skipHysteresis true to change the state at once, without the
+	 *                       hysteresis
 	 * @return whether the state was changed
 	 */
 	private boolean changeState(State nextState, boolean skipHysteresis) {
@@ -997,12 +997,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		Long currentEssActiveChargeEnergy = 0L;
 
-		currentEssActiveChargeEnergy = this.getEssChargedEnergy().get(); // Cumulative counter of ESS device. No matter
-																			// if DC or AC coupled
+		// Cumulative counter of ESS device. No matter if DC or AC coupled
+		currentEssActiveChargeEnergy = this.getEssChargedEnergy().get();
 
 		// Ess Active Charge Energy directly from ESS (cumulative)
-		Integer storedChargedEnergy = this.getChargedEnergy().get(); // Stored charged energy from this controller's
-																		// channel
+		// Stored charged energy from this controller's channel
+		Integer storedChargedEnergy = this.getChargedEnergy().get();
 
 		// Early exit if any data is not available
 		if (currentEssActiveChargeEnergy == null || storedChargedEnergy == null) {

@@ -19,7 +19,7 @@ import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.MeterType;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.CoilElement;
@@ -127,32 +127,32 @@ public class XrgiRoImpl extends AbstractOpenemsModbusComponent
 				// INT16/UIN16/UINT32 Register
 				new FC4ReadInputRegistersTask(0, Priority.HIGH,
 						m(XrgiRo.ChannelId.STORAGE_TEMPERATURE_TOP, new SignedWordElement(0),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0000: INT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0000: INT16, °C x100
 						m(XrgiRo.ChannelId.STORAGE_TEMPERATURE_BOTTOM, new SignedWordElement(1),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0001: INT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0001: INT16, °C x100
 						m(XrgiRo.ChannelId.FLOW_MASTER_FLOW_TEMPERATURE, new SignedWordElement(2),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0002: INT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0002: INT16, °C x100
 						m(XrgiRo.ChannelId.FLOW_MASTER_RETURN_TEMPERATURE, new SignedWordElement(3),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0003: INT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0003: INT16, °C x100
 						m(XrgiRo.ChannelId.CHP_NETWORK_TEMPERATURE, new SignedWordElement(4),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0004: INT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0004: INT16, °C x100
 						m(XrgiRo.ChannelId.OUTDOOR_TEMPERATURE, new SignedWordElement(5),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0005: INT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0005: INT16, °C x100
 						m(ElectricityMeter.ChannelId.ACTIVE_POWER, new UnsignedWordElement(6),
-								ElementToChannelConverter.SCALE_FACTOR_2), // 0x0006: UINT16, kW x10
+								ElementToChannelConverters.SCALE_FACTOR_2), // 0x0006: UINT16, kW x10
 						m(XrgiRo.ChannelId.CURRENT_HEAT_OUTPUT, new UnsignedWordElement(7)), // 0x0007: UINT16, %
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, new UnsignedDoublewordElement(8).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.SCALE_FACTOR_3), // 0x0008:
+								ElementToChannelConverters.SCALE_FACTOR_3), // 0x0008:
 																													// UINT32,
 																													// kWh
 						// m(XrgiRo.ChannelId.TOTAL_ACTIVE_ENERGY, new UnsignedDoublewordElement(8)), //
 						// 0x0008: UINT32, kWh
 						m(XrgiRo.ChannelId.TOTAL_HEAT_ENERGY, new UnsignedDoublewordElement(10).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.SCALE_FACTOR_3), // 0x000A: UINT32, kWh
+								ElementToChannelConverters.SCALE_FACTOR_3), // 0x000A: UINT32, kWh
 						m(XrgiRo.ChannelId.ACTIVE_ENERGY_15MIN, new UnsignedWordElement(12)), // 0x000C: UINT16, kWh
 						m(XrgiRo.ChannelId.HEAT_ENERGY_15MIN, new UnsignedWordElement(13)), // 0x000D: UINT16, kWh
 						m(XrgiRo.ChannelId.TOTAL_GAS_CONSUMPTION, new UnsignedDoublewordElement(14).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.SCALE_FACTOR_3), // 0x000E: UINT32,
+								ElementToChannelConverters.SCALE_FACTOR_3), // 0x000E: UINT32,
 																										// kWh
 						m(XrgiRo.ChannelId.TOTAL_OPERATING_HOURS, new UnsignedWordElement(16)), // 0x0010: UINT16,
 																								// Stunden
@@ -162,25 +162,25 @@ public class XrgiRoImpl extends AbstractOpenemsModbusComponent
 						m(XrgiRo.ChannelId.LAST_ERROR_CODE, new UnsignedWordElement(18)), // 0x0012: UINT16
 						m(XrgiRo.ChannelId.TOTAL_GENERATOR_STARTS, new UnsignedWordElement(19)), // 0x0013: UINT16
 						m(XrgiRo.ChannelId.MIXER_TMV_TEMPERATURE, new UnsignedWordElement(20),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0014: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0014: UINT16, °C x100
 						m(XrgiRo.ChannelId.MIXER_TMK_TEMPERATURE, new UnsignedWordElement(21),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0015: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0015: UINT16, °C x100
 						m(XrgiRo.ChannelId.MIXER_TLV_TEMPERATURE, new UnsignedWordElement(22),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0016: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0016: UINT16, °C x100
 						m(XrgiRo.ChannelId.MIXER_TLK_TEMPERATURE, new UnsignedWordElement(23),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0017: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0017: UINT16, °C x100
 						m(XrgiRo.ChannelId.MIXER_RETURN_TEMPERATUR, new UnsignedWordElement(24),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0018: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0018: UINT16, °C x100
 						m(XrgiRo.ChannelId.OPERATIONAL_SETPOINT_TMV, new UnsignedWordElement(25),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0019: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0019: UINT16, °C x100
 						m(XrgiRo.ChannelId.FLOW_MASTER_BYPASS_TEMPERATURE, new UnsignedWordElement(26),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x001A: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x001A: UINT16, °C x100
 						m(XrgiRo.ChannelId.FLOW_MASTER_SUPPLY_TEMPERATURE, new UnsignedWordElement(27),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x001B: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x001B: UINT16, °C x100
 						m(XrgiRo.ChannelId.FLOW_MASTER_SETPOINT_TEMPERATURE, new UnsignedWordElement(28),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x001C: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x001C: UINT16, °C x100
 						m(XrgiRo.ChannelId.FLOW_MASTER_OPERATIONAL_SETPOINT, new UnsignedWordElement(29),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // 0x001D: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1)), // 0x001D: UINT16, °C x100
 				new FC4ReadInputRegistersTask(30, Priority.HIGH,
 						m(XrgiRo.ChannelId.MIXER_ENGINE_LOOP_PUMP, new UnsignedWordElement(30)), // 0x001E: UINT16, %
 						m(XrgiRo.ChannelId.MIXER_SECONDARY_PUMP, new UnsignedWordElement(31)), // 0x001F: UINT16, %
@@ -189,11 +189,11 @@ public class XrgiRoImpl extends AbstractOpenemsModbusComponent
 						m(XrgiRo.ChannelId.FLOW_MASTER_VALVE_POSITION, new UnsignedWordElement(34)), // 0x0022: UINT16,
 																										// %
 						m(XrgiRo.ChannelId.CURRENT_ENGINE_HEAT_OUTPUT, new UnsignedWordElement(35),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2), // 0x0023: UINT16, kW x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2), // 0x0023: UINT16, kW x100
 						m(XrgiRo.ChannelId.HEAT_TRANSFER_VALUE, new UnsignedWordElement(36),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0024: UINT16, kW/K x10
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0024: UINT16, kW/K x10
 						m(XrgiRo.ChannelId.LAYER_SEPARATION_TEMPERATURE, new UnsignedWordElement(37),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x0025: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x0025: UINT16, °C x100
 						m(XrgiRo.ChannelId.POWER_UNIT_REQUESTED_POWER, new UnsignedWordElement(38)), // 0x0026: UINT16,
 																										// W
 						m(XrgiRo.ChannelId.POWER_UNIT_POWER_LIMIT, new UnsignedWordElement(39)), // 0x0027: UINT16, W
@@ -205,9 +205,9 @@ public class XrgiRoImpl extends AbstractOpenemsModbusComponent
 						m(XrgiRo.ChannelId.POWER_UNIT_FUEL_VALVE_POSITION, new UnsignedWordElement(43)), // 0x002B:
 																											// UINT16
 						m(XrgiRo.ChannelId.POWER_UNIT_IGNITION_ANGLE, new UnsignedWordElement(44),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x002C: UINT16, °C x10
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x002C: UINT16, °C x10
 						m(XrgiRo.ChannelId.POWER_UNIT_ENGINE_TEMPERATURE, new UnsignedWordElement(45),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), // 0x002D: UINT16, °C x100
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1), // 0x002D: UINT16, °C x100
 						m(XrgiRo.ChannelId.POWER_UNIT_RPM, new UnsignedWordElement(46)), // 0x002E: UINT16
 						m(XrgiRo.ChannelId.L1_L2_VOLTAGE, new UnsignedWordElement(47)), // 0x002F: UINT16, Volt
 						m(XrgiRo.ChannelId.L2_L3_VOLTAGE, new UnsignedWordElement(48)), // 0x0030: UINT16, Volt

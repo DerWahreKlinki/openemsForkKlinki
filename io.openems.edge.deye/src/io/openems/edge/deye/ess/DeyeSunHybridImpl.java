@@ -30,7 +30,7 @@ import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
@@ -283,7 +283,7 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 
 						
 						m(DeyeSunHybrid.ChannelId.SET_BATTERY_POWER_SOC, new SignedWordElement(1110), // set battery power as SoC percentage
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 
 						// set total AC power for all phases
 						m(DeyeSunHybrid.ChannelId.SET_AC_SETPOINT_3P_PERCENT, new SignedWordElement(1111))),
@@ -297,7 +297,7 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 						new DummyRegisterElement(8, 19),
 						m(SymmetricEss.ChannelId.MAX_APPARENT_POWER,
 								new UnsignedDoublewordElement(20).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1)),
 
 				new FC3ReadRegistersTask(60, Priority.LOW,
 
@@ -305,11 +305,11 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 
 						new DummyRegisterElement(61, 76),
 						m(DeyeSunHybrid.ChannelId.ACTIVE_POWER_REGULATION, new SignedWordElement(77),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 						m(DeyeSunHybrid.ChannelId.REACTIVE_POWER_REGULATION, new SignedWordElement(78),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 						m(DeyeSunHybrid.ChannelId.APPARENT_POWER_REGULATION, new SignedWordElement(79),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 						m(DeyeSunHybrid.ChannelId.ENABLE_SWITCH_STATE, new UnsignedWordElement(80)),
 						m(DeyeSunHybrid.ChannelId.FACTORY_RESET_STATE, new UnsignedWordElement(81)),
 						m(DeyeSunHybrid.ChannelId.SELF_CHECKING_TIME, new SignedWordElement(82)),
@@ -324,32 +324,32 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 
 						// Generator / grid charge settings
 						m(DeyeSunHybrid.ChannelId.GENERATOR_MAX_OPERATING_TIME, new UnsignedWordElement(121),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 						m(DeyeSunHybrid.ChannelId.GENERATOR_COOLING_TIME, new UnsignedWordElement(122),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 						m(DeyeSunHybrid.ChannelId.GENERATOR_CHARGING_START_VOLTAGE, new UnsignedWordElement(123),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.GENERATOR_CHARGING_START_CAPACITY, new UnsignedWordElement(124)),
 						m(DeyeSunHybrid.ChannelId.GENERATOR_CHARGE_CURRENT, new UnsignedWordElement(125),
-								ElementToChannelConverter.SCALE_FACTOR_3), // mA
+								ElementToChannelConverters.SCALE_FACTOR_3), // mA
 						m(DeyeSunHybrid.ChannelId.GRID_CHARGING_START_VOLTAGE, new UnsignedWordElement(126),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.GRID_CHARGING_START_CAPACITY, new UnsignedWordElement(127)),
 						m(DeyeSunHybrid.ChannelId.GRID_CHARGE_CURRENT, new UnsignedWordElement(128),
-								ElementToChannelConverter.SCALE_FACTOR_3), // mA
+								ElementToChannelConverters.SCALE_FACTOR_3), // mA
 						m(DeyeSunHybrid.ChannelId.GENERATOR_CHARGING_ENABLE, new UnsignedWordElement(129)),
 						m(DeyeSunHybrid.ChannelId.GRID_CHARGING_ENABLE, new UnsignedWordElement(130)),
 
 						// Power management and sell mode settings
 						m(DeyeSunHybrid.ChannelId.AC_COUPLE_FREQUENCY_LIMIT, new UnsignedWordElement(131),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.FORCE_GENERATOR_AS_LOAD, new UnsignedWordElement(132)),
 						m(DeyeSunHybrid.ChannelId.GENERATOR_INPUT_AS_LOAD_ENABLE, new UnsignedWordElement(133)),
 						m(DeyeSunHybrid.ChannelId.SMARTLOAD_OFF_BATT_VOLTAGE, new UnsignedWordElement(134),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SMARTLOAD_OFF_BATT_CAPACITY, new UnsignedWordElement(135)),
 						m(DeyeSunHybrid.ChannelId.SMARTLOAD_ON_BATT_VOLTAGE, new UnsignedWordElement(136),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SMARTLOAD_ON_BATT_CAPACITY, new UnsignedWordElement(137)),
 						m(DeyeSunHybrid.ChannelId.OUTPUT_VOLTAGE_LEVEL, new UnsignedWordElement(138)),
 						m(DeyeSunHybrid.ChannelId.MIN_SOLAR_POWER_TO_START_GENERATOR, new UnsignedWordElement(139)),
@@ -387,17 +387,17 @@ public class DeyeSunHybridImpl extends AbstractOpenemsModbusComponent
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_6_POWER, new UnsignedWordElement(159)),
 
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_1_VOLTAGE, new UnsignedWordElement(160),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_2_VOLTAGE, new UnsignedWordElement(161),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_3_VOLTAGE, new UnsignedWordElement(162),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_4_VOLTAGE, new UnsignedWordElement(163),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_5_VOLTAGE, new UnsignedWordElement(164),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_6_VOLTAGE, new UnsignedWordElement(165),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_1_CAPACITY, new UnsignedWordElement(166)),
 						m(DeyeSunHybrid.ChannelId.SELL_MODE_TIME_POINT_2_CAPACITY, new UnsignedWordElement(167)),

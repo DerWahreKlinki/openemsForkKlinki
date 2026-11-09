@@ -85,18 +85,18 @@ public abstract class AbstractSunSpecDcCharger extends AbstractOpenemsSunSpecCom
 
 		// this.mapFirstPointToChannel(//
 		// SymmetricEss.ChannelId.SOC, //
-		// ElementToChannelConverter.DIRECT_1_TO_1, //
+		// ElementToChannelConverters.DIRECT_1_TO_1, //
 		// DefaultSunSpecModel.S802.SO_C);
 		//
 		// this.mapFirstPointToChannel(//
 		// SymmetricEss.ChannelId.CAPACITY, //
-		// ElementToChannelConverter.DIRECT_1_TO_1, //
+		// ElementToChannelConverters.DIRECT_1_TO_1, //
 		// DefaultSunSpecModel.S802.W_H_RTG);
 		//
 		// // TODO this is the battery power; wrong for hybrid system
 		// this.mapFirstPointToChannel(//
 		// SymmetricEss.ChannelId.ACTIVE_POWER, //
-		// ElementToChannelConverter.DIRECT_1_TO_1, //
+		// ElementToChannelConverters.DIRECT_1_TO_1, //
 		// DefaultSunSpecModel.S802.W);
 
 		// TODO Channels: REACTIVE_POWER, MAX_APPARENT_POWER, ACTIVE_CHARGE_ENERGY,

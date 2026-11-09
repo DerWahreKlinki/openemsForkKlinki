@@ -26,7 +26,7 @@ import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.MeterType;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
@@ -182,50 +182,50 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 				// reg 33251 - Meter Phase A voltage [mV]
 				// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 				m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33251),
-						ElementToChannelConverter.SCALE_FACTOR_2),
+						ElementToChannelConverters.SCALE_FACTOR_2),
 
 				// reg 33252 - Meter Phase A current [mA]
 				// Datasheet: 0.01 A -> SCALE_FACTOR_1 -> mA
 				m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33252),
-						ElementToChannelConverter.SCALE_FACTOR_1),
+						ElementToChannelConverters.SCALE_FACTOR_1),
 
 				// reg 33253 - Meter Phase B voltage [mV]
 				// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 				m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33253),
-						ElementToChannelConverter.SCALE_FACTOR_2),
+						ElementToChannelConverters.SCALE_FACTOR_2),
 
 				// reg 33254 - Meter Phase B current [mA]
 				// Datasheet: 0.01 A -> SCALE_FACTOR_1 -> mA
 				m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33254),
-						ElementToChannelConverter.SCALE_FACTOR_1),
+						ElementToChannelConverters.SCALE_FACTOR_1),
 
 				// reg 33255 - Meter Phase C voltage [mV]
 				// Datasheet: 0.1 V -> SCALE_FACTOR_2 -> mV
 				m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33255),
-						ElementToChannelConverter.SCALE_FACTOR_2),
+						ElementToChannelConverters.SCALE_FACTOR_2),
 
 				// reg 33256 - Meter Phase C current [mA]
 				// Datasheet: 0.01 A -> SCALE_FACTOR_1 -> mA
 				m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33256),
-						ElementToChannelConverter.SCALE_FACTOR_1),
+						ElementToChannelConverters.SCALE_FACTOR_1),
 
 				// reg 33257-33258 - Meter Phase A active power [W] (S32)
 				// Datasheet: 0.001kw = 1 W -> no converter needed
 				// INVERT: meter convention positive = export, OpenEMS = import
 				m(ElectricityMeter.ChannelId.ACTIVE_POWER_L1, new SignedDoublewordElement(33257),
-						ElementToChannelConverter.INVERT),
+						ElementToChannelConverters.INVERT),
 
 				// reg 33259-33260 - Meter Phase B active power [W] (S32)
 				m(ElectricityMeter.ChannelId.ACTIVE_POWER_L2, new SignedDoublewordElement(33259),
-						ElementToChannelConverter.INVERT),
+						ElementToChannelConverters.INVERT),
 
 				// reg 33261-33262 - Meter Phase C active power [W] (S32)
 				m(ElectricityMeter.ChannelId.ACTIVE_POWER_L3, new SignedDoublewordElement(33261),
-						ElementToChannelConverter.INVERT),
+						ElementToChannelConverters.INVERT),
 
 				// reg 33263-33264 - Meter total active power [W] (S32)
 				m(ElectricityMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(33263),
-						ElementToChannelConverter.INVERT),
+						ElementToChannelConverters.INVERT),
 
 				// reg 33265-332566 - Meter Phase A reactive power [Var] (S32)
 				// Datasheet: 1 Var -> no converter needed
@@ -257,12 +257,12 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 				// Datasheet: 0.01 -> SCALE_FACTOR_MINUS_2
 				// Range: -1.0 to -0.8 and +0.8 to +1.0
 				m(PytesMeterGrid.ChannelId.METER_PF, new SignedWordElement(33281),
-						ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
+						ElementToChannelConverters.SCALE_FACTOR_MINUS_2),
 
 				// reg 332582 - Meter grid frequency [mHz]
 				// Datasheet: 0.01 Hz -> SCALE_FACTOR_1
 				m(ElectricityMeter.ChannelId.FREQUENCY, new UnsignedWordElement(33282),
-						ElementToChannelConverter.SCALE_FACTOR_1)
+						ElementToChannelConverters.SCALE_FACTOR_1)
 
 		));
 
@@ -310,18 +310,18 @@ public class PytesMeterGridImpl extends AbstractOpenemsModbusComponent implement
 			// Inverter Grid Electrical (33073..33094)
 			modbusProtocol.addTask(new FC4ReadInputRegistersTask(33073, Priority.LOW, // total: 22 registers
 					m(ElectricityMeter.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33073),
-							ElementToChannelConverter.SCALE_FACTOR_2),
+							ElementToChannelConverters.SCALE_FACTOR_2),
 					m(ElectricityMeter.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33074),
-							ElementToChannelConverter.SCALE_FACTOR_2),
+							ElementToChannelConverters.SCALE_FACTOR_2),
 					m(ElectricityMeter.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33075),
-							ElementToChannelConverter.SCALE_FACTOR_2),
+							ElementToChannelConverters.SCALE_FACTOR_2),
 
 					m(ElectricityMeter.ChannelId.CURRENT_L1, new UnsignedWordElement(33076),
-							ElementToChannelConverter.SCALE_FACTOR_2),
+							ElementToChannelConverters.SCALE_FACTOR_2),
 					m(ElectricityMeter.ChannelId.CURRENT_L2, new UnsignedWordElement(33077),
-							ElementToChannelConverter.SCALE_FACTOR_2),
+							ElementToChannelConverters.SCALE_FACTOR_2),
 					m(ElectricityMeter.ChannelId.CURRENT_L3, new UnsignedWordElement(33078),
-							ElementToChannelConverter.SCALE_FACTOR_2),
+							ElementToChannelConverters.SCALE_FACTOR_2),
 					m(ElectricityMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(33079)),
 					m(ElectricityMeter.ChannelId.REACTIVE_POWER, new SignedDoublewordElement(33081)),
 					m(PytesMeterGrid.ChannelId.APPARENT_POWER, new SignedDoublewordElement(33083)),

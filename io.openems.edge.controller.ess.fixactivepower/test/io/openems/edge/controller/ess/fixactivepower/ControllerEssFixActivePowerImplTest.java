@@ -105,12 +105,11 @@ class ControllerEssFixActivePowerImplTest {
 				.addReference("componentManager", new DummyComponentManager()) //
 				.addReference("sum", new DummySum() //
 						.withGridActivePower(0)) //
-				// Fork (klinki): upstream ab52862a3 (#4083) still uses the removed GridBuyLimit
-				// API here; rewritten to DummyMeta.withGridLimit(). Drop once upstream fixes it.
-				.addReference("meta", new DummyMeta()//
+				.addReference("meta", new DummyMeta() //
 						.withGridLimit(l -> l //
 								.setGridSellHardLimit(10_000) //
 								.setGridBuyHardLimit(10_000) //
+								.setFuseCurrent(32) //
 								.setEssChargeFromGridAllowed(true) //
 								.setEssDischargeToGridAllowed(true))) //
 				.addReference("ess", new DummyManagedSymmetricEss("ess0")) //

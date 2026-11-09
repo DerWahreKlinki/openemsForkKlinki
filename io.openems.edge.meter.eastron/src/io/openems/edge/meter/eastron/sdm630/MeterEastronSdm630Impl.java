@@ -1,9 +1,9 @@
 package io.openems.edge.meter.eastron.sdm630;
 
-import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.DIRECT_1_TO_1;
-import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.INVERT;
-import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.KEEP_POSITIVE;
-import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_3;
+import static io.openems.edge.bridge.modbus.api.ElementToChannelConverters.DIRECT_1_TO_1;
+import static io.openems.edge.bridge.modbus.api.ElementToChannelConverters.INVERT;
+import static io.openems.edge.bridge.modbus.api.ElementToChannelConverters.KEEP_POSITIVE;
+import static io.openems.edge.bridge.modbus.api.ElementToChannelConverters.SCALE_FACTOR_3;
 
 import java.nio.ByteOrder;
 
@@ -198,32 +198,32 @@ public class MeterEastronSdm630Impl extends AbstractOpenemsModbusComponent
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L1,
 								new FloatDoublewordElement(30347 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),
+								SCALE_FACTOR_3),
 
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L2,
 								new FloatDoublewordElement(30349 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),		
+								SCALE_FACTOR_3),		
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L3,
 								new FloatDoublewordElement(30351 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),						
+								SCALE_FACTOR_3),						
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY_L1,
 								new FloatDoublewordElement(30353 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),			
+								SCALE_FACTOR_3),			
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY_L2,
 								new FloatDoublewordElement(30355 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),	
+								SCALE_FACTOR_3),	
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY_L3,
 								new FloatDoublewordElement(30357 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3)));
+								SCALE_FACTOR_3)));
 				return modbusProtocol;		
 				
 			} else { // Consumption-Meter darf nicht negativ werden
@@ -324,32 +324,32 @@ public class MeterEastronSdm630Impl extends AbstractOpenemsModbusComponent
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY_L1,
 								new FloatDoublewordElement(30347 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),
+								SCALE_FACTOR_3),
 
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY_L2,
 								new FloatDoublewordElement(30349 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),		
+								SCALE_FACTOR_3),		
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY_L3,
 								new FloatDoublewordElement(30351 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),						
+								SCALE_FACTOR_3),						
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L1,
 								new FloatDoublewordElement(30353 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),			
+								SCALE_FACTOR_3),			
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L2,
 								new FloatDoublewordElement(30355 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3),	
+								SCALE_FACTOR_3),	
 						
 						m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L3,
 								new FloatDoublewordElement(30357 - offset).wordOrder(WordOrder.MSWLSW)
 										.byteOrder(ByteOrder.BIG_ENDIAN),
-								ElementToChannelConverter.SCALE_FACTOR_3)));
+								SCALE_FACTOR_3)));
 			
 				return modbusProtocol;		
 			}

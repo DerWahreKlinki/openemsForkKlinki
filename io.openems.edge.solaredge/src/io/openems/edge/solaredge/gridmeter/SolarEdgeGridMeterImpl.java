@@ -24,7 +24,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
@@ -83,13 +83,13 @@ public class SolarEdgeGridMeterImpl extends AbstractSolarEdgeGridmeter
 				new FC3ReadRegistersTask(0x9D0E, Priority.HIGH, //
 
 						m(SolarEdgeGridMeter.ChannelId.POWER, //
-								new SignedWordElement(0x9D0E), ElementToChannelConverter.INVERT),
+								new SignedWordElement(0x9D0E), ElementToChannelConverters.INVERT),
 						m(SolarEdgeGridMeter.ChannelId.POWER_L1, //
-								new SignedWordElement(0x9D0F), ElementToChannelConverter.INVERT),
+								new SignedWordElement(0x9D0F), ElementToChannelConverters.INVERT),
 						m(SolarEdgeGridMeter.ChannelId.POWER_L2, //
-								new SignedWordElement(0x9D10), ElementToChannelConverter.INVERT),
+								new SignedWordElement(0x9D10), ElementToChannelConverters.INVERT),
 						m(SolarEdgeGridMeter.ChannelId.POWER_L3, //
-								new SignedWordElement(0x9D11), ElementToChannelConverter.INVERT),
+								new SignedWordElement(0x9D11), ElementToChannelConverters.INVERT),
 						m(SolarEdgeGridMeter.ChannelId.POWER_SCALE, //
 								new SignedWordElement(0x9D12)
 

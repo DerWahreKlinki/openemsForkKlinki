@@ -27,7 +27,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
@@ -184,28 +184,28 @@ public class DeyeSunBatteryImpl extends AbstractOpenemsModbusComponent implement
 						m(DeyeSunBattery.ChannelId.BATTERY_CAPACITY_RESTART, new UnsignedWordElement(116)), // default 1%
 						m(DeyeSunBattery.ChannelId.BATTERY_LOW_BATT_CAPACITY, new UnsignedWordElement(117)), // default  1%
 						m(DeyeSunBattery.ChannelId.BATTERY_VOLTAGE_SHUTDOWN, new UnsignedWordElement(118),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunBattery.ChannelId.BATTERY_VOLTAGE_RESTART, new UnsignedWordElement(119),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunBattery.ChannelId.BATTERY_VOLTAGE_LOW_BATT, new UnsignedWordElement(120),
-								ElementToChannelConverter.SCALE_FACTOR_1)),
+								ElementToChannelConverters.SCALE_FACTOR_1)),
 				// new DummyRegisterElement(121, 209),
 
 				new FC3ReadRegistersTask(210, Priority.LOW, // °C
 						// BMS
 						m(DeyeSunBattery.ChannelId.BMS_CHARGING_VOLTAGE, new UnsignedWordElement(210),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunBattery.ChannelId.BMS_DISCHARGING_VOLTAGE, new UnsignedWordElement(211),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 
 						m(Battery.ChannelId.CHARGE_MAX_CURRENT, new UnsignedWordElement(212)), //[A] dynamically calculated
 						m(Battery.ChannelId.DISCHARGE_MAX_CURRENT, new UnsignedWordElement(213)),
 
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_SOC, new UnsignedWordElement(214)),
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_VOLTAGE, new SignedWordElement(215),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_CURRENT, new SignedWordElement(216),
-								ElementToChannelConverter.SCALE_FACTOR_3),
+								ElementToChannelConverters.SCALE_FACTOR_3),
 						new DummyRegisterElement(217),
 
 						// Hardware Limits Offgrid mode. Not clear!
@@ -213,7 +213,7 @@ public class DeyeSunBatteryImpl extends AbstractOpenemsModbusComponent implement
 						m(DeyeSunBattery.ChannelId.OFF_GRID_BATTERY_DISCHARGE_CURRENT_LIMIT, new UnsignedWordElement(219)),
 
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_ALARM, new UnsignedWordElement(220),
-								ElementToChannelConverter.SCALE_FACTOR_3),
+								ElementToChannelConverters.SCALE_FACTOR_3),
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_FAULT_LOCATION, new UnsignedWordElement(221)),
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_SYMBOL_2, new UnsignedWordElement(222)),
 						m(DeyeSunBattery.ChannelId.BMS_BATTERY_LITHIUM_TYPE, new UnsignedWordElement(223)),
@@ -223,27 +223,27 @@ public class DeyeSunBatteryImpl extends AbstractOpenemsModbusComponent implement
 						// Battery Energy
 						// Charge today (kWh)
 						m(DeyeSunBattery.ChannelId.TODAY_BATTERY_CHARGE, new UnsignedWordElement(514),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// Discharge today (kWh)
 						m(DeyeSunBattery.ChannelId.TODAY_BATTERY_DISCHARGE, new UnsignedWordElement(515),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// Total charge (kWh)
 						m(DeyeSunBattery.ChannelId.TOTAL_BATTERY_CHARGE,
 								new UnsignedDoublewordElement(516).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// Total discharge (kWh)
 						m(DeyeSunBattery.ChannelId.TOTAL_BATTERY_DISCHARGE,
 								new UnsignedDoublewordElement(518).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						new DummyRegisterElement(520, 585),
 						m(DeyeSunBattery.ChannelId.BATTERY_TEMPERATURE, new UnsignedWordElement(586),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2),
 						m(DeyeSunBattery.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(587),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(Battery.ChannelId.SOC, new UnsignedWordElement(588)), new DummyRegisterElement(589),
 						m(DeyeSunBattery.ChannelId.BATTERY_OUTPUT_POWER, new SignedWordElement(590)),
 						m(Battery.ChannelId.CURRENT, new SignedWordElement(591),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2),
 						m(DeyeSunBattery.ChannelId.BATTERY_CORRECTED_AH, new SignedWordElement(592))));
 	}
 

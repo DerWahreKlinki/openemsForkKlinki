@@ -23,7 +23,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
@@ -160,11 +160,11 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 
 						// PV energy today [Wh], resolution 0.1kWh -> SCALE_FACTOR_2
 						m(PytesDcCharger.ChannelId.PV_ENERGY_TODAY, new UnsignedWordElement(33035),
-									ElementToChannelConverter.SCALE_FACTOR_2),
+									ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// PV energy yesterday [Wh], resolution 0.1kWh -> SCALE_FACTOR_2
 						m(PytesDcCharger.ChannelId.PV_ENERGY_YESTERDAY, new UnsignedWordElement(33036),
-									ElementToChannelConverter.SCALE_FACTOR_2),
+									ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// PV energy this year [kWh], resolution 1kWh
 						m(PytesDcCharger.ChannelId.PV_ENERGY_YEAR_KWH, new UnsignedDoublewordElement(33037)),
@@ -189,35 +189,35 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 
 						// DC string 1 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_1, new UnsignedWordElement(33049),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 1 current [mA], resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_1, new UnsignedWordElement(33050),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 2 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_2, new UnsignedWordElement(33051),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 2 current [mA], resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_2, new UnsignedWordElement(33052),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 3 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_3, new UnsignedWordElement(33053),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 3 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_3, new UnsignedWordElement(33054),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 4 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_4, new UnsignedWordElement(33055),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 4 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_4, new UnsignedWordElement(33056),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// Total DC output power / Total PV Power [W]
 						// U32 (2 registers), 1 W resolution → no converter needed
@@ -232,35 +232,35 @@ public class PytesDcChargerImpl extends AbstractOpenemsModbusComponent
 
 						// DC string 5 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_5, new UnsignedWordElement(33059),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 5 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_5, new UnsignedWordElement(33060),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 6 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_6, new UnsignedWordElement(33061),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 6 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_6, new UnsignedWordElement(33062),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 7 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_7, new UnsignedWordElement(33063),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 7 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_7, new UnsignedWordElement(33064),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 8 voltage [mV], resolution 0.1V
 						m(PytesDcCharger.ChannelId.DC_VOLTAGE_8, new UnsignedWordElement(33065),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// DC string 8 current [mA], , resolution 0.1A
 						m(PytesDcCharger.ChannelId.DC_CURRENT_8, new UnsignedWordElement(33066),
-								ElementToChannelConverter.SCALE_FACTOR_2)
+								ElementToChannelConverters.SCALE_FACTOR_2)
 				)
 		);
 

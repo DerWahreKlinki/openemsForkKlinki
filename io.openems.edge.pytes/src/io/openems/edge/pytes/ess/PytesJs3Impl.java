@@ -32,7 +32,7 @@ import io.openems.common.channel.Level;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
@@ -319,15 +319,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				new FC4ReadInputRegistersTask(33133, Priority.HIGH,
 						// reg 33133 - battery voltage at the inverter port [0.1 V -> mV]
 						m(PytesJs3.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(33133),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// reg 33134 - battery current magnitude [0.1 A -> mA], direction in 33135
 						m(PytesJs3.ChannelId.BATTERY_CURRENT_WITHOUT_DIRECTION, new SignedWordElement(33134),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// reg 33135 - battery current direction: 0 = charging, 1 = discharging
 						m(PytesJs3.ChannelId.BATTERY_CURRENT_DIRECTION, new UnsignedWordElement(33135)),
 						// reg 33136 - LLC bus voltage [0.1 V -> mV]
 						m(PytesJs3.ChannelId.LLC_BUS_VOLTAGE, new UnsignedWordElement(33136),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// reg 33137-33138 - backup port voltage/current, read by Meter.Pytes.Backup
 						new DummyRegisterElement(33137, 33138),
 						// reg 33139 - state of charge [%]
@@ -336,15 +336,15 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						m(PytesJs3.ChannelId.BATTERY_SOH, new UnsignedWordElement(33140)),
 						// reg 33141 - BMS battery voltage [0.01 V -> mV]
 						m(PytesJs3.ChannelId.BMS_BATTERY_VOLTAGE, new UnsignedWordElement(33141),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						// reg 33142 - BMS battery current [0.1 A -> mA], magnitude only
 						m(PytesJs3.ChannelId.BMS_BATTERY_CURRENT, new SignedWordElement(33142),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// reg 33143/33144 - BMS charge/discharge current limits [0.1 A -> mA]
 						m(PytesJs3.ChannelId.BMS_CHARGE_CURRENT_LIMIT, new UnsignedWordElement(33143),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(PytesJs3.ChannelId.BMS_DISCHARGE_CURRENT_LIMIT, new UnsignedWordElement(33144),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						// reg 33145/33146 - battery fault status words (Appendix 9)
 						m(new BitsWordElement(33145, this) //
 								.bit(1, PytesJs3.ChannelId.BMS_FAULT01_OVERVOLTAGE_PRO) //
@@ -383,24 +383,24 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				// reg 43052 - limited power (AC output limit in % of rated power)
 				new FC6WriteRegisterTask(43052,
 						m(PytesJs3.ChannelId.SET_LIMITED_POWER, new UnsignedWordElement(43052),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2)),
 				new FC3ReadRegistersTask(43052, Priority.LOW,
 						m(PytesJs3.ChannelId.LIMITED_POWER_SETTING, new UnsignedWordElement(43052),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2)),
 
 				// reg 43130/43131 - battery charge/discharge power limits [10 W],
 				// 0 = disabled, not stored in the inverter's flash
 				new FC6WriteRegisterTask(43130,
 						m(PytesJs3.ChannelId.SET_BATTERY_CHARGE_LIMIT_POWER, new UnsignedWordElement(43130),
-								ElementToChannelConverter.SCALE_FACTOR_1)),
+								ElementToChannelConverters.SCALE_FACTOR_1)),
 				new FC6WriteRegisterTask(43131,
 						m(PytesJs3.ChannelId.SET_BATTERY_DISCHARGE_LIMIT_POWER, new UnsignedWordElement(43131),
-								ElementToChannelConverter.SCALE_FACTOR_1)),
+								ElementToChannelConverters.SCALE_FACTOR_1)),
 				new FC3ReadRegistersTask(43130, Priority.LOW,
 						m(PytesJs3.ChannelId.BATTERY_CHARGE_LIMIT_POWER, new UnsignedWordElement(43130),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 						m(PytesJs3.ChannelId.BATTERY_DISCHARGE_LIMIT_POWER, new UnsignedWordElement(43131),
-								ElementToChannelConverter.SCALE_FACTOR_1)),
+								ElementToChannelConverters.SCALE_FACTOR_1)),
 
 				new FC16WriteRegistersTask(43111,
 						m(PytesJs3.ChannelId.SET_BACKUP_CIRCUIT_SETTING, new UnsignedWordElement(43111))),
@@ -446,16 +446,16 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						// reg 43117/43118 - storage-control battery current limits [read-only]
 						m(PytesJs3.ChannelId.STORAGE_CTRL_MAX_CHARGE_CURRENT, new UnsignedWordElement(43117),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(PytesJs3.ChannelId.STORAGE_CTRL_MAX_DISCHARGE_CURRENT, new UnsignedWordElement(43118),
-								ElementToChannelConverter.SCALE_FACTOR_2)),
+								ElementToChannelConverters.SCALE_FACTOR_2)),
 
 				// reg 33206/33207 - inverter status: battery max charge/discharge current
 				new FC4ReadInputRegistersTask(33206, Priority.LOW,
 						m(PytesJs3.ChannelId.BATTERY_MAX_CHARGE_CURRENT_STATUS, new UnsignedWordElement(33206),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(PytesJs3.ChannelId.BATTERY_MAX_DISCHARGE_CURRENT_STATUS, new UnsignedWordElement(33207),
-								ElementToChannelConverter.SCALE_FACTOR_2)),
+								ElementToChannelConverters.SCALE_FACTOR_2)),
 
 				// ---------------------------------------------------------------
 				// SoC limit settings (reg 43010-43018, holding registers)
@@ -485,9 +485,9 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						// reg 43012/43013 - inverter battery-model current limits [read-only]
 						m(PytesJs3.ChannelId.INVERTER_MAX_CHARGE_CURRENT, new UnsignedWordElement(43012),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(PytesJs3.ChannelId.INVERTER_MAX_DISCHARGE_CURRENT, new UnsignedWordElement(43013),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 43014-43017 - voltage thresholds, not mapped
 						new DummyRegisterElement(43014, 43017),
@@ -521,11 +521,11 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						// reg 44103 – Remote dispatch system import limit [write] (1=100W -> SCALE_FACTOR_2)
 						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_IMPORT_LIMIT, new UnsignedWordElement(44103),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 44104 – Remote dispatch system export limit [write] (1=100W -> SCALE_FACTOR_2)
 						m(PytesJs3.ChannelId.SET_REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT, new UnsignedWordElement(44104),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 44105 – Remote dispatch real-time control switch [write]
 						// 1=Standby (default), 2=Battery charge/discharge control, 3=Grid point
@@ -561,11 +561,11 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 
 						// reg 44103 – Remote dispatch system import limit [read-back] (1=100W)
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_IMPORT_LIMIT, new UnsignedWordElement(44103),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 44104 – Remote dispatch system export limit [read-back] (1=100W)
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_SYSTEM_EXPORT_LIMIT, new UnsignedWordElement(44104),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 44105 – Remote dispatch real-time control switch [read-back]
 						m(PytesJs3.ChannelId.REMOTE_DISPATCH_REALTIME_CONTROL_SWITCH, new UnsignedWordElement(44105)),
@@ -583,7 +583,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 				new FC4ReadInputRegistersTask(33067, Priority.HIGH, //
 
 						m(SymmetricEss.ChannelId.MAX_APPARENT_POWER, new UnsignedWordElement(33067),
-								ElementToChannelConverter.SCALE_FACTOR_1),
+								ElementToChannelConverters.SCALE_FACTOR_1),
 
 						// reg 33068 – Safety (grid code) version number
 						// Datasheet: "Safety Version." Raw integer, no unit.
@@ -601,42 +601,42 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33071 – DC Bus Voltage [mV]
 						// Datasheet: 0.1V -> SCALE_FACTOR_2 -> mV
 						m(PytesJs3.ChannelId.DC_BUS_VOLTAGE, new UnsignedWordElement(33071),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33072 – DC Bus Half Voltage [mV]
 						// Datasheet: 0.1V -> SCALE_FACTOR_2 -> mV
 						m(PytesJs3.ChannelId.DC_BUS_HALF_VOLTAGE, new UnsignedWordElement(33072),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33073 – AB Line Voltage / A Phase Voltage [mV]
 						// Datasheet: 0.1V -> SCALE_FACTOR_2 -> mV
 						m(PytesJs3.ChannelId.VOLTAGE_L1, new UnsignedWordElement(33073),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33074 – BC Line Voltage / B Phase Voltage [mV]
 						// Datasheet: 0.1V -> SCALE_FACTOR_2 -> mV
 						m(PytesJs3.ChannelId.VOLTAGE_L2, new UnsignedWordElement(33074),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33075 – CA Line Voltage / C Phase Voltage [mV]
 						// Datasheet: 0.1V -> SCALE_FACTOR_2 -> mV
 						m(PytesJs3.ChannelId.VOLTAGE_L3, new UnsignedWordElement(33075),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33076 - A phase current [mA]
 						// Datasheet: 0.1A -> SCALE_FACTOR_2 -> mA
 						m(PytesJs3.ChannelId.CURRENT_L1, new UnsignedWordElement(33076),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33077 – B Phase Current [mA]
 						// Datasheet: 0.1A -> SCALE_FACTOR_2 -> mA
 						m(PytesJs3.ChannelId.CURRENT_L2, new UnsignedWordElement(33077),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33078 – C Phase Current [mA]
 						// Datasheet: 0.1A -> SCALE_FACTOR_2 -> mA
 						m(PytesJs3.ChannelId.CURRENT_L3, new UnsignedWordElement(33078),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33079-33080 - Active Power [W] (S32)
 						// Datasheet: 1W -> no converter needed
@@ -668,7 +668,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33094 – Grid frequency [mHz]
 						// Datasheet: 0.01Hz -> SCALE_FACTOR_1 -> mHz.
 						m(PytesJs3.ChannelId.FREQUENCY, new UnsignedWordElement(33094),
-								ElementToChannelConverter.SCALE_FACTOR_1)),
+								ElementToChannelConverters.SCALE_FACTOR_1)),
 
 				// Datasheet 3.2: max. 50 registers per frame -> 33067-33125 split here
 				new FC4ReadInputRegistersTask(33095, Priority.LOW, // diagnostics and fault bits; a few seconds delay is fine
@@ -716,7 +716,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33104 – Limited power actual value (0.01%, U16)
 						// Datasheet: 0.01% -> SCALE_FACTOR_MINUS_2 -> %
 						m(PytesJs3.ChannelId.LIMITED_POWER_ACTUAL_VALUE, new UnsignedWordElement(33104),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2),
 
 						// reg 33105 – PF adjustment actual value (0.001 resolution, S16)
 						// Datasheet: 100=1.00, 800=0.80. Range(-1.00 : 1.00)
@@ -726,7 +726,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// Datasheet: 0.01% -> SCALE_FACTOR_MINUS_2 -> %. Range: -6000 to +6000.
 						// Only effective in Working Mode 4 (Fix reactive power).
 						m(PytesJs3.ChannelId.LIMITED_REACTIVE_POWER, new SignedWordElement(33106),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_2),
 
 						// reg 33107 – Inverter module temperature 2 (0.1°C, S16)
 						// Datasheet: 0.1°C. For off-grid. Same as 33093 (different NTC).
@@ -735,7 +735,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33108 – Volt-var real-time Vref value (0.1V, U16)
 						// Datasheet: 0.1V resolution -> SCALE_FACTOR_2 -> mV. IEEE1547-2018 Vref.
 						m(PytesJs3.ChannelId.VOLT_VAR_VREF_RT_VALUES, new UnsignedWordElement(33108),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33109 – Reserved
 						new DummyRegisterElement(33109, 33109),
@@ -743,7 +743,7 @@ public class PytesJs3Impl extends AbstractOpenemsModbusComponent
 						// reg 33110 – BMS charging voltage limit (0.1V, U16)
 						// Datasheet:0.1V resolution -> SCALE_FACTOR_2 -> mV. (From BMS).
 						m(PytesJs3.ChannelId.BMS_CHARGING_VOLTAGE_LIMIT, new UnsignedWordElement(33110),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						// reg 33111 – Battery BMS status (U16)
 						// Datasheet: 0=normal, 1=comms fail, 2=warning.

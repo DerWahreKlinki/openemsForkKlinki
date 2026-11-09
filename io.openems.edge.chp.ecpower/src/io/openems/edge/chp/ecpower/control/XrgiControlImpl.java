@@ -24,7 +24,7 @@ import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 
@@ -209,14 +209,14 @@ public class XrgiControlImpl extends AbstractOpenemsModbusComponent
 	protected ModbusProtocol defineModbusProtocol() {
 		return new ModbusProtocol(this, new FC16WriteRegistersTask(150, //
 				this.m(XrgiControl.ChannelId.POWER_PERCENT, new UnsignedWordElement(150),
-						ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+						ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 				this.m(XrgiControl.ChannelId.CHP_PREPARING, new UnsignedWordElement(151))
 
 		),
 
 				new FC3ReadRegistersTask(150, Priority.HIGH,
 						this.m(XrgiControl.ChannelId.POWER_PERCENT, new UnsignedWordElement(150),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
+								ElementToChannelConverters.SCALE_FACTOR_MINUS_1),
 						this.m(XrgiControl.ChannelId.CHP_PREPARING, new UnsignedWordElement(151)))
 
 		);

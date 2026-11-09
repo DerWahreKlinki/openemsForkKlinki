@@ -23,7 +23,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 
@@ -194,33 +194,33 @@ public class SolaredgeDcChargerImpl extends AbstractSunSpecDcCharger implements 
 		// Example:
 		// this.mapFirstPointToChannel(//
 		// SymmetricEss.ChannelId.ACTIVE_POWER, //
-		// ElementToChannelConverter.DIRECT_1_TO_1, //
+		// ElementToChannelConverters.DIRECT_1_TO_1, //
 		// DefaultSunSpecModel.S103.W);
 
 		// this.mapFirstPointToChannel(//
 		// SymmetricEss.ChannelId.CONSUMPTION_POWER, //
-		// ElementToChannelConverter.DIRECT_1_TO_1, //
+		// ElementToChannelConverters.DIRECT_1_TO_1, //
 		// DefaultSunSpecModel.S103.W);
 
 		// DefaultSunSpecModel.S103.W);
 		/*
 		 * this.mapFirstPointToChannel(// EssDcCharger.ChannelId.VOLTAGE, //
-		 * ElementToChannelConverter.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.DCV);
+		 * ElementToChannelConverters.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.DCV);
 		 * 
 		 * this.mapFirstPointToChannel(// EssDcCharger.ChannelId.CURRENT, //
-		 * ElementToChannelConverter.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.DCA);
+		 * ElementToChannelConverters.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.DCA);
 		 */
 		/*
 		 * 2023 09 18 this.mapFirstPointToChannel(//
 		 * SolaredgeDcCharger.ChannelId.PRODUCTION_POWER, // AC-seitige Produktion
-		 * Richtung Verbraucher ElementToChannelConverter.DIRECT_1_TO_1, //
+		 * Richtung Verbraucher ElementToChannelConverters.DIRECT_1_TO_1, //
 		 * DefaultSunSpecModel.S103.DCW);
 		 */
 		/*
 		 * Grundsätzlich nicht falsch. Es ergeben sich aber Skalierungs-Effekte
 		 * this.mapFirstPointToChannel(// EssDcCharger.ChannelId.ACTUAL_POWER, //
 		 * DC-seitige Produktion Richtung Verbraucher
-		 * ElementToChannelConverter.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.DCW);
+		 * ElementToChannelConverters.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.DCW);
 		 */
 
 		/*
@@ -233,7 +233,7 @@ public class SolaredgeDcChargerImpl extends AbstractSunSpecDcCharger implements 
 		 */
 		this.mapFirstPointToChannel(//
 				SolaredgeDcCharger.ChannelId.ORIGINAL_ACTIVE_PRODUCTION_ENERGY, //
-				ElementToChannelConverter.DIRECT_1_TO_1, //
+				ElementToChannelConverters.DIRECT_1_TO_1, //
 				DefaultSunSpecModel.S103.WH); // 103.WH provides lifetime counter for production energy
 	}
 

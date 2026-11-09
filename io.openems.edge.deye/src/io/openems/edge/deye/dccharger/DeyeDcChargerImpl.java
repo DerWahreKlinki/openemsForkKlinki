@@ -28,7 +28,7 @@ import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.utils.IntUtils;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
@@ -131,24 +131,24 @@ public class DeyeDcChargerImpl extends AbstractOpenemsModbusComponent implements
 						m(DeyeDcCharger.ChannelId.DC_POWER_STRING_4, new UnsignedWordElement(675)),
 
 						m(DeyeDcCharger.ChannelId.DC_VOLTAGE_STRING_1, new UnsignedWordElement(676),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(DeyeDcCharger.ChannelId.DC_CURRENT_STRING_1, new UnsignedWordElement(677),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						m(DeyeDcCharger.ChannelId.DC_VOLTAGE_STRING_2, new UnsignedWordElement(678),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(DeyeDcCharger.ChannelId.DC_CURRENT_STRING_2, new UnsignedWordElement(679),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						m(DeyeDcCharger.ChannelId.DC_VOLTAGE_STRING_3, new UnsignedWordElement(680),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(DeyeDcCharger.ChannelId.DC_CURRENT_STRING_3, new UnsignedWordElement(681),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 
 						m(DeyeDcCharger.ChannelId.DC_VOLTAGE_STRING_4, new UnsignedWordElement(682),
-								ElementToChannelConverter.SCALE_FACTOR_2),
+								ElementToChannelConverters.SCALE_FACTOR_2),
 						m(DeyeDcCharger.ChannelId.DC_CURRENT_STRING_4, new UnsignedWordElement(683),
-								ElementToChannelConverter.SCALE_FACTOR_2)
+								ElementToChannelConverters.SCALE_FACTOR_2)
 
 				));
 	}

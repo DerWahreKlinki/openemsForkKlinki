@@ -25,7 +25,7 @@ import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
@@ -750,7 +750,7 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 								new FloatDoublewordElement(0xE172).wordOrder(WordOrder.LSWMSW)),
 						m(HybridEss.ChannelId.DC_DISCHARGE_POWER, // Instantaneous power to or from battery
 								new FloatDoublewordElement(0xE174).wordOrder(WordOrder.LSWMSW),
-								ElementToChannelConverter.INVERT),
+								ElementToChannelConverters.INVERT),
 
 						// Active Charge / Discharge energy are only valid until the next day/loading
 						// cycle (not clear or verified)
@@ -1000,60 +1000,60 @@ public class SolarEdgeHybridEssImpl extends AbstractSunSpecEss implements SolarE
 
 			this.mapFirstPointToChannel(//
 					ManagedSymmetricPvInverter.ChannelId.MAX_APPARENT_POWER, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S120.W_RTG);
 
 			// AC-Output from the Inverter. Could be the combination from PV + battery
 			/*
 			 * this.mapFirstPointToChannel(// SymmetricEss.ChannelId.ACTIVE_POWER, //
-			 * ElementToChannelConverter.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.W);
+			 * ElementToChannelConverters.DIRECT_1_TO_1, // DefaultSunSpecModel.S103.W);
 			 */
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.APPARENT_POWER, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.VA);
 
 			this.mapFirstPointToChannel(//
 					SymmetricEss.ChannelId.REACTIVE_POWER, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.V_AR);
 
 			this.mapFirstPointToChannel(//
 					SymmetricEss.ChannelId.ACTIVE_DISCHARGE_ENERGY, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.WH); // 103.WH holds value for lifetime production (battery + pv).
 													// Remember:
 													// battery can also be loaded from AC/grid
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.VOLTAGE_L1, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.PH_VPH_A);
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.VOLTAGE_L2, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.PH_VPH_B);
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.VOLTAGE_L3, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.PH_VPH_C);
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.CURRENT_L1, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.APH_A);
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.CURRENT_L2, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.APH_B);
 
 			this.mapFirstPointToChannel(//
 					SolarEdgeHybridEss.ChannelId.CURRENT_L3, //
-					ElementToChannelConverter.DIRECT_1_TO_1, //
+					ElementToChannelConverters.DIRECT_1_TO_1, //
 					DefaultSunSpecModel.S103.APH_C);
 
 			this.setLimits();

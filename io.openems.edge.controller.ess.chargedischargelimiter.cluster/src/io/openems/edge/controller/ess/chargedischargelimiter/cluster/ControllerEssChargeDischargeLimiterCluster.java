@@ -56,6 +56,14 @@ public interface ControllerEssChargeDischargeLimiterCluster extends Controller, 
 				.persistencePriority(HIGH) //
 				.text("Energy in the cluster")),
 		/**
+		 * Net capacity of the cluster: the width of its SoC window, the upper end
+		 * less the lower end.
+		 */
+		NET_CAPACITY(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT_HOURS) //
+				.persistencePriority(HIGH) //
+				.text("Net capacity of the cluster: upper end less lower end of its SoC window")),
+		/**
 		 * The SoC of the cluster within its window: 0 % at the summed lower end,
 		 * 100 % at the summed upper end.
 		 */
@@ -76,7 +84,21 @@ public interface ControllerEssChargeDischargeLimiterCluster extends Controller, 
 		DISCHARGE_POWER_ALLOWED(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.WATT) //
 				.persistencePriority(HIGH) //
-				.text("Discharge power allowed right now"));
+				.text("Discharge power allowed right now")),
+		/**
+		 * The member with a pending calibration that charges first; empty if none.
+		 */
+		PRIORITY_MEMBER(Doc.of(OpenemsType.STRING) //
+				.persistencePriority(HIGH) //
+				.text("Member with a pending calibration that charges first")),
+		/**
+		 * The charge limit of the other members while the priority member charges
+		 * first: what the cluster would feed into the grid otherwise; null if none.
+		 */
+		MEMBER_CHARGE_LIMIT(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(HIGH) //
+				.text("Charge limit of the other members while a member calibrates"));
 
 		private final Doc doc;
 
@@ -115,6 +137,62 @@ public interface ControllerEssChargeDischargeLimiterCluster extends Controller, 
 	 */
 	public default StringReadChannel getTriggerChannel() {
 		return this.channel(ChannelId.TRIGGER);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#PRIORITY_MEMBER}.
+	 *
+	 * @return the Channel
+	 */
+	public default StringReadChannel getPriorityMemberChannel() {
+		return this.channel(ChannelId.PRIORITY_MEMBER);
+	}
+
+	/**
+	 * Gets the member that charges first. See {@link ChannelId#PRIORITY_MEMBER}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<String> getPriorityMember() {
+		return this.getPriorityMemberChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on {@link ChannelId#PRIORITY_MEMBER}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setPriorityMember(String value) {
+		this.getPriorityMemberChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#MEMBER_CHARGE_LIMIT}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getMemberChargeLimitChannel() {
+		return this.channel(ChannelId.MEMBER_CHARGE_LIMIT);
+	}
+
+	/**
+	 * Gets the charge limit of the other members. See
+	 * {@link ChannelId#MEMBER_CHARGE_LIMIT}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Integer> getMemberChargeLimit() {
+		return this.getMemberChargeLimitChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#MEMBER_CHARGE_LIMIT}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setMemberChargeLimit(Integer value) {
+		this.getMemberChargeLimitChannel().setNextValue(value);
 	}
 
 	/**
@@ -259,6 +337,33 @@ public interface ControllerEssChargeDischargeLimiterCluster extends Controller, 
 	 */
 	public default void _setCurrentEnergy(Integer value) {
 		this.getCurrentEnergyChannel().setNextValue(value);
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#NET_CAPACITY}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getNetCapacityChannel() {
+		return this.channel(ChannelId.NET_CAPACITY);
+	}
+
+	/**
+	 * Gets the value of {@link ChannelId#NET_CAPACITY} in [Wh].
+	 *
+	 * @return the value
+	 */
+	public default Value<Integer> getNetCapacity() {
+		return this.getNetCapacityChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on {@link ChannelId#NET_CAPACITY}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setNetCapacity(Integer value) {
+		this.getNetCapacityChannel().setNextValue(value);
 	}
 
 	/**

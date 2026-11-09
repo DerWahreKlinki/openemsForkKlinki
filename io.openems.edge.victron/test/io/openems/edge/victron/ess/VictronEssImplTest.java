@@ -49,7 +49,6 @@ public class VictronEssImplTest {
 						.setDebugMode(false) //
 						.setReadOnlyMode(false) //
 						.setCapacity(10000) //
-						.setMaxApparentPower(5000) //
 						.build()) //
 				.next(new TestCase() //
 						.output(SymmetricEss.ChannelId.CAPACITY, 10000)) //
@@ -85,7 +84,6 @@ public class VictronEssImplTest {
 				.setDebugMode(false) //
 				.setReadOnlyMode(false) //
 				.setCapacity(10000) //
-				.setMaxApparentPower(5000) //
 				.build();
 
 		assertEquals(ESS_ID, config.id());
@@ -97,7 +95,6 @@ public class VictronEssImplTest {
 		assertEquals(false, config.debugMode());
 		assertEquals(false, config.readOnlyMode());
 		assertEquals(10000, config.capacity());
-		assertEquals(5000, config.maxApparentPower());
 	}
 
 	@Test
@@ -309,7 +306,6 @@ public class VictronEssImplTest {
 						.setPhase(phase) //
 						.setReadOnlyMode(readOnlyMode) //
 						.setCapacity(10000) //
-						.setMaxApparentPower(5000) //
 						.build());
 
 		var operationalValuesOk = VictronEssImpl.class.getDeclaredField("operationalValuesOk");

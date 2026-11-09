@@ -1,0 +1,64 @@
+ion-text.price-big {
+    font-size: 2.6rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.price-unit {
+    font-size: 1rem;
+    margin-left: 0.2rem;
+}
+
+.rating {
+    font-weight: bold;
+    letter-spacing: 0.05rem;
+    white-space: nowrap;
+}
+
+.rating-big {
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.rating-1 {
+    color: var(--ion-color-success);
+}
+
+.rating-2 {
+    color: #7cb342;
+}
+
+.rating-3 {
+    color: var(--ion-color-warning);
+}
+
+.rating-4 {
+    color: #fb8c00;
+}
+
+.rating-5 {
+    color: var(--ion-color-danger);
+}
+
+.forecast {
+    font-style: italic;
+}
+
+.muted {
+    color: var(--ion-color-medium);
+}
+
+.thin-divider {
+    height: 0.1rem;
+    background-color: var(--ion-background-color);
+    margin: 0.5rem 0 0.5rem 0;
+}
+
+.day-row {
+    border-bottom: 0.05rem solid var(--ion-background-color);
+    padding: 0.25rem 0;
+}
+
+.small {
+    font-size: 0.75rem;
+}

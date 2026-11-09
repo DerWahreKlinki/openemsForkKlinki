@@ -37,9 +37,6 @@ public @interface Config {
 	@AttributeDefinition(name = "Capacity", description = "Total battery capacity in Wh")
 	int capacity() default 10000;
 
-	@AttributeDefinition(name = "Max Apparent Power", description = "Maximum apparent power in VA")
-	int maxApparentPower() default 5000;
-
 	String webconsole_configurationFactory_nameHint() default "Victron Multiplus 2 ESS [{id}]";
 
 }

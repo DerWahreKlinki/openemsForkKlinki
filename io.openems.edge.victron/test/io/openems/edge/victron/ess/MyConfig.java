@@ -16,7 +16,6 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private boolean debugMode;
 		private boolean readOnlyMode;
 		private int capacity;
-		private int maxApparentPower;
 
 		private Builder() {
 		}
@@ -66,10 +65,6 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setMaxApparentPower(int maxApparentPower) {
-			this.maxApparentPower = maxApparentPower;
-			return this;
-		}
 
 		public MyConfig build() {
 			return new MyConfig(this);
@@ -135,11 +130,6 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int capacity() {
 		return this.builder.capacity;
-	}
-
-	@Override
-	public int maxApparentPower() {
-		return this.builder.maxApparentPower;
 	}
 
 }

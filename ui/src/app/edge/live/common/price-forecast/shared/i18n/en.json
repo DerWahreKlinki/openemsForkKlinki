@@ -1,0 +1,22 @@
+{
+    "PRICE_FORECAST": {
+        "TITLE": "Electricity price outlook",
+        "TODAY": "Today",
+        "HOUR": "{{hour}}:00",
+        "NOW": "now",
+        "MIN": "Min {{price}}",
+        "MAX": "Max {{price}}",
+        "CT_PER_KWH": "ct/kWh",
+        "CHEAPEST_WINDOW": "Cheapest {{hours}} h",
+        "CHEAPEST_WINDOW_SHORT": "{{hours}} h",
+        "WEEKLY_FORECAST": "Weekly outlook",
+        "NIGHT": "Night",
+        "MORNING": "Morning",
+        "NOON": "Noon",
+        "EVENING": "Evening",
+        "FORECAST_HINT": "Italic: forecast, not published yet",
+        "LEGEND": "€ below {{level2}} ct, €€ up to {{level3}} ct, €€€ up to {{level4}} ct, €€€€ up to {{level5}} ct, €€€€€ above",
+        "LAST_UPDATE": "Forecast of {{time}}",
+        "NO_DATA": "No price outlook available at the moment."
+    }
+}

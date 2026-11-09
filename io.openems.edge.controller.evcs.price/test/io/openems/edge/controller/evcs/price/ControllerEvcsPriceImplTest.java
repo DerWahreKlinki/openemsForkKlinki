@@ -47,6 +47,7 @@ import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.IS_CLUSTERED;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_LIMIT;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_ENERGY_LIMIT;
 import static io.openems.edge.evcs.api.ManagedEvcs.ChannelId.SET_CHARGE_POWER_REQUEST;
+import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY;
 import static io.openems.edge.meter.api.ElectricityMeter.ChannelId.ACTIVE_POWER;
 import static java.time.temporal.ChronoUnit.HOURS;
 import static java.time.temporal.ChronoUnit.MINUTES;
@@ -2249,8 +2250,9 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void targetStartEnergyTest() throws Exception {
-		// The target counts from switching on: the session energy at that moment is
-		// stored in the configuration, a new session (counter reset) counts from zero
+		// The target counts from switching on: the total counter of the wallbox at
+		// that moment is stored in the configuration. The session counter of the
+		// wallbox restarts e.g. at midnight; the target must not count twice then
 		final var clock = createDummyClock();
 		final var now = ZonedDateTime.now(clock);
 		final var targetTime = (now.getHour() * 60 + now.getMinute() + 120) % (24 * 60);
@@ -2267,7 +2269,8 @@ public class ControllerEvcsPriceImplTest {
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
-						.input("evcs0", ENERGY_SESSION, 22902) //
+						.input("evcs0", ENERGY_SESSION, 5008) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4041000L) //
 						.input(GRID_ACTIVE_POWER, 1000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
@@ -2275,10 +2278,10 @@ public class ControllerEvcsPriceImplTest {
 						.output(TARGET_STATUS, "PLANNED") //
 						.output(TARGET_REMAINING_ENERGY, 10000)) //
 				.deactivate();
-		assertEquals(22902, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetStartEnergy"));
+		assertEquals(4041000, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("targetStartEnergy"));
 
 		final var cm2 = new DummyConfigurationAdmin();
-		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 10000, targetTime, 22902, cm2) //
+		prepareTargetTest(clock, new ControllerEvcsPriceImpl(clock), prices, 10000, targetTime, 4041000, cm2) //
 				.next(new TestCase("3 kWh charged since switching on") //
 						.input(GRID_BUY_PRICE, 200.) //
 						.input(ESS_CAPACITY, 20000) //
@@ -2286,17 +2289,25 @@ public class ControllerEvcsPriceImplTest {
 						.input(ESS_DISCHARGE_POWER, 0) //
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
-						.input("evcs0", ENERGY_SESSION, 25902) //
+						.input("evcs0", ENERGY_SESSION, 8008) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4044000L) //
 						.input(GRID_ACTIVE_POWER, 1000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
 						.output(TARGET_REMAINING_ENERGY, 7000)) //
-				.next(new TestCase("new session: the counter restarted at zero") //
-						.input("evcs0", ENERGY_SESSION, 1000) //
-						.output(TARGET_REMAINING_ENERGY, 9000)) //
+				.next(new TestCase("midnight: the session counter of the wallbox restarts, the total goes on") //
+						.input("evcs0", ENERGY_SESSION, 0) //
+						.output(TARGET_REMAINING_ENERGY, 7000)) //
+				.next(new TestCase("session counter above the old start again: still counted once (night of 03./04.11.2026)") //
+						.input("evcs0", ENERGY_SESSION, 5315) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4049315L) //
+						.output(TARGET_REMAINING_ENERGY, 1685)) //
+				.next(new TestCase("a cycle without total counter: the last value counts") //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, null) //
+						.output(TARGET_REMAINING_ENERGY, 1685)) //
 				.next(new TestCase("target reached") //
-						.input("evcs0", ENERGY_SESSION, 10000) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4051000L) //
 						.output(TARGET_REMAINING_ENERGY, 0) //
 						.output(TARGET_STATUS, "REACHED")) //
 				.deactivate();
@@ -2306,8 +2317,10 @@ public class ControllerEvcsPriceImplTest {
 
 	@Test
 	public void sessionLimitFromPlugInTest() throws Exception {
-		// The wallbox counter keeps the last session until the next charging: the
-		// controller stores the counter at the plug-in and sends counter + limit
+		// The session counts from the total counter of the wallbox at the plug-in. The
+		// wallbox compares its limit with its own session counter, which keeps the
+		// last session until the next charging and restarts e.g. at midnight: the
+		// controller sends that counter plus what is left of the limit
 		var cm = new DummyConfigurationAdmin();
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
 				.addReference("cm", cm) //
@@ -2324,15 +2337,16 @@ public class ControllerEvcsPriceImplTest {
 						.setEnergySessionLimit(5000) //
 						.setSessionStartEnergy(-1) //
 						.build()) //
-				.next(new TestCase("plugged in with an old counter: start is stored, limit sent as is") //
+				.next(new TestCase("plugged in with an old counter: start is stored, the limit follows in the next cycle") //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input("evcs0", ENERGY_SESSION, 22902) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4041000L) //
 						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output(SESSION_ENERGY, 0) //
 						.output("evcs0", SET_ENERGY_LIMIT, 5000)) //
 				.deactivate();
-		assertEquals(22902, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("sessionStartEnergy"));
+		assertEquals(4041000, (int) (Integer) cm.getConfiguration("ctrlEvcs0").getProperties().get("sessionStartEnergy"));
 
 		cm = new DummyConfigurationAdmin();
 		new ControllerTest(new ControllerEvcsPriceImpl()) //
@@ -2348,19 +2362,21 @@ public class ControllerEvcsPriceImplTest {
 						.setDefaultChargeMinPower(0) //
 						.setPriority(CAR) //
 						.setEnergySessionLimit(5000) //
-						.setSessionStartEnergy(22902) //
+						.setSessionStartEnergy(4041000) //
 						.build()) //
 				.next(new TestCase("3 kWh since the plug-in: the limit counts from the start") //
 						.input("evcs0", STATUS, Status.CHARGING) //
 						.input("evcs0", ENERGY_SESSION, 25902) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4044000L) //
 						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
 						.output(SESSION_ENERGY, 3000) //
 						.output("evcs0", SET_ENERGY_LIMIT, 27902)) //
-				.next(new TestCase("the wallbox restarted its counter: the session counts from zero") //
+				.next(new TestCase("the wallbox restarted its session counter: the session goes on") //
 						.input("evcs0", ENERGY_SESSION, 1000) //
-						.output(SESSION_ENERGY, 1000) //
-						.output("evcs0", SET_ENERGY_LIMIT, 5000)) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 4045000L) //
+						.output(SESSION_ENERGY, 4000) //
+						.output("evcs0", SET_ENERGY_LIMIT, 2000)) //
 				.next(new TestCase("unplugged: no session") //
 						.input("evcs0", STATUS, Status.NOT_READY_FOR_CHARGING) //
 						.output(SESSION_ENERGY, null)) //
@@ -2503,6 +2519,7 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input("evcs0", ENERGY_SESSION, 1800) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 1800L) //
 						.input(GRID_ACTIVE_POWER, 1000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
@@ -2543,6 +2560,7 @@ public class ControllerEvcsPriceImplTest {
 						.input("evcs0", IS_CLUSTERED, false) //
 						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
 						.input("evcs0", ENERGY_SESSION, 2000) //
+						.input("evcs0", ACTIVE_CONSUMPTION_ENERGY, 2000L) //
 						.input(GRID_ACTIVE_POWER, 1000) //
 						.input("evcs0", ACTIVE_POWER, 0) //
 						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //

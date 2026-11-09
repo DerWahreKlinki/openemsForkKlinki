@@ -1,0 +1,22 @@
+{
+    "PRICE_FORECAST": {
+        "TITLE": "Strompreisprognose",
+        "TODAY": "Heute",
+        "HOUR": "{{hour}} Uhr",
+        "NOW": "jetzt",
+        "MIN": "Min {{price}}",
+        "MAX": "Max {{price}}",
+        "CT_PER_KWH": "ct/kWh",
+        "CHEAPEST_WINDOW": "Günstigste {{hours}} h",
+        "CHEAPEST_WINDOW_SHORT": "{{hours}} h",
+        "WEEKLY_FORECAST": "Wochenprognose",
+        "NIGHT": "Nachts",
+        "MORNING": "Morgens",
+        "NOON": "Mittags",
+        "EVENING": "Abends",
+        "FORECAST_HINT": "Kursiv: Prognose, noch nicht veröffentlicht",
+        "LEGEND": "€ unter {{level2}} ct, €€ bis {{level3}} ct, €€€ bis {{level4}} ct, €€€€ bis {{level5}} ct, €€€€€ darüber",
+        "LAST_UPDATE": "Prognose von {{time}}",
+        "NO_DATA": "Aktuell liegt keine Preisprognose vor."
+    }
+}

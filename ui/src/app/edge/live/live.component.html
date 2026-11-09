@@ -63,6 +63,10 @@
                         @case ("Weather.OpenMeteo") {
                           <weather [componentId]="widget.componentId" class="ion-hide-sm-down"></weather>
                         }
+                        <!-- Fork (klinki): price outlook -->
+                        @case ("TimeOfUseTariff.Forecast") {
+                          <price-forecast [componentId]="widget.componentId" class="ion-hide-sm-down"></price-forecast>
+                        }
                       }
                     }
                   </ion-col>
@@ -220,6 +224,11 @@
 
                     <ion-col size="12" *ngSwitchCase="'Weather.OpenMeteo'" [attr.size-lg]="widgetColumnSize" class="ion-hide-sm-up ion-no-padding">
                       <weather [componentId]="widget.componentId"></weather>
+                    </ion-col>
+
+                    <!-- Fork (klinki): price outlook -->
+                    <ion-col size="12" *ngSwitchCase="'TimeOfUseTariff.Forecast'" [attr.size-lg]="widgetColumnSize" class="ion-hide-sm-up ion-no-padding">
+                      <price-forecast [componentId]="widget.componentId"></price-forecast>
                     </ion-col>
                   </ng-container>
 

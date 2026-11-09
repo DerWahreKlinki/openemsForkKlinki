@@ -32,6 +32,22 @@ public class DummyChargeDischargeLimiter extends AbstractDummyOpenemsComponent<D
 		return this.essId;
 	}
 
+	private Integer clusterChargeLimit = null;
+
+	@Override
+	public void setClusterChargeLimit(Integer watts) {
+		this.clusterChargeLimit = watts;
+	}
+
+	/**
+	 * The charge limit the cluster limiter set last.
+	 *
+	 * @return the limit in [W]; null for none
+	 */
+	public Integer getClusterChargeLimitSet() {
+		return this.clusterChargeLimit;
+	}
+
 	@Override
 	public void run() {
 	}

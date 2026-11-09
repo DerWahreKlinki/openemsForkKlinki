@@ -85,6 +85,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	private int balancingHysteresisTime = 0;
 	private State state = State.UNDEFINED;
 	private BalancingDecision balanceDecision = BalancingDecision.UNDEFINED;
+	private BalancingDeferralReason deferralReason = BalancingDeferralReason.NONE;
+
+	// Charge limit from the cluster limiter while another member calibrates: set
+	// for the next cycle, consumed by run(), see setClusterChargeLimit()
+	private volatile Integer clusterChargeLimitNext = null;
+	private Integer clusterChargeLimit = null;
 
 	private boolean debugMode = false;
 	private Integer slowChargePower = null;
@@ -94,6 +100,12 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	// Battery power asked for while the SoC is above the maximum, see ABOVE_MAX_SOC.
 	static final int RECOVER_DISCHARGE_W = 50;
 	static final int BALANCING_SOC = 100;
+	// Charge power asked for during the hold at the balancing SoC while the force
+	// charge is deferred by the price. Not 0 W: a SolarEdge hybrid ESS switches to
+	// Idle at 0 W, and Idle with a full battery froze its PV production (2026-07-15,
+	// hard reset of the inverter needed). 200 W keep the charge mode; from the
+	// grid that is at most 0.2 kWh per hold (user decision 2026-11-06, first 1 kW)
+	static final int HOLD_CHARGE_W = 200;
 
 	private int fullChargePower = 0;
 	private int fullDischargePower = 0;
@@ -330,6 +342,8 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 	@Override
 	public void run() throws OpenemsNamedException {
 
+		this.clusterChargeLimit = this.clusterChargeLimitNext;
+		this.clusterChargeLimitNext = null;
 		this.pvPower = this.calculatePvPower();
 		this.setEssProperties();
 
@@ -598,11 +612,15 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				break;
 			}
 
-			if (this.balanceDecision == BalancingDecision.YES_DEFERRED) {
+			if (this.balanceDecision == BalancingDecision.YES_DEFERRED && !this.isDeferredByPrice()) {
+				// peak shaving needs the storage: abort the hold
 				this.resetBalancingTimers(false);
-				this.changeState(State.BALANCING_WANTED);				
+				this.changeState(State.BALANCING_WANTED);
 				break;
 			}
+			// Deferred by the price, the hold goes on: it needs next to no energy. The
+			// force charge stays off, the storage is held with the small hold charge
+			// instead (see HOLD_CHARGE_W)
 
 			// Check if balancing duration has passed
 			if (this.isBalancingDurationExceeded()) {
@@ -625,8 +643,9 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 					this.resetBalancingTimers(false);
 					break;
 				} else if (this.currentSoc <= (BALANCING_SOC + 1)) {
-					// SOC slightly below target, maintain SOC with force charging
-					calculatedPower = this.forceChargePower * -1; // Charging has a negative value
+					// SOC slightly below target, maintain SOC with force charging; deferred by
+					// the price with the small hold charge instead (see HOLD_CHARGE_W)
+					calculatedPower = this.isDeferredByPrice() ? -HOLD_CHARGE_W : this.forceChargePower * -1;
 				} else {
 					// SOC is sufficient, no charging or discharging needed
 					calculatedPower = 0; // block further discharging if SOC is sufficient
@@ -646,10 +665,18 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			}
 
 			if (this.balanceDecision == BalancingDecision.YES_DEFERRED) {
+				// Deferred by the price, the storage may still fill up to the balancing SoC
+				// without the force charge: the cluster limiter gives it the charge power
+				// of the cluster first, so PV does the work the grid is too expensive for.
+				// Reaching the balancing SoC that way, the hold starts as usual
+				if (this.isDeferredByPrice() && this.currentSoc >= BALANCING_SOC) {
+					this.changeState(State.BALANCING_ACTIVE);
+					break;
+				}
 				// Avoid discharge below minSoc and charge above maxSoc while waiting
 				if (this.currentSoc <= this.minSoc) { // min guard
 					calculatedPower = 0;
-				} else if (this.currentSoc >= this.maxSoc) { // max guard
+				} else if (this.currentSoc >= this.maxSoc && !this.isDeferredByPrice()) { // max guard
 					calculatedPower = 0;
 				} else if (currentBatteryPower > 0 && this.currentSoc <= (this.minSoc + TAPER_PERCENT)) {
 					this.logDebug(this.log, "Approaching min. SoC limit : " + this.currentSoc + "%/" + this.minSoc + "%");
@@ -724,15 +751,79 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 				: Math.min(Math.max(calculatedPower, 0), fullDischarge);
 		default -> fullDischarge;
 		};
+		final var chargeUpTo = this.isDeferredByPrice() ? BALANCING_SOC : this.maxSoc;
 		final int charge = switch (this.state) {
 		case MAX_SOC_REACHED, ABOVE_MAX_SOC -> 0;
 		case APPROACHING_MAX_SOC -> calculatedPower == null ? fullCharge
 				: Math.min(Math.max(-calculatedPower, 0), fullCharge);
-		case BALANCING_WANTED -> this.currentSoc != null && this.currentSoc >= this.maxSoc ? 0 : fullCharge;
+		case BALANCING_WANTED -> this.currentSoc != null && this.currentSoc >= chargeUpTo ? 0 : fullCharge;
+		case BALANCING_ACTIVE -> this.currentSoc != null && this.currentSoc >= BALANCING_SOC ? 0 : fullCharge;
 		default -> fullCharge;
 		};
+		final var clusterLimit = this.effectiveClusterChargeLimit();
 		this._setDischargePowerAllowed(discharge);
-		this._setChargePowerAllowed(charge);
+		this._setChargePowerAllowed(clusterLimit == null ? charge : Math.min(charge, clusterLimit));
+	}
+
+	/**
+	 * Is the balancing wanted, but deferred because the grid price is above the
+	 * limit? Then the storage may fill up from the cluster (PV), only the force
+	 * charge from the grid waits.
+	 *
+	 * @return true if deferred by the price
+	 */
+	private boolean isDeferredByPrice() {
+		return this.balanceDecision == BalancingDecision.YES_DEFERRED
+				&& this.deferralReason == BalancingDeferralReason.PRICE_LIMIT;
+	}
+
+	private void setDeferralReason(BalancingDeferralReason reason) {
+		this.deferralReason = reason;
+		this._setBalancingDeferralReason(reason);
+	}
+
+	@Override
+	public void setClusterChargeLimit(Integer watts) {
+		this.clusterChargeLimitNext = watts == null ? null : Math.max(watts, 0);
+	}
+
+	/**
+	 * Does the charge limit of the cluster limiter apply in the current state? Not
+	 * below the minimum SoC where the slow charge must not be blocked, and not
+	 * without a valid state. While this member calibrates, the cluster limiter
+	 * limits it to what it takes (plus headroom); see effectiveClusterChargeLimit().
+	 *
+	 * @return true if the limit applies
+	 */
+	private boolean clusterChargeLimitApplies() {
+		if (this.clusterChargeLimit == null) {
+			return false;
+		}
+		return switch (this.state) {
+		case NORMAL, APPROACHING_MAX_SOC, MAX_SOC_REACHED, ABOVE_MAX_SOC, APPROACHING_MIN_SOC, MIN_SOC_REACHED, //
+				BALANCING_WANTED, FORCE_CHARGE_ACTIVE, BALANCING_ACTIVE //
+			-> true;
+		default -> false;
+		};
+	}
+
+	/**
+	 * The charge limit of the cluster limiter, raised to the charge this controller
+	 * asks for itself (force charge, hold charge), so the two constraints never
+	 * contradict each other.
+	 *
+	 * @return the limit in [W] as a positive value; null if none applies
+	 */
+	private Integer effectiveClusterChargeLimit() {
+		if (!this.clusterChargeLimitApplies()) {
+			return null;
+		}
+		final int ownCharge = switch (this.state) {
+		case FORCE_CHARGE_ACTIVE -> this.forceChargePower;
+		case BALANCING_ACTIVE -> this.isDeferredByPrice() ? HOLD_CHARGE_W : this.forceChargePower;
+		default -> 0;
+		};
+		return Math.max(this.clusterChargeLimit, ownCharge);
 	}
 
 	private String formatAcPower(int acPower, int batteryPower) {
@@ -770,12 +861,22 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 		}
 
 		try {
-			
+			// Another member of the cluster calibrates and charges first: this one takes
+			// at most what the cluster limiter leaves over (battery charge <= limit, as
+			// an AC constraint shifted by PV). Reported for the UI and the history
+			final var clusterLimit = this.effectiveClusterChargeLimit();
+			this._setClusterChargeLimit(clusterLimit);
+			if (clusterLimit != null) {
+				this.ess.setActivePowerGreaterOrEquals(-clusterLimit + this.pvPower);
+				this.logDebug(this.log, "Cluster charge limit " + clusterLimit + "W -> setActivePowerGreaterOrEquals "
+						+ this.formatAcPower(-clusterLimit + this.pvPower, -clusterLimit));
+			}
+
 			if (calculatedPower == null) {
 				this.logDebug(this.log, "CalculatedPower is null. No constraints will be set");
 				return; // No constraints to set
 			}
-			
+
 			// calculatedPower is battery power; the ESS constraint is AC = battery + PV
 			int acPower = calculatedPower + this.pvPower;
 			
@@ -920,14 +1021,14 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 		if (chargedEnergy == null) {
 			this.logDebug(this.log, "ERROR: Cannot determine charged energy");
-			this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
+			this.setDeferralReason(BalancingDeferralReason.NONE);
 			return BalancingDecision.NO;
 		}
 
 		// balancing is not desired
 		if (this.config.energyBetweenBalancingCycles() == 0) {
 			this.logDebug(this.log, "Balancing is deactivated due to config setting");
-			this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
+			this.setDeferralReason(BalancingDeferralReason.NONE);
 			return BalancingDecision.NO;
 		}
 		/*
@@ -939,23 +1040,23 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 			// are there any peakshavers active
 			if (this.isPeakshavingActive()) {
 				this.logDebug(this.log, "Balancing is deferred due to active peakshaving");
-				this._setBalancingDeferralReason(BalancingDeferralReason.PEAKSHAVING);
+				this.setDeferralReason(BalancingDeferralReason.PEAKSHAVING);
 				return BalancingDecision.YES_DEFERRED;
 			}
 
 			if (!this.isWithinPriceLimit()) {
 				this.logDebug(this.log, "Balancing is deferred due to high energy costs");
-				this._setBalancingDeferralReason(BalancingDeferralReason.PRICE_LIMIT);
+				this.setDeferralReason(BalancingDeferralReason.PRICE_LIMIT);
 				return BalancingDecision.YES_DEFERRED;
 			}
 
-			this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
+			this.setDeferralReason(BalancingDeferralReason.NONE);
 			return BalancingDecision.YES;
 
 		}
 
 		this.logDebug(this.log, "No Balancing necessary");
-		this._setBalancingDeferralReason(BalancingDeferralReason.NONE);
+		this.setDeferralReason(BalancingDeferralReason.NONE);
 		return BalancingDecision.NO;
 	}
 	

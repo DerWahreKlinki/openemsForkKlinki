@@ -166,6 +166,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	private EnergyScheduleHandler energyScheduleHandler = null;
 	// null until the wallbox reported a status
 	private Boolean lastPluggedIn = null;
+	// Last known total energy counter of the wallbox, see energyCounter()
+	private Integer lastEnergyCounter = null;
 
 	// "Do not charge today": end of the pause; null if not paused
 	private Instant pausedUntil = null;
@@ -1063,7 +1065,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var pluggedIn = isPluggedIn(this.evcs.getStatus(), this.evcsPlug()) && !this.isPaused();
 		final var sessionLimit = this.config.energySessionLimit();
 		final Integer remainingWh = sessionLimit > 0 //
-				? Math.max(sessionLimit - this.evcs.getEnergySession().orElse(0), 0)
+				? Math.max(sessionLimit - this.sessionChargedWh(), 0)
 				: null;
 		if (targetMode) {
 			return this.calculateTargetPlan(quarter, rules, storage, inputs, pluggedIn);
@@ -1998,13 +2000,38 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @return the energy in [Wh]
 	 */
 	private int targetChargedWh() {
-		final var start = this.config.targetStartEnergy();
-		if (start < 0) {
-			return 0; // start not yet stored
+		return chargedSince(this.config.targetStartEnergy(), this.energyCounter());
+	}
+
+	/**
+	 * The energy counter the session and the target count from: the total energy
+	 * counter of the wallbox (ActiveConsumptionEnergy). Unlike its session counter
+	 * it never restarts; the wallbox restarts the session counter e.g. at midnight,
+	 * which made the target count the energy before the restart twice. The last
+	 * known value bridges cycles without a value, e.g. right after a restart.
+	 *
+	 * @return the counter in [Wh]; null if never known
+	 */
+	private Integer energyCounter() {
+		final var total = this.evcs.getActiveConsumptionEnergy();
+		if (total.isDefined()) {
+			this.lastEnergyCounter = (int) Math.min(total.get(), Integer.MAX_VALUE);
 		}
-		final var session = this.evcs.getEnergySession().orElse(0);
-		// a new session (re-plug) resets the wallbox counter: count from zero then
-		return session >= start ? session - start : session;
+		return this.lastEnergyCounter;
+	}
+
+	/**
+	 * Energy charged since a stored counter value.
+	 *
+	 * @param start   the counter at the start; below 0 = not yet stored
+	 * @param counter the counter now; null if not known
+	 * @return the energy in [Wh]
+	 */
+	protected static int chargedSince(int start, Integer counter) {
+		if (start < 0 || counter == null || counter < start) {
+			return 0;
+		}
+		return counter - start;
 	}
 
 	/**
@@ -2015,12 +2042,16 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 */
 	private void updateTargetStartEnergy(boolean targetMode) {
 		if (targetMode) {
-			if (this.config.targetStartEnergy() < 0) {
-				final var session = this.evcs.getEnergySession();
-				if (session.isDefined()) {
-					this.logInfo(this.log, "Target charging starts at session energy " + session.get() + " Wh");
-					this.configUpdateOnce("targetStartEnergy", session.get());
-				}
+			final var counter = this.energyCounter();
+			final var start = this.config.targetStartEnergy();
+			if (counter != null && start < 0) {
+				this.logInfo(this.log, "Target charging starts at wallbox counter " + counter + " Wh");
+				this.configUpdateOnce("targetStartEnergy", counter);
+			} else if (counter != null && counter < start) {
+				// the total counter never goes back unless the wallbox was replaced or reset
+				this.logWarn(this.log, "Wallbox counter " + counter + " Wh below the target start " + start
+						+ " Wh: the target counts from now");
+				this.configUpdateOnce("targetStartEnergy", counter);
 			}
 		} else if (!this.config.targetCharging() && this.config.targetStartEnergy() >= 0) {
 			this.configUpdateOnce("targetStartEnergy", -1);
@@ -2044,17 +2075,19 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			this.setSessionEnergy(null);
 			return;
 		}
-		final var counter = this.evcs.getEnergySession();
-		if (!counter.isDefined()) {
+		final var counter = this.energyCounter();
+		if (counter == null) {
 			this.setSessionEnergy(null);
 			return;
 		}
 		if (start < 0) {
-			this.logInfo(this.log, "Car plugged in at wallbox counter " + counter.get() + " Wh");
-			this.configUpdateOnce("sessionStartEnergy", counter.get());
-		} else if (counter.get() < start) {
-			this.logInfo(this.log, "Wallbox counter restarted: the session counts from zero");
-			this.configUpdateOnce("sessionStartEnergy", 0);
+			this.logInfo(this.log, "Car plugged in at wallbox counter " + counter + " Wh");
+			this.configUpdateOnce("sessionStartEnergy", counter);
+		} else if (counter < start) {
+			// the total counter never goes back unless the wallbox was replaced or reset
+			this.logWarn(this.log, "Wallbox counter " + counter + " Wh below the session start " + start
+					+ " Wh: the session counts from now");
+			this.configUpdateOnce("sessionStartEnergy", counter);
 		}
 		this.setSessionEnergy(this.sessionChargedWh());
 	}
@@ -2065,18 +2098,14 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @return the energy in [Wh]
 	 */
 	private int sessionChargedWh() {
-		final var start = this.config.sessionStartEnergy();
-		final var counter = this.evcs.getEnergySession().orElse(0);
-		if (start < 0) {
-			return 0; // start not yet stored
-		}
-		return counter >= start ? counter - start : counter;
+		return chargedSince(this.config.sessionStartEnergy(), this.energyCounter());
 	}
 
 	/**
 	 * The energy limit for the wallbox component. It compares the limit with its
-	 * own counter, so the counter value at the plug-in is added: the limit then
-	 * counts from the plug-in. Target charging has its own energy target and
+	 * own session counter, so the energy left of the limit is added to that
+	 * counter: the limit then counts from the plug-in, even if the wallbox
+	 * restarted its counter in between. Target charging has its own energy target and
 	 * overrides the session limit.
 	 *
 	 * @return the limit in [Wh]; 0 = unlimited
@@ -2089,9 +2118,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		if (limit <= 0) {
 			return 0;
 		}
-		final var start = this.config.sessionStartEnergy();
-		final var counter = this.evcs.getEnergySession().orElse(0);
-		return start > 0 && counter >= start ? start + limit : limit;
+		final var wallboxSession = this.evcs.getEnergySession();
+		if (this.config.sessionStartEnergy() < 0 || !wallboxSession.isDefined()) {
+			return limit;
+		}
+		// the wallbox compares the limit with its own session counter, which may have
+		// restarted since the plug-in: send its counter plus what is left; at least
+		// 1 Wh, as 0 means no limit to the wallbox
+		final var left = Math.max(limit - this.sessionChargedWh(), 0);
+		return Math.max(wallboxSession.get() + left, 1);
 	}
 
 	/**

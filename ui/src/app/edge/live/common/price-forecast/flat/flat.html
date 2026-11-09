@@ -1,0 +1,58 @@
+@if (isInitialized) {
+  <oe-flat-widget [modalComponent]="modalComponent" [title]="'PRICE_FORECAST.TITLE' | translate"
+    [icon]="{ color: 'normal', name: 'cash-outline' }">
+    @if (outlook && current && today) {
+      <ion-card-content class="ion-no-padding">
+        <ion-grid class="ion-no-padding">
+          <ion-row>
+            <ion-text [translate]="'PRICE_FORECAST.TODAY'"></ion-text>
+          </ion-row>
+          <ion-row>
+            <ion-col size="5" class="ion-display-flex ion-flex-column ion-justify-content-between">
+              <ion-row style="flex-grow: 1;">
+                <ion-text class="price-big" [class.forecast]="!current.published">
+                  {{ current.price | priceCt }}<span class="price-unit">ct</span>
+                </ion-text>
+              </ion-row>
+              <ion-row class="small">
+                <ion-text class="muted" style="margin-right: 0.4rem;" [translate]="'PRICE_FORECAST.MIN'"
+                  [translateParams]="{ price: (today.min | priceCt) }"></ion-text>
+                <ion-text class="muted" [translate]="'PRICE_FORECAST.MAX'"
+                  [translateParams]="{ price: (today.max | priceCt) }"></ion-text>
+              </ion-row>
+            </ion-col>
+            <ion-col size="7" class="ion-text-end">
+              <ion-row class="ion-justify-content-end">
+                <ion-text class="rating rating-big rating-{{ currentRating }}">{{ currentRating | euroRating }}</ion-text>
+              </ion-row>
+              @if (today.cheapestWindow) {
+                <ion-row class="ion-justify-content-end small" style="margin-top: 0.4rem;">
+                  <ion-text class="muted" [translate]="'PRICE_FORECAST.CHEAPEST_WINDOW'"
+                    [translateParams]="{ hours: outlook.windowHours }"></ion-text>
+                </ion-row>
+                <ion-row class="ion-justify-content-end">
+                  <ion-text>
+                    {{ today.cheapestWindow.from | date:'HH:mm' }}–{{ today.cheapestWindow.to | date:'HH:mm' }}
+                    <span class="rating rating-{{ rate(today.cheapestWindow.price) }}">{{ today.cheapestWindow.price | priceCt }} ct</span>
+                  </ion-text>
+                </ion-row>
+              }
+            </ion-col>
+          </ion-row>
+          <div class="thin-divider"></div>
+          <ion-row class="ion-justify-content-between">
+            @for (q of upcoming; track q.time) {
+              <ion-col size="auto" class="ion-display-flex ion-flex-column ion-align-items-center ion-text-center">
+                <ion-text color="normal" class="small" style="margin-bottom: 0.15rem;" [translate]="'PRICE_FORECAST.HOUR'" [translateParams]="{ hour: (q.time | date:'HH') }"></ion-text>
+                <ion-text class="rating rating-{{ rate(q.price) }}">{{ rate(q.price) | euroRating }}</ion-text>
+                <ion-text class="ion-text-bold small" [class.forecast]="!q.published">{{ q.price | priceCt:'1.0-0' }}</ion-text>
+              </ion-col>
+            }
+          </ion-row>
+        </ion-grid>
+      </ion-card-content>
+    } @else {
+      <oe-flat-widget-line [name]="'PRICE_FORECAST.NO_DATA' | translate"></oe-flat-widget-line>
+    }
+  </oe-flat-widget>
+}

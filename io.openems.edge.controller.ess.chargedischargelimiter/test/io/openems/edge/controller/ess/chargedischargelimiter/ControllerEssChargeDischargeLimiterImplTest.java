@@ -11,6 +11,9 @@ import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEs
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.LIMITED_BATTERY_POWER;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGED_ENERGY;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.BALANCING_DEFERRAL_REASON;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_POWER_ALLOWED;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CLUSTER_CHARGE_LIMIT;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.DISCHARGE_POWER_ALLOWED;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_POWER;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.ACTIVE_CHARGE_ENERGY;
 import static io.openems.edge.ess.api.SymmetricEss.ChannelId.SOC;
@@ -324,8 +327,9 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 	@Test
 	public void testBalancingDeferralReasonIsPriceLimit() throws Exception {
 		final var clock = createDummyClock();
+		final var sut = new ControllerEssChargeDischargeLimiterImpl();
 
-		new ControllerTest(new ControllerEssChargeDischargeLimiterImpl()) //
+		new ControllerTest(sut) //
 				.addReference("componentManager", new DummyComponentManager(clock)) //
 				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("timedata", new DummyTimedata("timedata0")) //
@@ -378,14 +382,113 @@ public class ControllerEssChargeDischargeLimiterImplTest {
 						.output(BALANCING_DEFERRAL_REASON, BalancingDeferralReason.PRICE_LIMIT) //
 						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, null) //
 						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null)) //
-				// at the upper limit charging is blocked while the balancing waits
-				.next(new TestCase("At maxSoc while deferred: charging blocked") //
+				// deferred by the price, the storage may fill up beyond maxSoc from the
+				// cluster (PV); only the force charge from the grid waits
+				.next(new TestCase("At maxSoc while deferred by the price: charging stays allowed") //
 						.input("ess0", SOC, 90) //
 						.input("ess0", ACTIVE_POWER, -1000) //
 						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
 						.output(STATE_MACHINE, State.BALANCING_WANTED) //
 						.output(BALANCING_DEFERRAL_REASON, BalancingDeferralReason.PRICE_LIMIT) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, null) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, null) //
+						.output(CHARGE_POWER_ALLOWED, 10_000)) //
+				.next(new TestCase("Above maxSoc while deferred by the price: still no constraint") //
+						.input("ess0", SOC, 96) //
+						.input("ess0", ACTIVE_POWER, -1000) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.BALANCING_WANTED) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, null) //
+						.output(CHARGE_POWER_ALLOWED, 10_000)) //
+				.next(new TestCase("Balancing SoC reached from the cluster: the hold starts") //
+						.timeleap(clock, 11, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 100) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.BALANCING_ACTIVE)) //
+				.next(new TestCase("Hold while deferred by the price: hold charge of 200 W instead of the force charge") //
+						.input("ess0", SOC, 100) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.BALANCING_ACTIVE) //
+						.output(BALANCING_DEFERRAL_REASON, BalancingDeferralReason.PRICE_LIMIT) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, -ControllerEssChargeDischargeLimiterImpl.HOLD_CHARGE_W) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, null) //
+						.output(CHARGE_POWER_ALLOWED, 0) //
+						.output(DISCHARGE_POWER_ALLOWED, 0)) //
+				.next(new TestCase("Cluster limit of 100 W while holding: raised to the hold charge") //
+						.onBeforeControllersCallbacks(() -> sut.setClusterChargeLimit(100)) //
+						.input("ess0", SOC, 100) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.BALANCING_ACTIVE) //
+						.output(CLUSTER_CHARGE_LIMIT, ControllerEssChargeDischargeLimiterImpl.HOLD_CHARGE_W) //
+						.output("ess0", SET_ACTIVE_POWER_LESS_OR_EQUALS, -ControllerEssChargeDischargeLimiterImpl.HOLD_CHARGE_W) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, -ControllerEssChargeDischargeLimiterImpl.HOLD_CHARGE_W)) //
+				.next(new TestCase("Hold time over: balancing done, charged energy reset") //
+						.timeleap(clock, 3601, ChronoUnit.SECONDS) //
+						.input("ess0", SOC, 100) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.input("ess0", ACTIVE_CHARGE_ENERGY, 3000L) //
+						.output(STATE_MACHINE, State.NORMAL) //
+						.output(CHARGED_ENERGY, 0)) //
+				.deactivate();
+	}
+
+	/**
+	 * Another member of the cluster calibrates: the cluster limiter limits the
+	 * charge power of this one for the next cycle. The limit is applied as a
+	 * constraint and reported as the allowed charge power; it holds for one cycle
+	 * only.
+	 */
+	@Test
+	public void testClusterChargeLimitAppliesForOneCycle() throws Exception {
+		final var clock = createDummyClock();
+		final var sut = new ControllerEssChargeDischargeLimiterImpl();
+
+		new ControllerTest(sut) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("cm", new DummyConfigurationAdmin()) //
+				.addReference("ess", new DummyManagedSymmetricEss("ess0") //
+						.withSoc(50) //
+						.withActivePower(0) //
+						.withCapacity(10_000) //
+						.withAllowedChargePower(-10_000) //
+						.withAllowedDischargePower(10_000)) //
+				.activate(MyConfig.create() //
+						.setId("ctrl0") //
+						.setEssId("ess0") //
+						.setMinSoc(15) //
+						.setMaxSoc(90) //
+						.setEnergyBetweenBalancingCycles(0) //
+						.build()) //
+				.next(new TestCase("Normal, no limit") //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL) //
+						.output(CLUSTER_CHARGE_LIMIT, null) //
+						.output(CHARGE_POWER_ALLOWED, 10_000)) //
+				.next(new TestCase("The cluster limiter leaves 1000 W: constraint and allowed power follow") //
+						.onBeforeControllersCallbacks(() -> sut.setClusterChargeLimit(1000)) //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.output(STATE_MACHINE, State.NORMAL) //
+						.output(CLUSTER_CHARGE_LIMIT, 1000) //
+						.output(CHARGE_POWER_ALLOWED, 1000) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, -1000)) //
+				.next(new TestCase("Blocked completely") //
+						.onBeforeControllersCallbacks(() -> sut.setClusterChargeLimit(0)) //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.output(CLUSTER_CHARGE_LIMIT, 0) //
+						.output(CHARGE_POWER_ALLOWED, 0) //
 						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, 0)) //
+				.next(new TestCase("No cluster limiter call: the limit is gone") //
+						.input("ess0", SOC, 50) //
+						.input("ess0", ACTIVE_POWER, 0) //
+						.output(CLUSTER_CHARGE_LIMIT, null) //
+						.output(CHARGE_POWER_ALLOWED, 10_000) //
+						.output("ess0", SET_ACTIVE_POWER_GREATER_OR_EQUALS, null)) //
 				.deactivate();
 	}
 

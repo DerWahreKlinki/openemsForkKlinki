@@ -1,0 +1,16 @@
+= Time-Of-Use Tariff Forecast
+
+Price outlook for the next days, for display only.
+
+The component takes the published prices of a Time-of-Use tariff (today and, once known, tomorrow) and continues them with the free day-ahead price forecast of https://github.com/b3nn0/EpexPredictor[EpexPredictor] (public endpoint, fair use, no guarantee). The forecast is an exchange price; the configured surcharge and VAT turn it into the household price so that it matches the tariff where both overlap. The outlook is fetched once per hour.
+
+Neither the energy optimizer nor any controller reads this component. It serves the UI widget "Strompreisprognose" and the Modbus/REST channels:
+
+- `CurrentPrice`, `CurrentRating` (1 cheap to 5 expensive, by the configured thresholds)
+- `TodayMinPrice`, `TodayMaxPrice`
+- `CheapestWindowStart`, `CheapestWindowPrice`: the cheapest window of the configured length within the horizon
+- `ForecastHours`, `LastUpdate`, `HttpStatusCode`, `FetchFailed`
+
+The JSON-RPC method `getPriceForecast` returns the quarter-hours with a published/forecast flag and one summary per day: minimum, maximum, average, the averages of night, morning, noon and evening, and the cheapest window of the day.
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.timeofusetariff.forecast[Source Code icon:github[]]

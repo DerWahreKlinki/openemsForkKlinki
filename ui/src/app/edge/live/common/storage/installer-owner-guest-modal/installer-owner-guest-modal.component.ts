@@ -145,6 +145,8 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                     new ChannelAddress(limiter.id, "ChargePowerAllowed"),
                     new ChannelAddress(limiter.id, "DischargePowerAllowed"),
                     new ChannelAddress(limiter.id, "_PropertyReportToEnergyScheduler"),
+                    new ChannelAddress(limiter.id, "PriorityMember"),
+                    new ChannelAddress(limiter.id, "MemberChargeLimit"),
                 );
             }
             channelAddresses.push(new ChannelAddress("_meta", "IsEssChargeFromGridAllowed"));
@@ -172,6 +174,9 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                     new ChannelAddress(ctrl.id, "BalancingRemainingSeconds"),
                     new ChannelAddress(ctrl.id, "ChargedEnergy"),
                     new ChannelAddress(ctrl.id, "BalancingDeferralReason"),
+                    new ChannelAddress(ctrl.id, "ClusterChargeLimit"),
+                    new ChannelAddress(ctrl.id, "ChargePowerAllowed"),
+                    new ChannelAddress(ctrl.id, "DischargePowerAllowed"),
                 );
             }
             for (const essId in emergencyReserveCtrl) {
@@ -325,6 +330,11 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                             const balancingRemainingSeconds = currentData.channel[controller.id + "/BalancingRemainingSeconds"];
                             const chargedEnergy = currentData.channel[controller.id + "/ChargedEnergy"];
                             const balancingDeferralReasonNumber = currentData.channel[controller.id + "/BalancingDeferralReason"];
+                            // charge limit while another member of the cluster calibrates (Fork, klinki)
+                            const clusterChargeLimit = currentData.channel[controller.id + "/ClusterChargeLimit"];
+                            // what the limiter allows right now (Fork, klinki)
+                            const chargePowerAllowed = currentData.channel[controller.id + "/ChargePowerAllowed"];
+                            const dischargePowerAllowed = currentData.channel[controller.id + "/DischargePowerAllowed"];
                             const stateKey = (ChargeDischargeControllerState[Number(stateNumber)] as keyof typeof ChargeDischargeControllerState) ?? "UNDEFINED";
                             const balancingDeferralReasonKey = (ChargeDischargeBalancingDeferralReason[Number(balancingDeferralReasonNumber)] as keyof typeof ChargeDischargeBalancingDeferralReason) ?? "NONE";
 
@@ -341,6 +351,10 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
                                     balancingRemainingSeconds: new FormControl(balancingRemainingSeconds),
                                     chargedEnergy: new FormControl(chargedEnergy),
                                     balancingDeferralReasonKey: new FormControl(balancingDeferralReasonKey),
+                                    clusterChargeLimit: new FormControl(clusterChargeLimit ?? null),
+                                    clusterPriority: new FormControl(this.priorityAlias(currentData.channel)),
+                                    chargePowerAllowed: new FormControl(chargePowerAllowed ?? null),
+                                    dischargePowerAllowed: new FormControl(dischargePowerAllowed ?? null),
                                 }),
                             );
                         }
@@ -483,6 +497,57 @@ export class InstallerOwnerGuestStorageModalComponent implements OnInit, OnDestr
 
     ngOnDestroy() {
         this.edge.unsubscribeChannels(this.websocket, "storage");
+    }
+
+    /**
+     * The alias of a member of a cluster, for the priority lines; the id if it has none.
+     *
+     * @param essId the id of the ESS
+     * @returns the alias
+     */
+    protected memberAlias(essId: string | null | undefined): string {
+        if (!essId) {
+            return "";
+        }
+        return this.config?.getComponent(essId)?.alias || essId;
+    }
+
+    /**
+     * The member that charges first in any cluster, because its calibration is
+     * pending, by alias; empty if none.
+     *
+     * @param channel the current channel values
+     * @returns the alias
+     */
+    protected priorityAlias(channel: { [address: string]: any }): string {
+        for (const limiter of Object.values(this.clusterLimiters)) {
+            const member = channel[limiter.id + "/PriorityMember"];
+            if (member) {
+                return this.memberAlias(member);
+            }
+        }
+        return "";
+    }
+
+    /**
+     * The trigger of a cluster state, readable: the alias of the member and its
+     * state translated. The Trigger channel carries "essId: STATE_NAME".
+     *
+     * @param trigger the Trigger channel value
+     * @returns the text
+     */
+    protected triggerText(trigger: string | null | undefined): string {
+        if (!trigger) {
+            return "";
+        }
+        const i = trigger.indexOf(":");
+        if (i < 0) {
+            return trigger;
+        }
+        const member = this.memberAlias(trigger.substring(0, i).trim());
+        const key = "EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE." + trigger.substring(i + 1).trim();
+        const state = this.translate.instant(key);
+        return member + ", " + (state === key ? trigger.substring(i + 1).trim() : state);
     }
 
     /**

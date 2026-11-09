@@ -81,6 +81,8 @@ export enum WidgetFactory {
     "System.Fenecon.Industrial.Tokai2",
     "System.Fenecon.Industrial.Xl",
     "Weather.OpenMeteo",
+    // Fork (klinki)
+    "TimeOfUseTariff.Forecast",
 }
 
 export type Icon = {

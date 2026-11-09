@@ -201,8 +201,8 @@ public class VictronEssImpl extends AbstractOpenemsModbusComponent
 		this.config = config;
 		super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId());
 
-		// Set initial values from config
-		this._setMaxApparentPower(config.maxApparentPower());
+		// Set initial values from config; the max apparent power comes from the battery
+		// inverter (its device type) as soon as it is bound
 		this._setCapacity(config.capacity());
 
 		this.singlePhase = switch (config.phase()) {

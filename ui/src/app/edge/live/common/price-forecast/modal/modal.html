@@ -1,0 +1,101 @@
+@if (isInitialized) {
+  <oe-modal [title]="'PRICE_FORECAST.TITLE' | translate" [component]="component">
+    @if (outlook && current && today) {
+      <ion-card style="--background: var(--ion-background-color-card-header); box-shadow: none;">
+        <ion-card-content>
+          <ion-row>
+            <ion-text [translate]="'PRICE_FORECAST.TODAY'"></ion-text>
+          </ion-row>
+          <ion-row>
+            <ion-col size="6" class="ion-display-flex ion-flex-column ion-justify-content-between">
+              <ion-row style="flex-grow: 1;">
+                <ion-text class="price-big" [class.forecast]="!current.published">
+                  {{ current.price | priceCt }}<span class="price-unit">ct</span>
+                </ion-text>
+              </ion-row>
+              <ion-row class="small">
+                <ion-text class="muted" style="margin-right: 0.4rem;" [translate]="'PRICE_FORECAST.MIN'"
+                  [translateParams]="{ price: (today.min | priceCt) }"></ion-text>
+                <ion-text class="muted" [translate]="'PRICE_FORECAST.MAX'"
+                  [translateParams]="{ price: (today.max | priceCt) }"></ion-text>
+              </ion-row>
+            </ion-col>
+            <ion-col size="6" class="ion-text-end">
+              <ion-row class="ion-justify-content-end">
+                <ion-text class="rating rating-big rating-{{ currentRating }}">{{ currentRating | euroRating }}</ion-text>
+              </ion-row>
+              @if (today.cheapestWindow) {
+                <ion-row class="ion-justify-content-end small" style="margin-top: 0.4rem;">
+                  <ion-text class="muted" [translate]="'PRICE_FORECAST.CHEAPEST_WINDOW'"
+                    [translateParams]="{ hours: outlook.windowHours }"></ion-text>
+                </ion-row>
+                <ion-row class="ion-justify-content-end">
+                  <ion-text>
+                    {{ today.cheapestWindow.from | date:'HH:mm' }}–{{ today.cheapestWindow.to | date:'HH:mm' }}
+                    <span class="rating rating-{{ rate(today.cheapestWindow.price) }}">{{ today.cheapestWindow.price | priceCt }} ct</span>
+                  </ion-text>
+                </ion-row>
+              }
+            </ion-col>
+          </ion-row>
+          <div class="thin-divider"></div>
+          <ion-row class="ion-justify-content-between">
+            @for (q of upcoming; track q.time) {
+              <ion-col size="auto" class="ion-display-flex ion-flex-column ion-align-items-center ion-text-center">
+                <ion-text color="normal" class="small" style="margin-bottom: 0.15rem;" [translate]="'PRICE_FORECAST.HOUR'" [translateParams]="{ hour: (q.time | date:'HH') }"></ion-text>
+                <ion-text class="rating rating-{{ rate(q.price) }}">{{ rate(q.price) | euroRating }}</ion-text>
+                <ion-text class="ion-text-bold small" [class.forecast]="!q.published">{{ q.price | priceCt:'1.0-0' }}</ion-text>
+              </ion-col>
+            }
+          </ion-row>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-text [translate]="'PRICE_FORECAST.WEEKLY_FORECAST'" class="ion-font-size-large"></ion-text>
+
+      <ion-card style="--background: var(--ion-background-color); box-shadow: none;">
+        <ion-card-content class="ion-no-padding-top ion-no-padding-bottom">
+          <ion-row class="ion-align-items-center small muted">
+            <ion-col size="3" size-sm="3"></ion-col>
+            <ion-col size="1.5" size-sm="1.5" class="ion-text-center" [translate]="'PRICE_FORECAST.NIGHT'"></ion-col>
+            <ion-col size="1.5" size-sm="1.5" class="ion-text-center" [translate]="'PRICE_FORECAST.MORNING'"></ion-col>
+            <ion-col size="1.5" size-sm="1.5" class="ion-text-center" [translate]="'PRICE_FORECAST.NOON'"></ion-col>
+            <ion-col size="1.5" size-sm="1.5" class="ion-text-center" [translate]="'PRICE_FORECAST.EVENING'"></ion-col>
+            <ion-col size="3" size-sm="3" class="ion-text-end" [translate]="'PRICE_FORECAST.CHEAPEST_WINDOW_SHORT'"
+              [translateParams]="{ hours: outlook.windowHours }"></ion-col>
+          </ion-row>
+          @for (day of days; track day.date) {
+            <ion-row class="ion-align-items-center day-row" [class.forecast]="day.forecast">
+              <ion-col size="3" size-sm="3">
+                <span class="ion-text-bold">{{ day.date | date:'EE' }}</span>
+                <span class="muted small" style="margin-left: 0.3rem;">{{ day.date | date:'dd.MM.' }}</span>
+              </ion-col>
+              <ion-col size="1.5" class="ion-text-center rating rating-{{ rate(day.periods.night) }}">{{ rate(day.periods.night) | euroRating }}</ion-col>
+              <ion-col size="1.5" class="ion-text-center rating rating-{{ rate(day.periods.morning) }}">{{ rate(day.periods.morning) | euroRating }}</ion-col>
+              <ion-col size="1.5" class="ion-text-center rating rating-{{ rate(day.periods.noon) }}">{{ rate(day.periods.noon) | euroRating }}</ion-col>
+              <ion-col size="1.5" class="ion-text-center rating rating-{{ rate(day.periods.evening) }}">{{ rate(day.periods.evening) | euroRating }}</ion-col>
+              <ion-col size="3" class="ion-text-end small">
+                @if (day.cheapestWindow) {
+                  {{ day.cheapestWindow.from | date:'HH:mm' }}–{{ day.cheapestWindow.to | date:'HH:mm' }}
+                  <span class="rating rating-{{ rate(day.cheapestWindow.price) }}">{{ day.cheapestWindow.price | priceCt:'1.0-0' }}</span>
+                } @else {
+                  -
+                }
+              </ion-col>
+            </ion-row>
+          }
+          <ion-row class="small muted" style="margin-top: 0.5rem;">
+            <ion-col size="12" [translate]="'PRICE_FORECAST.FORECAST_HINT'"></ion-col>
+            <ion-col size="12" [translate]="'PRICE_FORECAST.LEGEND'" [translateParams]="outlook.thresholds"></ion-col>
+            @if (outlook.lastUpdate) {
+              <ion-col size="12" [translate]="'PRICE_FORECAST.LAST_UPDATE'"
+                [translateParams]="{ time: (outlook.lastUpdate | date:'dd.MM. HH:mm') }"></ion-col>
+            }
+          </ion-row>
+        </ion-card-content>
+      </ion-card>
+    } @else {
+      <oe-modal-line style="font-style: italic" leftColumnWidth="100" [name]="'PRICE_FORECAST.NO_DATA' | translate"></oe-modal-line>
+    }
+  </oe-modal>
+}

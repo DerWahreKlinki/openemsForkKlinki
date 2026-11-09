@@ -9,6 +9,7 @@ import { SharedModule } from "./../../shared/shared.module";
 import { CommonAutarchy } from "./common/autarchy/Common_Autarchy";
 import { CommonConsumption } from "./common/consumption/common-consumption";
 import { CommonGrid } from "./common/grid/Common_Grid";
+import { PriceForecastModule } from "./common/price-forecast/price-forecast.module";
 import { CommonProduction } from "./common/production/common-production";
 import { CommonSelfconsumption } from "./common/selfconsumption/common-selfconsumption";
 import { SohStatusBannerComponent } from "./common/soh/components/soh-status-banner/soh-status-banner";
@@ -83,6 +84,7 @@ import { SystemOutageInfoComponent } from "./system-outage-info/oe-system-outage
         EdgeOfflineModule,
         EnergymonitorModule,
         WeatherModule,
+        PriceForecastModule,
         ModalModule,
         SharedModule,
         SohStatusBannerComponent,

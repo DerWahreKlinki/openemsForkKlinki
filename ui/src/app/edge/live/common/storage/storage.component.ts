@@ -1,12 +1,10 @@
 // @ts-strict-ignore
 import { formatNumber } from "@angular/common";
 import { ChangeDetectionStrategy, Component } from "@angular/core";
-import { AdminStorageModalComponent } from "src/app/edge/live/common/storage/admin-modal/admin-modal.component";
 import { AbstractFlatWidget } from "src/app/shared/components/flat/abstract-flat-widget";
 import { Modal } from "src/app/shared/components/flat/flat";
 import { ChannelAddress, CurrentData, EdgeConfig, Utils } from "src/app/shared/shared";
 import { Language } from "src/app/shared/type/language";
-import { Role } from "src/app/shared/type/role";
 import { DateUtils } from "src/app/shared/utils/date/dateutils";
 
 import { InstallerOwnerGuestStorageModalComponent } from "./installer-owner-guest-modal/installer-owner-guest-modal.component";
@@ -103,9 +101,10 @@ export class StorageComponent extends AbstractFlatWidget {
 
     protected getModalComponent(): Modal {
         return {
-            component: this.edge.roleIsAtLeast(Role.ADMIN)
-                ? AdminStorageModalComponent
-                : InstallerOwnerGuestStorageModalComponent,
+            // Fork (klinki): every role opens the installer/owner/guest modal. The upstream
+            // admin modal is built for Ess.Generic with a battery inverter and lacks the
+            // fork sections (limiter state, cluster limiter, Ess.EnergyPrice)
+            component: InstallerOwnerGuestStorageModalComponent,
             componentProps: {
                 edge: this.edge,
                 component: this.component,

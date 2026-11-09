@@ -97,10 +97,10 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Target plan", description = "The plan of target charging as announced to the energy optimizer; set by the controller itself. The controller follows it until the target time and plans again only when the car is plugged in, the target changes or the charged energy deviates from the plan.")
 	String targetPlan() default "";
 
-	@AttributeDefinition(name = "Session start energy [Wh]", description = "Counter of the wallbox when the car was plugged in; the session limit counts from there. Set by the controller itself, -1 = no car plugged in.")
+	@AttributeDefinition(name = "Session start energy [Wh]", description = "Total energy counter of the wallbox (ActiveConsumptionEnergy; its session counter if the total is missing) when the car was plugged in; the session counts from there. Set by the controller itself, -1 = no car plugged in.")
 	int sessionStartEnergy() default -1;
 
-	@AttributeDefinition(name = "Target start energy [Wh]", description = "Session energy of the wallbox when target charging was switched on; the target counts from there. Set by the controller itself, -1 = not yet set.")
+	@AttributeDefinition(name = "Target start energy [Wh]", description = "Total energy counter of the wallbox (ActiveConsumptionEnergy; its session counter if the total is missing) when target charging was switched on; the target counts from there. Set by the controller itself, -1 = not yet set.")
 	int targetStartEnergy() default -1;
 
 	String webconsole_configurationFactory_nameHint() default "Controller Electric Vehicle Charging Station with Price Limit [{id}]";

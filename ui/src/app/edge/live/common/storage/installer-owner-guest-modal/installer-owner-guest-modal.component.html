@@ -159,8 +159,19 @@
                   <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
                     <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds | formatSecondsToDuration"></oe-modal-line>
                   </ng-container>
-                  <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
+                  <ng-container *ngIf="(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE') && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
                     <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON_LABEL' | translate" [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON.' + (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey ?? 'NONE')) | translate"></oe-modal-line>
+                  </ng-container>
+                  <!-- another member of the cluster calibrates and charges first (Fork, klinki) -->
+                  <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.clusterChargeLimit != null">
+                    <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.CLUSTER_CHARGE_LIMIT' | translate: { member: formGroup.value[component.id]?.['chargeDischargeLimiterController']?.clusterPriority }" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.clusterChargeLimit | unitvalue: 'W'"></oe-modal-line>
+                  </ng-container>
+                  <!-- the limiter restricts one direction: show what it still allows (Fork, klinki) -->
+                  <ng-container *ngIf="(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'APPROACHING_MAX_SOC' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'MAX_SOC_REACHED' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'ABOVE_MAX_SOC') && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargePowerAllowed != null">
+                    <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.CHARGE_POWER_ALLOWED' | translate" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargePowerAllowed | unitvalue: 'W'"></oe-modal-line>
+                  </ng-container>
+                  <ng-container *ngIf="(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'APPROACHING_MIN_SOC' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'MIN_SOC_REACHED' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BELOW_MIN_SOC') && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.dischargePowerAllowed != null">
+                    <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.DISCHARGE_POWER_ALLOWED' | translate" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.dischargePowerAllowed | unitvalue: 'W'"></oe-modal-line>
                   </ng-container>
                 </ion-label>
               </ion-item>
@@ -479,7 +490,12 @@
                   <ion-label>
                     <oe-modal-line [name]="'GENERAL.MODE' | translate" [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.STATE_' + clusterStateKey(clusterState)) | translate"></oe-modal-line>
                     @if (currentData[limiter.id + "/Trigger"]; as trigger) {
-                      <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.TRIGGER' | translate" [value]="trigger"></oe-modal-line>
+                      <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.TRIGGER' | translate" [value]="triggerText(trigger)"></oe-modal-line>
+                    }
+                    <!-- a member with a pending calibration charges first, the others are limited (Fork, klinki) -->
+                    @if (currentData[limiter.id + "/PriorityMember"]; as priority) {
+                      <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.PRIORITY_MEMBER' | translate" [value]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.PRIORITY_MEMBER_VALUE' | translate: { member: memberAlias(priority) }"></oe-modal-line>
+                      <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_LIMITER_CLUSTER.MEMBER_CHARGE_LIMIT' | translate" [value]="currentData[limiter.id + '/MemberChargeLimit'] | unitvalue: 'W'"></oe-modal-line>
                     }
                   </ion-label>
                 </ion-item>
@@ -634,8 +650,19 @@
                       <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE'">
                         <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_REMAINING_SECONDS' | translate" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingRemainingSeconds | formatSecondsToDuration"></oe-modal-line>
                       </ng-container>
-                      <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
+                      <ng-container *ngIf="(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_WANTED' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BALANCING_ACTIVE') && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey !== 'NONE'">
                         <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON_LABEL' | translate" [value]="('EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.BALANCING_DEFERRAL_REASON.' + (formGroup.value[component.id]?.['chargeDischargeLimiterController']?.balancingDeferralReasonKey ?? 'NONE')) | translate"></oe-modal-line>
+                      </ng-container>
+                      <!-- another member of the cluster calibrates and charges first (Fork, klinki) -->
+                      <ng-container *ngIf="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.clusterChargeLimit != null">
+                        <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.CLUSTER_CHARGE_LIMIT' | translate: { member: formGroup.value[component.id]?.['chargeDischargeLimiterController']?.clusterPriority }" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.clusterChargeLimit | unitvalue: 'W'"></oe-modal-line>
+                      </ng-container>
+                      <!-- the limiter restricts one direction: show what it still allows (Fork, klinki) -->
+                      <ng-container *ngIf="(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'APPROACHING_MAX_SOC' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'MAX_SOC_REACHED' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'ABOVE_MAX_SOC') && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargePowerAllowed != null">
+                        <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.CHARGE_POWER_ALLOWED' | translate" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.chargePowerAllowed | unitvalue: 'W'"></oe-modal-line>
+                      </ng-container>
+                      <ng-container *ngIf="(formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'APPROACHING_MIN_SOC' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'MIN_SOC_REACHED' || formGroup.value[component.id]?.['chargeDischargeLimiterController']?.stateKey === 'BELOW_MIN_SOC') && formGroup.value[component.id]?.['chargeDischargeLimiterController']?.dischargePowerAllowed != null">
+                        <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.CHARGE_DISCHARGE_STATE.DISCHARGE_POWER_ALLOWED' | translate" [value]="formGroup.value[component.id]?.['chargeDischargeLimiterController']?.dischargePowerAllowed | unitvalue: 'W'"></oe-modal-line>
                       </ng-container>
                     </ion-label>
                   </ion-item>

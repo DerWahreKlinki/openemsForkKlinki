@@ -121,7 +121,15 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 		CHARGE_POWER_ALLOWED(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.WATT) //
 				.persistencePriority(PersistencePriority.HIGH) //
-				.text("Battery charge power allowed right now"));
+				.text("Battery charge power allowed right now")),
+		/**
+		 * Charge limit the cluster limiter sets while another member of the cluster
+		 * calibrates and charges first; null while none applies.
+		 */
+		CLUSTER_CHARGE_LIMIT(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.WATT) //
+				.persistencePriority(PersistencePriority.HIGH) //
+				.text("Charge limit set by the cluster limiter while another member calibrates"));
 
 		private final Doc doc;
 
@@ -603,6 +611,46 @@ public interface ControllerEssChargeDischargeLimiter extends Controller, Openems
 		this.getUseableSocChannel().setNextValue(value);
 	}	
 	
+	/**
+	 * Gets the Channel for {@link ChannelId#CLUSTER_CHARGE_LIMIT}.
+	 *
+	 * @return the Channel
+	 */
+	public default IntegerReadChannel getClusterChargeLimitChannel() {
+		return this.channel(ChannelId.CLUSTER_CHARGE_LIMIT);
+	}
+
+	/**
+	 * Gets the charge limit set by the cluster limiter. See
+	 * {@link ChannelId#CLUSTER_CHARGE_LIMIT}.
+	 *
+	 * @return the Channel {@link Value}
+	 */
+	public default Value<Integer> getClusterChargeLimit() {
+		return this.getClusterChargeLimitChannel().value();
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#CLUSTER_CHARGE_LIMIT}.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setClusterChargeLimit(Integer value) {
+		this.getClusterChargeLimitChannel().setNextValue(value);
+	}
+
+	/**
+	 * Limits the battery charge power for the next cycle, called by the cluster
+	 * limiter while another member of the cluster calibrates and charges first.
+	 * The limit holds for one cycle: the cluster limiter repeats it every cycle,
+	 * so a vanished cluster limiter cannot leave a member limited.
+	 *
+	 * @param watts the charge limit in [W] as a positive value, 0 blocks charging;
+	 *              null for none
+	 */
+	public void setClusterChargeLimit(Integer watts);
+
 	/**
 	 * Publish ID of ESS device.
 	 *

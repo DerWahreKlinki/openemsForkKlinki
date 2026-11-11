@@ -447,7 +447,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			} else if ((plug != null || evcsStatus == Status.NOT_READY_FOR_CHARGING) && this.config.targetCharging()) {
 				// the car is gone: target charging ends, its plan is void
 				this.logInfo(this.log, "Car unplugged: target charging switches off");
-				this.configUpdateOnce("targetCharging", false);
+				this.endTargetCharging();
 			}
 			if (this.energyScheduleHandler != null) {
 				this.energyScheduleHandler.triggerReschedule("ControllerEvcsPriceImpl::car plugged in/out",
@@ -566,10 +566,10 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		final var targetMode = this.isTargetMode();
 		if (targetMode && !ZonedDateTime.now(this.clock()).isBefore(this.targetDeadline)) {
 			this.logInfo(this.log, "Target time reached: target charging switches off");
-			this.configUpdateOnce("targetCharging", false);
+			this.endTargetCharging();
 		} else if (targetMode && this.config.targetStartEnergy() >= 0 && this.targetRemainingWh() <= 0) {
 			this.logInfo(this.log, "Target reached: target charging switches off");
-			this.configUpdateOnce("targetCharging", false);
+			this.endTargetCharging();
 		}
 		this.updateTargetStartEnergy(targetMode);
 		if (!this.config.targetCharging() && this.storedTargetPlan != null) {
@@ -2194,11 +2194,43 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @param requiredValue  Value that should be set
 	 */
 	private void configUpdateOnce(String targetProperty, Object requiredValue) {
-		if (Objects.equals(this.configUpdatesSent.get(targetProperty), requiredValue)) {
+		this.configUpdateOnce(Map.of(targetProperty, requiredValue));
+	}
+
+	/**
+	 * Like {@link #configUpdateOnce(String, Object)} for several properties in one
+	 * configuration update, so that the component is reactivated only once.
+	 *
+	 * @param requiredValues the properties and the values that should be set
+	 */
+	private void configUpdateOnce(Map<String, Object> requiredValues) {
+		final var changes = new HashMap<String, Object>();
+		requiredValues.forEach((property, value) -> {
+			if (!Objects.equals(this.configUpdatesSent.get(property), value)) {
+				changes.put(property, value);
+			}
+		});
+		if (changes.isEmpty()) {
 			return;
 		}
-		this.configUpdatesSent.put(targetProperty, requiredValue);
-		this.configUpdate(targetProperty, requiredValue);
+		this.configUpdatesSent.putAll(changes);
+		this.configUpdate(changes);
+	}
+
+	/**
+	 * Ends target charging: its switch goes off. The charge mode underneath goes
+	 * back to charging the surplus as well. The target charging view of the UI
+	 * leaves the mode as it was, and a force charge left there would charge the car
+	 * with full power from the grid as soon as target charging ends (2026-11-11:
+	 * 12 kWh from 05:35 on, at a price far above the limit).
+	 */
+	private void endTargetCharging() {
+		final var changes = new HashMap<String, Object>();
+		changes.put("targetCharging", false);
+		if (this.config.chargeMode() != ChargeMode.EXCESS_POWER) {
+			changes.put("chargeMode", ChargeMode.EXCESS_POWER.name());
+		}
+		this.configUpdateOnce(changes);
 	}
 
 	/**
@@ -2739,6 +2771,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 * @param requiredValue  Value that should be set
 	 */
 	public void configUpdate(String targetProperty, Object requiredValue) {
+		this.configUpdate(Map.of(targetProperty, requiredValue));
+	}
+
+	/**
+	 * Updates several properties of the configuration in one go.
+	 *
+	 * @param requiredValues the properties and the values that should be set
+	 */
+	public void configUpdate(Map<String, Object> requiredValues) {
 
 		Configuration c;
 		try {
@@ -2749,7 +2790,7 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 			}
 			c = this.cm.getConfiguration(pid, "?");
 			var properties = c.getProperties();
-			properties.put(targetProperty, requiredValue);
+			requiredValues.forEach(properties::put);
 			c.update(properties);
 		} catch (IOException | SecurityException e) {
 			this.logError(this.log, "ERROR: " + e.getMessage());

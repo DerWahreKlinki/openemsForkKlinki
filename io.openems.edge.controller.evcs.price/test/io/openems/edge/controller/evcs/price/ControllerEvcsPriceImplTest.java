@@ -2953,6 +2953,49 @@ public class ControllerEvcsPriceImplTest {
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
 				.deactivate();
 		assertEquals(false, cm.getConfiguration("ctrlEvcs0").getProperties().get("targetCharging"));
+		// the mode underneath was charging the surplus already: left alone
+		assertEquals("EXCESS_POWER",
+				String.valueOf(cm.getConfiguration("ctrlEvcs0").getProperties().get("chargeMode")));
+	}
+
+	@Test
+	public void targetEndRestoresExcessPowerTest() throws Exception {
+		// Target charging was switched on over a force charge (the target charging
+		// view of the UI leaves the mode underneath as it was). When the target time
+		// passes, the controller must not fall back to the force charge: 2026-11-11
+		// it charged 12 kWh from the grid at full power from 05:35 on, at a price far
+		// above the limit. The switch-off restores charging the surplus
+		final var clock = createDummyClock();
+		final var now = ZonedDateTime.now(clock);
+		final var targetTime = (now.getHour() * 60 + now.getMinute() + 24 * 60 - 60) % (24 * 60); // an hour ago
+		final var passed = now.minusHours(1);
+		final var prices = new Double[96];
+		for (var i = 0; i < prices.length; i++) {
+			prices[i] = 200.;
+		}
+		final var old = new ControllerEvcsPriceImpl.StoredTargetPlan(now.minusHours(3).toEpochSecond(),
+				passed.toEpochSecond(), 5000, now.minusHours(3).toEpochSecond(),
+				new int[] { 0, 11040, 11040, 0, 0, 0, 0, 0 }, 0);
+		final var cm = new DummyConfigurationAdmin();
+		prepareModeTest(clock, new ControllerEvcsPriceImpl(clock), prices, FORCE_CHARGE, true, 5000, targetTime, 0,
+				cm, old.encode()) //
+				.next(new TestCase("target time passed: off, and not the force charge underneath") //
+						.input(GRID_BUY_PRICE, 200.) //
+						.input(ESS_CAPACITY, 20000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.READY_FOR_CHARGING) //
+						.input("evcs0", ENERGY_SESSION, 2000) //
+						.input(GRID_ACTIVE_POWER, 1000) //
+						.input("evcs0", ACTIVE_POWER, 0) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.input("evcs0", MAXIMUM_HARDWARE_POWER, 11040) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.deactivate();
+		final var properties = cm.getConfiguration("ctrlEvcs0").getProperties();
+		assertEquals(false, properties.get("targetCharging"));
+		assertEquals("EXCESS_POWER", String.valueOf(properties.get("chargeMode")));
 	}
 
 	@Test
@@ -3123,6 +3166,13 @@ public class ControllerEvcsPriceImplTest {
 	private static ControllerTest prepareModeTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
 			Double[] prices, boolean targetCharging, int targetEnergy, int targetTime, int targetStartEnergy,
 			DummyConfigurationAdmin cm, String targetPlan) throws Exception {
+		return prepareModeTest(clock, controller, prices, EXCESS_POWER, targetCharging, targetEnergy, targetTime,
+				targetStartEnergy, cm, targetPlan);
+	}
+
+	private static ControllerTest prepareModeTest(TimeLeapClock clock, ControllerEvcsPriceImpl controller,
+			Double[] prices, ChargeMode chargeMode, boolean targetCharging, int targetEnergy, int targetTime,
+			int targetStartEnergy, DummyConfigurationAdmin cm, String targetPlan) throws Exception {
 		final var now = Instant.now(clock);
 		final var componentManager = new DummyComponentManager(clock);
 		final var sum = new DummySum();
@@ -3150,7 +3200,7 @@ public class ControllerEvcsPriceImplTest {
 						.setEvcsId("evcs0") //
 						.setEssId("ess0") //
 						.setEnableCharging(true) //
-						.setChargeMode(EXCESS_POWER) //
+						.setChargeMode(chargeMode) //
 						.setForceChargeMinPower(3680) //
 						.setDefaultChargeMinPower(0) //
 						.setPriority(CAR) //

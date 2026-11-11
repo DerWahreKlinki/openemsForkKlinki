@@ -1,6 +1,7 @@
 package io.openems.edge.controller.ess.chargedischargelimiter.cluster;
 
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CHARGE_POWER_ALLOWED;
+import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CLUSTER_CHARGE_LIMIT;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.CURRENT_ENERGY;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.DISCHARGE_POWER_ALLOWED;
 import static io.openems.edge.controller.ess.chargedischargelimiter.ControllerEssChargeDischargeLimiter.ChannelId.MAX_ENERGY;
@@ -178,15 +179,26 @@ public class ControllerEssChargeDischargeLimiterClusterImplTest {
 				.next(new TestCase("nothing fed in: the limit melts") //
 						.input("_sum", GRID_ACTIVE_POWER, 0) //
 						.output(MEMBER_CHARGE_LIMIT, 850)) //
-				.next(new TestCase("ess0 charges nearly as asked (short by less than 10 %): no growth") //
+				.next(new TestCase("ess0 charges nearly as asked (short by less than 10 %) and could take more: no growth") //
+						.input("chargeDischargeLimiter0", CHARGE_POWER_ALLOWED, 6000) //
 						.input("ess0", ACTIVE_POWER, -4600) //
 						.input("_sum", GRID_ACTIVE_POWER, -1500) //
 						.output(MEMBER_CHARGE_LIMIT, 800)) //
+				.next(new TestCase("ess0 is asked all it may (5000 of 5000) and 200 W are fed in: at its ceiling, ess1 may take it") //
+						.input("chargeDischargeLimiter0", CHARGE_POWER_ALLOWED, 5000) //
+						.input("ess0", ACTIVE_POWER, -4950) //
+						.input("_sum", GRID_ACTIVE_POWER, -200) //
+						.output(MEMBER_CHARGE_LIMIT, 950)) //
+				.next(new TestCase("the ceiling is the headroom of this cluster limiter (ess0 still ramps up): no growth") //
+						.input("chargeDischargeLimiter0", CLUSTER_CHARGE_LIMIT, 5000) //
+						.input("_sum", GRID_ACTIVE_POWER, -200) //
+						.output(MEMBER_CHARGE_LIMIT, 900)) //
 				.next(new TestCase("ess0 force-charges: still first") //
 						.input("chargeDischargeLimiter0", STATE_MACHINE, State.FORCE_CHARGE_ACTIVE) //
+						.input("chargeDischargeLimiter0", CLUSTER_CHARGE_LIMIT, null) //
 						.input("_sum", GRID_ACTIVE_POWER, 0) //
 						.output(PRIORITY_MEMBER, "ess0") //
-						.output(MEMBER_CHARGE_LIMIT, 750)) //
+						.output(MEMBER_CHARGE_LIMIT, 850)) //
 				.next(new TestCase("ess0 is full and holds: the priority ends, ess1 is free, ess0 stays limited") //
 						.input("chargeDischargeLimiter0", STATE_MACHINE, State.BALANCING_ACTIVE) //
 						.input("chargeDischargeLimiter0", CHARGE_POWER_ALLOWED, 0) //

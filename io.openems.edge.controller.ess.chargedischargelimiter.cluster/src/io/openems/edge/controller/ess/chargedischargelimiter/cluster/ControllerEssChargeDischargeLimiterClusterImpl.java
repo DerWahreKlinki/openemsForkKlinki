@@ -89,6 +89,14 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 	// would hand the share to the other members instead. Short by less than this
 	// share of the asked power counts as charging as asked
 	protected static final double PRIORITY_SHORTFALL_SHARE = 0.1;
+	// The limit grows with the feed-in also while the power solver asks of the
+	// priority member all the charge power its limiter allows, less this
+	// tolerance: the member is at its ceiling (the device, the SoC window) and the
+	// feed-in is power it cannot take either (2026-11-10: Victron at its 5 kW,
+	// 200 W fed in while the SolarEdge battery was held at 0). The ceiling this
+	// cluster limiter sets itself (what the member takes plus the headroom) does
+	// not count: at that one the member still ramps up
+	protected static final int PRIORITY_CEILING_TOLERANCE_W = 100;
 	// The limit grows by at most this much per cycle: a feed-in of one or two
 	// cycles (readings of the devices lag behind each other) stays small, and the
 	// other members ramp up instead of jumping in while the cluster is still
@@ -258,8 +266,8 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 			this.memberChargeLimit = null;
 		} else {
 			final var sum = this.sum;
-			final var fallsShort = this.fallsShortOfAskedPower(priority);
-			final var feedIn = sum == null || !fallsShort ? 0
+			final var cannotTakeMore = this.fallsShortOfAskedPower(priority) || this.isAskedAllItMay(priority);
+			final var feedIn = sum == null || !cannotTakeMore ? 0
 					: Math.min(Math.max(0, -sum.getGridActivePower().orElse(0)), MEMBER_CHARGE_LIMIT_RAMP_W);
 			final var before = this.memberChargeLimit == null ? 0 : this.memberChargeLimit;
 			var limit = Math.max(0, before + feedIn - MEMBER_CHARGE_LIMIT_DECAY_W);
@@ -382,6 +390,38 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 			}
 			final Integer actual = batteryPowerOf(member);
 			return actual != null && -actual < -asked * (1 - PRIORITY_SHORTFALL_SHARE);
+		} catch (OpenemsNamedException e) {
+			this.logDebug(this.log, "Cluster member [" + limiter.getEssId() + "] not found: " + e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Does the power solver ask of the member of this limiter all the charge power
+	 * its limiter allows? Then it is at its ceiling, and the feed-in is power it
+	 * cannot take. Not while the ceiling is the one of this cluster limiter (what
+	 * the member takes plus the headroom): there it still ramps up.
+	 *
+	 * @param limiter the limiter of the priority member
+	 * @return true if asked all it may; false otherwise or if unknown
+	 */
+	private boolean isAskedAllItMay(ControllerEssChargeDischargeLimiter limiter) {
+		final var allowed = limiter.getChargePowerAllowed().orElse(0);
+		if (allowed <= 0) {
+			return false;
+		}
+		final Integer ownCeiling = limiter.getClusterChargeLimit().get();
+		if (ownCeiling != null && allowed >= ownCeiling) {
+			return false;
+		}
+		try {
+			final OpenemsComponent member = this.componentManager.getComponent(limiter.getEssId());
+			if (!(member instanceof ManagedSymmetricEss managed)) {
+				return false;
+			}
+			// the set-point of the solver; negative = charge
+			final Integer asked = managed.getDebugSetActivePower().get();
+			return asked != null && -asked >= allowed - PRIORITY_CEILING_TOLERANCE_W;
 		} catch (OpenemsNamedException e) {
 			this.logDebug(this.log, "Cluster member [" + limiter.getEssId() + "] not found: " + e.getMessage());
 			return false;

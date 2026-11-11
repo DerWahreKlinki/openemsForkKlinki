@@ -567,6 +567,7 @@
                         "PLANNED": "Planned",
                         "PLANNED_SHARES": "of which PV / storage / grid",
                         "PRICE_CHARGING_PAUSED": "Target charging is active and overrides price charging until the target time.",
+                        "PRICE_HYSTERESIS_INFO": "The same price hysteresis as in price charging: a quarter-hour between two planned ones is taken as well with the minimum power when its price is at most this value above the dearest planned one. This avoids a short pause after which the car has to start up again.",
                         "REMAINING": "Still to charge",
                         "SHORT_NAME": "Target charging",
                         "STATUS_PRICES_MISSING": "Prices until the target time still unknown, no charging.",

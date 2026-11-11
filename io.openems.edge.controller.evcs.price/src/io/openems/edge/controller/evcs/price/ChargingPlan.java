@@ -483,6 +483,14 @@ public final class ChargingPlan {
 	 * prices or forecast until the target time nothing is planned: charging blind
 	 * is not what target charging is for.
 	 *
+	 * <p>
+	 * Short gaps are bridged: a quarter-hour between two planned ones is taken as
+	 * well, with the minimum power, when its price is at most the price hysteresis
+	 * above the dearest planned quarter-hour. The car needs a quarter-hour to start
+	 * again after a pause (2026-11-11: 15 min after every release), so a pause of
+	 * one quarter-hour loses the next one too. The last planned quarter-hour
+	 * shrinks by what the bridge charges, the target stays the same.
+	 *
 	 * @param rules   the rules; maxPower is the upper limit of target charging
 	 * @param storage the storage now
 	 * @param car     the car now; remainingWh is the missing energy
@@ -660,6 +668,30 @@ public final class ChargingPlan {
 			if (sl.base()) {
 				for (var rest : rests.get(sl.index())) {
 					queue.add(new Entry(priceOf.applyAsDouble(rest) - bonus[rest.index()], rest));
+				}
+			}
+		}
+		// Short gaps: a quarter-hour between two planned ones is taken as well when
+		// its price is at most the price hysteresis above the dearest planned one.
+		// The car needs a quarter-hour to start again after a pause, so a pause of
+		// one quarter-hour loses the next one too; 0 = off
+		if (rules.priceHysteresis() > 0) {
+			var first = -1;
+			var last = -1;
+			var dearest = Double.NEGATIVE_INFINITY;
+			for (var sl : bases) {
+				if (takenWh[sl.index()] > 0) {
+					first = first < 0 ? sl.index() : first;
+					last = sl.index();
+					dearest = max(dearest, priceOf.applyAsDouble(sl));
+				}
+			}
+			for (var sl : bases) {
+				final var i = sl.index();
+				if (i > first && i < last && takenWh[i] == 0
+						&& priceOf.applyAsDouble(sl) <= dearest + rules.priceHysteresis() + 1e-9) {
+					drawn[i] += min(sl.storageWh(), budget.applyAsDouble(i));
+					takenWh[i] += sl.wh();
 				}
 			}
 		}

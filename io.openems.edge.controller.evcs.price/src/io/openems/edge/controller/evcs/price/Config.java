@@ -58,7 +58,7 @@ import io.openems.edge.evcs.api.ChargeMode;
 	@AttributeDefinition(name = "Price limit for full power [Cent/kWh]", description = "At or below this price: full charge power from grid.")
 	double priceLimitFullPower() default 20;
 
-	@AttributeDefinition(name = "Price hysteresis [Cent/kWh]", description = "Once charging by price, charging goes on with the minimum power while the price stays below the 'Price limit' plus this; 0 = off.")
+	@AttributeDefinition(name = "Price hysteresis [Cent/kWh]", description = "Once charging by price, charging goes on with the minimum power while the price stays below the 'Price limit' plus this. Target charging takes a quarter-hour between two planned ones as well when its price is at most this above the dearest planned one; 0 = off.")
 	double priceHysteresis() default 1;
 
 	@AttributeDefinition(name = "Full charge power by price [W]", description = "Charge power at or below the 'Price limit for full power'.")

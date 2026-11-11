@@ -400,6 +400,41 @@ public class ChargingPlanTest {
 	}
 
 	@Test
+	public void targetBridgesShortGapWithinHysteresis() {
+		// 8 kWh until 02:00 at 11.04 kW: the quarter-hours at 25 ct are the cheapest
+		// (00:00, 00:15, 00:45), the one between them costs 25.5 ct. With a price
+		// hysteresis of 1 ct it is taken as well with the minimum power, so that the
+		// car does not pause for a quarter-hour and lose the next one starting again;
+		// without hysteresis it stays a gap
+		final var inputs = nightPrices(25, 25, 25.5, 25, 40, 40, 40, 40);
+		final var deadline = inputs.get(0).time().plusHours(2);
+		final var bridged = ChargingPlan.calculateTarget(rulesWithHysteresis(1, false), storage(5000),
+				new Car(true, 8000), new Target(8000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, bridged.targetStatus());
+		final var gap = ChargingPlan.calculateTarget(rules(Priority.CAR), storage(5000), new Car(true, 8000),
+				new Target(8000, deadline), inputs);
+		assertEquals(TargetStatus.PLANNED, gap.targetStatus());
+		for (var i = 0; i < 4; i++) {
+			final var b = bridged.quarters().get(i);
+			final var g = gap.quarters().get(i);
+			if (i == 2) {
+				assertEquals(4140, b.power(), "bridged with the minimum power at " + b.time());
+				assertEquals(Reason.TARGET_CHARGE, b.reason());
+				assertEquals(0, g.power(), "gap without hysteresis at " + g.time());
+			} else if (i == 3) {
+				// the last planned quarter-hour shrinks by what the bridge charged
+				assertEquals(9920, g.power(), "rest without hysteresis at " + g.time());
+				assertEquals(9920 - 4140, b.power(), "rest after the bridge at " + b.time());
+			} else {
+				assertTrue(b.power() > 0, "planned at " + b.time());
+				assertEquals(g.power(), b.power(), "the planned quarter-hours stay at " + b.time());
+			}
+		}
+		assertEquals(8000, gap.energyWh());
+		assertEquals(8000, bridged.energyWh());
+	}
+
+	@Test
 	public void targetTakesSurplusBeforeGrid() {
 		// 3 kWh until 15:00 on a PV day with 45 ct in the morning and 33 ct at noon:
 		// the surplus at the PV price is the cheapest, taken with what it offers

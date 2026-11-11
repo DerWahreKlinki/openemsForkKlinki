@@ -135,6 +135,10 @@
           <!--Evening target of the storage: below it the storage is locked for the car-->
           <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.STORAGE_PRICING.TARGET' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['storageTargetSocNet']" [converter]="Utils.CONVERT_TO_PERCENT"></oe-modal-line>
           <oe-range-slider [formGroup]="formGroup" controlName="storageTargetSocNet" [properties]="{ tickMin: 0, tickMax: 100, unit: '%', step: 5, pinFormatter: PERCENT_PIN_FORMATTER }"></oe-range-slider>
+          <!--The same price hysteresis as in price charging, shown here too so that all settings of target charging are in one place-->
+          <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.OPTIMIZED_CHARGE_MODE.PRICE_HYSTERESIS' | translate" [formGroup]="formGroup" [component]="controller" [value]="formGroup.value['priceHysteresis']" [converter]="CONVERT_TO_CENT_PER_KWH"></oe-modal-line>
+          <oe-range-slider [formGroup]="formGroup" controlName="priceHysteresis" [properties]="{ tickMin: 0, tickMax: 20, unit: 'ct/kWh', step: 1, pinFormatter: CENT_PIN_FORMATTER }"></oe-range-slider>
+          <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.PRICE_HYSTERESIS_INFO' | translate" style="font-size: small"></oe-modal-info-line>
           @if (targetCharging) {
             @if (targetDeadline != null) {
               <oe-modal-line [name]="'EDGE.INDEX.WIDGETS.EVCS.TARGET_CHARGE.DEADLINE' | translate" [value]="formatDeadline(targetDeadline)"></oe-modal-line>

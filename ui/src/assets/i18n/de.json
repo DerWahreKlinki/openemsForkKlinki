@@ -567,6 +567,7 @@
                         "PLANNED": "Geplant",
                         "PLANNED_SHARES": "davon PV / Speicher / Netz",
                         "PRICE_CHARGING_PAUSED": "Zielladen ist aktiv und übersteuert das Preisladen bis zur Zielzeit.",
+                        "PRICE_HYSTERESIS_INFO": "Dieselbe Preis-Hysterese wie beim Preisladen: Eine Viertelstunde zwischen zwei geplanten wird mit Mindestleistung mitgenommen, wenn ihr Preis höchstens um diesen Wert über der teuersten geplanten liegt. So entsteht keine kurze Pause, nach der das Auto erst wieder anlaufen muss.",
                         "REMAINING": "Noch zu laden",
                         "SHORT_NAME": "Zielladen",
                         "STATUS_PRICES_MISSING": "Preise bis zur Zielzeit noch unbekannt, es wird nicht geladen.",

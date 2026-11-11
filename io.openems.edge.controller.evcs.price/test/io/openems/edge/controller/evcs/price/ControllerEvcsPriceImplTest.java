@@ -2953,18 +2953,18 @@ public class ControllerEvcsPriceImplTest {
 						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
 				.deactivate();
 		assertEquals(false, cm.getConfiguration("ctrlEvcs0").getProperties().get("targetCharging"));
-		// the mode underneath was charging the surplus already: left alone
-		assertEquals("EXCESS_POWER",
-				String.valueOf(cm.getConfiguration("ctrlEvcs0").getProperties().get("chargeMode")));
+		// charging is off as well, as with the "Off" button of the UI
+		assertEquals(false, cm.getConfiguration("ctrlEvcs0").getProperties().get("enabledCharging"));
 	}
 
 	@Test
-	public void targetEndRestoresExcessPowerTest() throws Exception {
+	public void targetEndSwitchesChargingOffTest() throws Exception {
 		// Target charging was switched on over a force charge (the target charging
 		// view of the UI leaves the mode underneath as it was). When the target time
 		// passes, the controller must not fall back to the force charge: 2026-11-11
 		// it charged 12 kWh from the grid at full power from 05:35 on, at a price far
-		// above the limit. The switch-off restores charging the surplus
+		// above the limit. The switch-off switches charging off altogether; the mode
+		// underneath stays as it was, the user chooses the next one
 		final var clock = createDummyClock();
 		final var now = ZonedDateTime.now(clock);
 		final var targetTime = (now.getHour() * 60 + now.getMinute() + 24 * 60 - 60) % (24 * 60); // an hour ago
@@ -2995,7 +2995,8 @@ public class ControllerEvcsPriceImplTest {
 				.deactivate();
 		final var properties = cm.getConfiguration("ctrlEvcs0").getProperties();
 		assertEquals(false, properties.get("targetCharging"));
-		assertEquals("EXCESS_POWER", String.valueOf(properties.get("chargeMode")));
+		assertEquals(false, properties.get("enabledCharging"));
+		assertEquals("FORCE_CHARGE", String.valueOf(properties.get("chargeMode")));
 	}
 
 	@Test

@@ -2218,19 +2218,15 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	}
 
 	/**
-	 * Ends target charging: its switch goes off. The charge mode underneath goes
-	 * back to charging the surplus as well. The target charging view of the UI
-	 * leaves the mode as it was, and a force charge left there would charge the car
-	 * with full power from the grid as soon as target charging ends (2026-11-11:
-	 * 12 kWh from 05:35 on, at a price far above the limit).
+	 * Ends target charging: its switch goes off, and charging with it, as the "Off"
+	 * button of the UI does. The user chooses the next mode. The target charging
+	 * view of the UI leaves the charge mode underneath as it was, and a force
+	 * charge left there would charge the car with full power from the grid as soon
+	 * as target charging ends (2026-11-11: 12 kWh from 05:35 on, at a price far
+	 * above the limit).
 	 */
 	private void endTargetCharging() {
-		final var changes = new HashMap<String, Object>();
-		changes.put("targetCharging", false);
-		if (this.config.chargeMode() != ChargeMode.EXCESS_POWER) {
-			changes.put("chargeMode", ChargeMode.EXCESS_POWER.name());
-		}
-		this.configUpdateOnce(changes);
+		this.configUpdateOnce(Map.of("targetCharging", false, "enabledCharging", false));
 	}
 
 	/**

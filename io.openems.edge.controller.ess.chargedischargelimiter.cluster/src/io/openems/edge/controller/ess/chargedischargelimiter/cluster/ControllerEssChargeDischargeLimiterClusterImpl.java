@@ -89,6 +89,14 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 	// would hand the share to the other members instead. Short by less than this
 	// share of the asked power counts as charging as asked
 	protected static final double PRIORITY_SHORTFALL_SHARE = 0.1;
+	// Falling short counts only once the charge power of the priority member has
+	// not risen by this much for this many cycles: while it ramps up (the headroom
+	// of this cluster limiter, the device following its set-point with a delay) it
+	// falls short as well, but it will take the feed-in a moment later
+	// (2026-11-12: Victron back from 0 W, the limit of the SolarEdge grew to
+	// 5 kW within 16 s and the Victron was left with nothing)
+	protected static final int PRIORITY_RISE_W = 100;
+	protected static final int PRIORITY_STALL_CYCLES = 10;
 	// The limit grows with the feed-in also while the power solver asks of the
 	// priority member all the charge power its limiter allows, less this
 	// tolerance: the member is at its ceiling (the device, the SoC window) and the
@@ -114,6 +122,12 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 	// The charge limit of the other members while a member charges first; null
 	// while no member does
 	private Integer memberChargeLimit = null;
+	// The member that charges first; null while no member does
+	private String priorityEssId = null;
+	// The lowest charge power of the priority member since it rose last, and the
+	// cycles since then
+	private Integer priorityChargeReference = null;
+	private int priorityStallCycles = 0;
 	private EnergyScheduleHandler energyScheduleHandler;
 	// The last summary of the members, for the energy optimizer; null while unknown
 	private volatile Summary summary = Summary.NONE;
@@ -264,9 +278,14 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 				.findFirst().orElse(null);
 		if (priority == null) {
 			this.memberChargeLimit = null;
+			this.priorityEssId = null;
+			this.priorityChargeReference = null;
+			this.priorityStallCycles = 0;
 		} else {
 			final var sum = this.sum;
-			final var cannotTakeMore = this.fallsShortOfAskedPower(priority) || this.isAskedAllItMay(priority);
+			final var stalled = this.isChargePowerStalled(priority);
+			final var cannotTakeMore = this.fallsShortOfAskedPower(priority) && stalled
+					|| this.isAskedAllItMay(priority);
 			final var feedIn = sum == null || !cannotTakeMore ? 0
 					: Math.min(Math.max(0, -sum.getGridActivePower().orElse(0)), MEMBER_CHARGE_LIMIT_RAMP_W);
 			final var before = this.memberChargeLimit == null ? 0 : this.memberChargeLimit;
@@ -368,6 +387,33 @@ public class ControllerEssChargeDischargeLimiterClusterImpl extends AbstractOpen
 		case BALANCING_WANTED, FORCE_CHARGE_ACTIVE -> limiter.getChargePowerAllowed().orElse(0) > 0;
 		default -> false;
 		};
+	}
+
+	/**
+	 * Has the charge power of the member of this limiter stopped rising? Called
+	 * once per cycle. It rises while the member ramps up; it stands or falls while
+	 * its battery tapers or the device is at a limit.
+	 *
+	 * @param limiter the limiter of the priority member
+	 * @return true if it has not risen for {@link #PRIORITY_STALL_CYCLES} cycles
+	 *         or if unknown
+	 */
+	private boolean isChargePowerStalled(ControllerEssChargeDischargeLimiter limiter) {
+		final var charging = this.batteryChargePowerOf(limiter);
+		if (charging == null) {
+			return true;
+		}
+		final var reference = this.priorityChargeReference;
+		if (!limiter.getEssId().equals(this.priorityEssId) || reference == null
+				|| charging >= reference + PRIORITY_RISE_W) {
+			this.priorityEssId = limiter.getEssId();
+			this.priorityChargeReference = charging;
+			this.priorityStallCycles = 0;
+			return false;
+		}
+		this.priorityChargeReference = Math.min(reference, charging);
+		this.priorityStallCycles = Math.min(this.priorityStallCycles + 1, PRIORITY_STALL_CYCLES);
+		return this.priorityStallCycles >= PRIORITY_STALL_CYCLES;
 	}
 
 	/**

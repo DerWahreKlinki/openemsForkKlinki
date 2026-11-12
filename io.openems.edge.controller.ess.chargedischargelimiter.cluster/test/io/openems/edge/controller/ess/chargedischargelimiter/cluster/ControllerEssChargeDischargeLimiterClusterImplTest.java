@@ -164,10 +164,18 @@ public class ControllerEssChargeDischargeLimiterClusterImplTest {
 						.input("ess0", ACTIVE_POWER, -2000) //
 						.input("_sum", GRID_ACTIVE_POWER, -1500) //
 						.output(MEMBER_CHARGE_LIMIT, 0)) //
-				.next(new TestCase("fed in while ess0 falls short of the asked 5000 W: ess1 may take it, ramped, less the decay") //
-						.input("ess0", DEBUG_SET_ACTIVE_POWER, -5000) //
+				.next(new TestCase("fed in while ess0 falls short of the asked 4000 W but ramps up (2000 -> 3500 W): no growth") //
+						// its limiter applies the headroom of the cluster limiter
+						.input("chargeDischargeLimiter0", CHARGE_POWER_ALLOWED, 4000) //
+						.input("chargeDischargeLimiter0", CLUSTER_CHARGE_LIMIT, 4000) //
+						.input("ess0", DEBUG_SET_ACTIVE_POWER, -4000) //
 						.input("ess0", ACTIVE_POWER, -3500) //
 						.input("_sum", GRID_ACTIVE_POWER, -1500) //
+						.output(MEMBER_CHARGE_LIMIT, 0)) //
+				.next(new TestCase("its charge power stands, but not for long enough yet: no growth") //
+						.output(MEMBER_CHARGE_LIMIT, 0), //
+						ControllerEssChargeDischargeLimiterClusterImpl.PRIORITY_STALL_CYCLES - 1) //
+				.next(new TestCase("its charge power has not risen for 10 cycles: ess1 may take the feed-in, ramped, less the decay") //
 						.output(MEMBER_CHARGE_LIMIT, 450) //
 						.onAfterControllersCallbacks(() -> {
 							assertEquals(Integer.valueOf(450), limiter1.getClusterChargeLimitSet());
@@ -186,6 +194,8 @@ public class ControllerEssChargeDischargeLimiterClusterImplTest {
 						.output(MEMBER_CHARGE_LIMIT, 800)) //
 				.next(new TestCase("ess0 is asked all it may (5000 of 5000) and 200 W are fed in: at its ceiling, ess1 may take it") //
 						.input("chargeDischargeLimiter0", CHARGE_POWER_ALLOWED, 5000) //
+						.input("chargeDischargeLimiter0", CLUSTER_CHARGE_LIMIT, null) //
+						.input("ess0", DEBUG_SET_ACTIVE_POWER, -5000) //
 						.input("ess0", ACTIVE_POWER, -4950) //
 						.input("_sum", GRID_ACTIVE_POWER, -200) //
 						.output(MEMBER_CHARGE_LIMIT, 950)) //

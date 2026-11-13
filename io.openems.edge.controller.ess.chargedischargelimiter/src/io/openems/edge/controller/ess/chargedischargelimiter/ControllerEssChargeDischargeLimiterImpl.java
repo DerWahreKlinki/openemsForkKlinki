@@ -98,7 +98,13 @@ public class ControllerEssChargeDischargeLimiterImpl extends AbstractOpenemsComp
 
 	static final int TAPER_PERCENT = 3; // decrease charge power during the last X percent before hitting the max. Soc
 	// Battery power asked for while the SoC is above the maximum, see ABOVE_MAX_SOC.
-	static final int RECOVER_DISCHARGE_W = 50;
+	// 0 W since 2026-11-13: charging stays blocked, no discharge is asked for. In a
+	// cluster whose target is to charge, a member that has to discharge makes the
+	// power solver set the other member to its full charge power and balance the
+	// rest with this one (Victron at 100 % after its calibration, maxSoc 80: it
+	// fed 4.7 kW into the grid, the SolarEdge takes nothing from AC). The slow
+	// upward drift of the SolarEdge on its charge bias (2026-09-29) is accepted
+	static final int RECOVER_DISCHARGE_W = 0;
 	static final int BALANCING_SOC = 100;
 	// Charge power asked for during the hold at the balancing SoC while the force
 	// charge is deferred by the price. Not 0 W: a SolarEdge hybrid ESS switches to

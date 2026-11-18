@@ -51,23 +51,25 @@ public class EnergySchedulerTest {
 	}
 
 	@Test
-	public void testEnergySchedulerPowerAllowed() {
-		// the window leaves room, the power allowed right now limits: 2000 W
-		// discharge and 8000 W charge in a quarter-hour
+	public void testEnergySchedulerPowerAllowedIsNotSimulated() {
+		// the power allowed right now is a snapshot and no limit for the schedule
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
 				() -> new EnergyScheduler.Config(0, 22000, 8000, 2000));
 		var t = EnergyScheduleTester.from(esh);
-		assertEquals(500 /* 2000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().commitEss(4000));
-		assertEquals(-2000 /* 8000 W for a quarter-hour */, t.simulatePeriodIndex(0).ef().commitEss(-4000));
+		assertEquals(4000, t.simulatePeriodIndex(0).ef().commitEss(4000));
+		assertEquals(-3894, t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 
 	@Test
-	public void testEnergySchedulerNoPowerAllowed() {
-		// an ESS at its minimum: no discharge right now, charging stays possible
+	public void testEnergySchedulerEmptyEssStaysWorthCharging() {
+		// 17.11.2026: both ESS at minSoc reported 0 W discharge; applied to every
+		// period the optimizer dropped the planned charging from the grid. With
+		// energy above minEnergy, discharging is possible whatever the snapshot says
 		var esh = buildEnergyScheduleHandler(new DummyController("ctrl0"),
-				() -> new EnergyScheduler.Config(0, 22000, -1, 0));
+				() -> new EnergyScheduler.Config(4400, 19800, 10000, 0));
 		var t = EnergyScheduleTester.from(esh);
-		assertEquals(0, t.simulatePeriodIndex(0).ef().commitEss(4000));
+		assertEquals(600 /* 5000 Wh - minEnergy */, t.simulatePeriodIndex(0).ef().commitEss(4000));
+		assertEquals(600, t.simulatePeriodIndex(5).ef().commitEss(4000));
 		assertEquals(-3894, t.simulatePeriodIndex(0).ef().commitEss(-4000));
 	}
 

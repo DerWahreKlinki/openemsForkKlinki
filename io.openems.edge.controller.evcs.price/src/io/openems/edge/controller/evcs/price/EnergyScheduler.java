@@ -32,7 +32,9 @@ public class EnergyScheduler {
 	/**
 	 * The optimization context: what the optimizer knows about the car.
 	 *
-	 * @param charging  true while the car charges
+	 * @param charging  true while the plan counts: the car charges, or it is plugged
+	 *                  in with energy left in the plan; false for a car that takes
+	 *                  nothing. Not the charging of this moment
 	 * @param planStart the start of the plan as epoch seconds; the first quarter-hour
 	 *                  of planWh
 	 * @param planWh    the planned energy per quarter-hour in [Wh]

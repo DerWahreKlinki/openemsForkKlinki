@@ -3,7 +3,6 @@ package io.openems.edge.controller.ess.chargedischargelimiter;
 import static io.openems.common.jsonrpc.serialization.JsonSerializerUtil.jsonObjectSerializer;
 import static io.openems.common.utils.JsonUtils.buildJsonObject;
 import static java.lang.Math.max;
-import static java.lang.Math.min;
 
 import java.util.function.Supplier;
 
@@ -12,10 +11,16 @@ import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.energy.api.handler.EnergyScheduleHandler;
 
 /**
- * Tells the energy optimizer the SoC window of the ESS in energy and the power
- * it allows right now. The window is given in [Wh] of the ESS the optimizer
- * plans with: for a limiter on an ESS cluster the sum over the members. A
- * negative power means unknown: no limit.
+ * Tells the energy optimizer the SoC window of the ESS in energy. The window is
+ * given in [Wh] of the ESS the optimizer plans with: for a limiter on an ESS
+ * cluster the sum over the members.
+ *
+ * <p>
+ * The power allowed right now is part of the report, but not of the simulation:
+ * it is a snapshot of the current SoC, e.g. 0 W discharge at minSoc, and would
+ * be wrong for every later period. Applied to the whole schedule it made
+ * charging from the grid look useless for an empty ESS. Like the upstream
+ * controllers, the simulation is limited by the energy window only.
  */
 public class EnergyScheduler {
 
@@ -40,20 +45,9 @@ public class EnergyScheduler {
 						return;
 					}
 					var currentEnergy = gsc.ess.getInitialEnergy();
-					// the window
-					var allowedDischarge = max(0, currentEnergy - coc.minEnergy());
-					var allowedCharge = max(0, coc.maxEnergy() - currentEnergy);
-					// the power allowed right now, as energy of this period
-					if (coc.maxDischargePower() >= 0) {
-						allowedDischarge = min(allowedDischarge,
-								period.duration().convertPowerToEnergy(coc.maxDischargePower()));
-					}
-					if (coc.maxChargePower() >= 0) {
-						allowedCharge = min(allowedCharge, period.duration().convertPowerToEnergy(coc.maxChargePower()));
-					}
 					// ESS energy per period: positive = discharge, negative = charge
-					ef.setEssLessOrEquals(allowedDischarge);
-					ef.setEssGreaterOrEquals(-allowedCharge);
+					ef.setEssLessOrEquals(max(0, currentEnergy - coc.minEnergy()));
+					ef.setEssGreaterOrEquals(-max(0, coc.maxEnergy() - currentEnergy));
 				})
 				.build();
 	}
@@ -64,9 +58,9 @@ public class EnergyScheduler {
 	 * @param minEnergy        lower end of the SoC window in [Wh]
 	 * @param maxEnergy        upper end of the SoC window in [Wh]
 	 * @param maxChargePower   charge power allowed right now in [W]; negative for
-	 *                         unknown
+	 *                         unknown; for information only
 	 * @param maxDischargePower discharge power allowed right now in [W]; negative
-	 *                         for unknown
+	 *                         for unknown; for information only
 	 */
 	public static record Config(int minEnergy, int maxEnergy, int maxChargePower, int maxDischargePower) {
 

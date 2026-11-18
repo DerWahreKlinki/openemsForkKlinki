@@ -393,6 +393,25 @@ export namespace EvcsPriceForecast {
     }
 
     /**
+     * The energy the car is expected to charge in the shown period: the charge power of every quarter-hour, the
+     * running one with its remaining time only.
+     *
+     * @param slots The slots as shown
+     * @param now The current time
+     * @returns The energy in [Wh]
+     */
+    export function plannedEnergy(slots: Slot[], now: Date): number {
+        const quarter = 15 * 60 * 1000;
+        let result = 0;
+        for (const slot of slots) {
+            const end = slot.timestamp.getTime() + quarter;
+            const remaining = Math.min(Math.max(end - Math.max(slot.timestamp.getTime(), now.getTime()), 0), quarter);
+            result += (Math.max(slot.chargePower, 0) * remaining) / (60 * 60 * 1000);
+        }
+        return Math.round(result);
+    }
+
+    /**
      * Is the effective price a real blend, i.e. below the grid price because of a PV or storage share?
      * Without a share the "blended price" is simply the grid price.
      *

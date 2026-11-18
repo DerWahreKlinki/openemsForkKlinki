@@ -252,7 +252,16 @@
             @if (hasTimeOfUseTariff) {
               <oe-modal-horizontal-line></oe-modal-horizontal-line>
               <oe-modal-info-line [info]="'EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.CHART_TITLE' | translate"></oe-modal-info-line>
-              <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower" [storagePrice]="storagePrice" [storageReleased]="storageTargetReachable" [storageCapacity]="storageCapacity" [priority]="formGroup.value['priority']" [enablePriceCharging]="formGroup.value['enablePriceCharging']" [live]="live"> </oe-evcs-price-chart>
+              <!--Price charging with a car plugged in only: what it is expected to charge in the period the chart shows-->
+              @if (carPlugged && !targetCharging && forecastEnergy != null && forecastEnergy > 0) {
+                <table class="full_width" style="color: #2dd36f; font-weight: bold">
+                  <tr>
+                    <td class="align_left">{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.PLANNED_ENERGY" | translate }}</td>
+                    <td class="align_right">{{ CONVERT_TO_KILO_WATT_HOURS(forecastEnergy) }}</td>
+                  </tr>
+                </table>
+              }
+              <oe-evcs-price-chart class="ion-padding" [edge]="edge" [component]="controller" [priceLimit]="formGroup.value['priceLimit']" [priceLimitFullPower]="formGroup.value['priceLimitFullPower']" [priceChargePower]="priceChargePower" [pvPrice]="pvPrice" [minPower]="minHardwarePower" [maxPower]="maxHardwarePower" [storagePrice]="storagePrice" [storageReleased]="storageTargetReachable" [storageCapacity]="storageCapacity" [priority]="formGroup.value['priority']" [enablePriceCharging]="formGroup.value['enablePriceCharging']" [live]="live" (plannedEnergy)="forecastEnergy = $event"> </oe-evcs-price-chart>
               <div style="font-size: small; padding: 0 16px 8px 16px; color: var(--ion-color-medium)">
                 <div><i [style]="zoneDot(Zone.NONE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_NONE" | translate }}</div>
                 <div><i [style]="zoneDot(Zone.GRID_PRICE)"></i>{{ "EDGE.INDEX.WIDGETS.EVCS.PRICE_FORECAST.NOTE_GRID_PRICE" | translate }}</div>

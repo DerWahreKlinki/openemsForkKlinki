@@ -333,4 +333,16 @@ describe("EvcsPriceForecast", () => {
             settings, new Date("2026-10-02T09:00:00Z"))).toBe(forecast);
         expect(EvcsPriceForecast.applyLive(forecast, null, settings, new Date("2026-10-02T10:05:00Z"))).toBe(forecast);
     });
+
+    it("#plannedEnergy sums the charge power of the shown quarter-hours", () => {
+        const slot = (time: string, chargePower: number): EvcsPriceForecast.Slot =>
+            ({ timestamp: new Date("2026-10-02T" + time + ":00Z"), chargePower: chargePower }) as EvcsPriceForecast.Slot;
+        const slots = [slot("10:00", 4000), slot("10:15", 0), slot("10:30", 8000)];
+        // before the first quarter-hour: 1000 Wh + 0 + 2000 Wh
+        expect(EvcsPriceForecast.plannedEnergy(slots, new Date("2026-10-02T09:00:00Z"))).toBe(3000);
+        // 10 minutes into the running quarter-hour: a third of it is left
+        expect(EvcsPriceForecast.plannedEnergy(slots, new Date("2026-10-02T10:10:00Z"))).toBe(333 + 2000);
+        expect(EvcsPriceForecast.plannedEnergy(slots, new Date("2026-10-02T11:00:00Z"))).toBe(0);
+        expect(EvcsPriceForecast.plannedEnergy([], NOW)).toBe(0);
+    });
 });

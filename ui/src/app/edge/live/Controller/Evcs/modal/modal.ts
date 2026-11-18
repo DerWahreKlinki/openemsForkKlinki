@@ -108,6 +108,10 @@ export class ModalComponent extends AbstractModal {
     private planFromGrid: number | null = null;
     /** Cost of the planned energy in [ct] */
     private planCost: number | null = null;
+    /** Energy in [Wh] the car is expected to charge in the period of the forecast chart; null without forecast */
+    private forecastEnergy: number | null = null;
+    /** A car is plugged in; without one the forecast chart shows what a car would get */
+    private carPlugged = false;
 
     constructor(
         @Inject(Websocket) protected override websocket: Websocket,
@@ -372,6 +376,9 @@ export class ModalComponent extends AbstractModal {
             currentData.allComponents[this.component.id + "/Status"],
             currentData.allComponents[this.component.id + "/Plug"],
         );
+        const plug = currentData.allComponents[this.component.id + "/Plug"];
+        this.carPlugged =
+            plug === ChargePlug.PLUGGED_ON_EVCS_AND_ON_EV || plug === ChargePlug.PLUGGED_ON_EVCS_AND_ON_EV_AND_LOCKED;
         if (this.chargePoint != null) {
             this.chargePower = Utils.convertChargeDischargePower(
                 this.translate,

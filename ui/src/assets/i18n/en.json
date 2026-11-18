@@ -528,6 +528,7 @@
                         "CHEAPEST_WINDOW": "Cheapest 3 h",
                         "GRID_PRICE": "Grid price",
                         "NOW": "now",
+                        "PLANNED_ENERGY": "Expected charge energy in the shown period",
                         "PRODUCTION": "PV production",
                         "PV_SHARE": "Surplus share",
                         "STORAGE_SOC": "Storage SoC (plan)",

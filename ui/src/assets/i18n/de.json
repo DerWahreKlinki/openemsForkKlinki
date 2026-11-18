@@ -528,6 +528,7 @@
                         "CHEAPEST_WINDOW": "Günstigste 3 h",
                         "GRID_PRICE": "Strompreis",
                         "NOW": "jetzt",
+                        "PLANNED_ENERGY": "Voraussichtliche Lademenge im angezeigten Zeitraum",
                         "PRODUCTION": "PV-Erzeugung",
                         "PV_SHARE": "Überschuss-Anteil",
                         "STORAGE_SOC": "Speicher-Ladestand (Plan)",

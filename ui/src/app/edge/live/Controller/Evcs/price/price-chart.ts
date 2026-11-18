@@ -1,5 +1,5 @@
 import { formatNumber } from "@angular/common";
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnChanges, SimpleChanges } from "@angular/core";
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { TranslateService } from "@ngx-translate/core";
 import * as Chart from "chart.js";
@@ -46,6 +46,8 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     @Input() public storageCapacity: number | null = null;
     /** Current state of the controller; drawn instead of the forecast for the running quarter-hour */
     @Input() public live: EvcsPriceForecast.Live | null = null;
+    /** Energy in [Wh] the car is expected to charge in the shown period; null without a forecast */
+    @Output() public plannedEnergy = new EventEmitter<number | null>();
 
     private currencyLabel: Currency.Label | undefined = undefined;
     private currencyUnit: Currency.Unit | undefined = undefined;
@@ -56,6 +58,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
     /** Slots of the forecast only */
     private forecastSlots: EvcsPriceForecast.Slot[] = [];
     private settings: EvcsPriceForecast.Settings | null = null;
+    private lastPlannedEnergy: number | null | undefined = undefined;
 
     constructor(
         public override service: Service,
@@ -78,6 +81,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             // Live values change every cycle: only redraw, do not reload the schedule
             if (this.forecastSlots.length > 0 && this.settings != null) {
                 this.slots = EvcsPriceForecast.applyLive(this.forecastSlots, this.live, this.settings, new Date());
+                this.emitPlannedEnergy();
                 this.datasets = this.createDatasets(this.slots);
                 this.legendOptions = this.createLegendOptions(this.datasets);
                 this.options = this.createOptions();
@@ -172,6 +176,7 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
                 this.component.id,
             );
             this.slots = EvcsPriceForecast.applyLive(this.forecastSlots, this.live, settings, new Date());
+            this.emitPlannedEnergy();
 
             if (this.slots.length === 0) {
                 this.initializeChart();
@@ -196,6 +201,16 @@ export class EvcsPriceChartComponent extends AbstractHistoryChart implements OnC
             console.error(error);
             this.initializeChart();
         }
+    }
+
+    /** Tells the parent the energy of the shown period: after the running change detection, and on changes only. */
+    private emitPlannedEnergy(): void {
+        const energy = this.slots.length === 0 ? null : EvcsPriceForecast.plannedEnergy(this.slots, new Date());
+        if (energy === this.lastPlannedEnergy) {
+            return;
+        }
+        this.lastPlannedEnergy = energy;
+        queueMicrotask(() => this.plannedEnergy.emit(energy));
     }
 
     /** Zones that do not occur in the shown period (all values null) are left out of the legend */

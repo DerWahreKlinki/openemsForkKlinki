@@ -34,7 +34,6 @@ import io.openems.edge.common.modbusslave.ModbusSlaveTable;
 import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.common.type.Phase.SinglePhase;
-import io.openems.edge.common.type.TypeUtils;
 import io.openems.edge.ess.api.AsymmetricEss;
 import io.openems.edge.ess.api.ManagedAsymmetricEss;
 import io.openems.edge.ess.api.ManagedSinglePhaseEss;
@@ -139,8 +138,15 @@ public class SaxPowerImpl extends AbstractOpenemsModbusComponent
 	@Override
 	public void applyPower(int activePower, int reactivePower) throws OpenemsError.OpenemsNamedException {
 
-		this.setControlMode(1);
-		this.setTimeout(this.checkTimeout());
+		final var controlMode = this.getControlMode().get();
+		if (controlMode == null || controlMode != 1) {
+			this.setControlMode(1);
+		}
+
+		final var timeout = this.getTimeout().get();
+		if (timeout == null || timeout != this.checkTimeout()) {
+			this.setTimeout(this.checkTimeout());
+		}
 
 		final var maxPowerReferenceValue = this.getReferenceMaximumPower().get();
 		if (maxPowerReferenceValue == null || maxPowerReferenceValue <= 0) {
@@ -150,7 +156,7 @@ public class SaxPowerImpl extends AbstractOpenemsModbusComponent
 		final int maxPowerReference = maxPowerReferenceValue;
 
 		int percent = activePower * 10000 / maxPowerReference;
-		var setPoint = (int) TypeUtils.fitWithin(-10000, 10000, percent);
+		var setPoint = Math.clamp(percent, -10000, 10000);
 		setPowerTarget(setPoint);
 	}
 

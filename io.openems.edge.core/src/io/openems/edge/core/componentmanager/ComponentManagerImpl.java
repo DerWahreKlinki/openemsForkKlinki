@@ -273,15 +273,10 @@ public class ComponentManagerImpl extends AbstractOpenemsComponent
 	}
 
 	@Override
-	public void handleCreateComponentConfigRequest(User user, CreateComponentConfig.Request request)
+	public void handleCreateComponentConfigRequestNonGuarded(User user, CreateComponentConfig.Request request)
 			throws OpenemsNamedException {
 		// Get Component-ID from Request
-		String componentId = null;
-		for (Property property : request.properties()) {
-			if (property.name().equals("id")) {
-				componentId = JsonUtils.getAsString(property.value());
-			}
-		}
+		final var componentId = request.getComponentId();
 
 		final var config = this.getConfigurationForComponentOrSingleton(componentId, request.factoryPid());
 
@@ -304,9 +299,9 @@ public class ComponentManagerImpl extends AbstractOpenemsComponent
 	}
 
 	@Override
-	public void handleUpdateComponentConfigRequest(User user, UpdateComponentConfig.Request request)
+	public void handleUpdateComponentConfigRequestNonGuarded(User user, UpdateComponentConfig.Request request)
 			throws OpenemsNamedException {
-		var config = this.getExistingConfigForId(request.componentId());
+		final var config = this.getExistingConfigForId(request.componentId());
 
 		// Create map with changed configuration attributes
 		var properties = config.getProperties();
@@ -375,10 +370,9 @@ public class ComponentManagerImpl extends AbstractOpenemsComponent
 	}
 
 	@Override
-	public void handleDeleteComponentConfigRequest(User user, DeleteComponentConfig.Request request)
+	public void handleDeleteComponentConfigRequestNonGuarded(User user, DeleteComponentConfig.Request request)
 			throws OpenemsNamedException {
-		var config = this.getExistingConfigForId(request.componentId());
-
+		final var config = this.getExistingConfigForId(request.componentId());
 		try {
 			config.delete();
 		} catch (IOException e) {
@@ -407,6 +401,7 @@ public class ComponentManagerImpl extends AbstractOpenemsComponent
 		properties.put(OpenemsConstants.PROPERTY_LAST_CHANGE_AT,
 				LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).toString());
 		config.update(properties);
+		this.edgeConfigWorker.applyWrittenConfiguration(config.getPid());
 	}
 
 	/**
@@ -442,7 +437,7 @@ public class ComponentManagerImpl extends AbstractOpenemsComponent
 		if (configs.size() > 1) {
 			throw OpenemsError.EDGE_MULTIPLE_COMPONENTS_WITH_ID.exception(componentId);
 		}
-		return configs.get(0);
+		return configs.getFirst();
 	}
 
 	/**

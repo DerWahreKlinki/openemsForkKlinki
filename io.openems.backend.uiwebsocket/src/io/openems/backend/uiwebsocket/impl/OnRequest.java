@@ -284,7 +284,7 @@ public class OnRequest implements io.openems.common.websocket.OnRequest {
 		final var userObj = request.getUser();
 		final var user = io.openems.backend.authentication.api.model.request.RegisterUserRequest.serializer()
 				.deserialize(userObj);
-		this.log.info("Register User: json={}, obj={}", userObj.toString(), user);
+		this.log.info("Register User: json={}", JsonUtils.hidePassword(userObj));
 
 		return this.parent.userRegistrationService.registerUser(user).thenApply(unused -> {
 			return new GenericJsonrpcResponseSuccess(request.getId());
@@ -299,8 +299,8 @@ public class OnRequest implements io.openems.common.websocket.OnRequest {
 	 * @return the JSON-RPC Success Response Future
 	 */
 	private CompletableFuture<JsonrpcResponseSuccess> handleLogoutRequest(WsData wsData, LogoutRequest request) {
-		wsData.logout();
 		final var token = wsData.getToken().orElse(null);
+		wsData.logout();
 		if (token == null) {
 			return CompletableFuture.completedFuture(new GenericJsonrpcResponseSuccess(request.getId()));
 		}

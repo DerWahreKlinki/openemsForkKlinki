@@ -144,6 +144,16 @@ public final class ComponentConfigGuard {
 			// ui/src/app/edge/live/Multiple/evcs-api-cluster/new-navigation/new-navigation.ts
 			.add("Evcs.Cluster.PeakShaving", //
 					"evcs.ids") //
+
+			// Fork (klinki): own Components that upstream does not know. Keep this block
+			// at the end to avoid merge conflicts with upstream.
+			// ui/src/app/edge/live/Controller/Evcs/modal/modal.ts
+			.add("Controller.Evcs.Price", //
+					"chargeMode", "defaultChargeMinPower", "enabledCharging", "energySessionLimit",
+					"forceChargeMinPower", "priority", //
+					"enablePriceCharging", "priceLimit", "priceLimitFullPower", "priceHysteresis",
+					"useStorageSurplus", "storageTargetSocNet", //
+					"targetCharging", "targetEnergy", "targetTime") //
 			.build();
 
 	private ComponentConfigGuard() {

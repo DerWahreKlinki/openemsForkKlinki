@@ -134,6 +134,8 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	// the stored energy includes the deficit carried over from the plan before
 	private double planStoredAtStartWh = 0;
 	private double planUsableAtStartWh = 0;
+	// The storage windows the plan was calculated with (see isStorageChanged)
+	private List<StorageWindow> planWindowsAtStart = List.of();
 	private ZonedDateTime planComputedAt = null;
 	// Charge power the storage could still take right now (its allowed charge
 	// power within the SoC windows minus what it charges), while the
@@ -832,11 +834,13 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		this.setCarTakesNothing(this.carTakesNothing);
 		final var now = ZonedDateTime.now(this.clock());
 		final var capacityChanged = energy != null && !this.plan.quarters().isEmpty()
-				&& Math.abs(energy.usableWh() - this.planUsableAtStartWh) > 1;
+				&& isStorageChanged(this.planWindowsAtStart, windows, this.planUsableAtStartWh, energy.usableWh());
 		if (capacityChanged) {
-			// The usable capacity changed, e.g. the SoC windows of the limiters arrive
-			// after a restart: the stored energy means something else now, the path
-			// of the plan would show the storage behind or ahead for no reason
+			// The storage is another one now, e.g. the SoC windows of the limiters
+			// arrive after a restart: the stored energy means something else, the path
+			// of the plan would show the storage behind or ahead for no reason. A
+			// capacity that only wobbles (see isStorageChanged) waits for the next
+			// quarter-hour
 			this.planDirty = true;
 		}
 		// A new plan starts from the measured storage: made at the quarter-hour while
@@ -941,17 +945,30 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 		if (!this.planDirty && quarter.equals(this.planQuarter)) {
 			return;
 		}
+		// A plan made anew within the quarter-hour: while the car charges, the
+		// quarter-hour the plan before promised goes on (see ChargingPlan.keepRunning).
+		// Target charging keeps its running quarter-hour by itself
+		final var running = quarter.equals(this.planQuarter) && this.lastChargePower > 0 && !this.isTargetMode() //
+				? this.plan.getAt(now)
+				: null;
 		this.planDirty = false;
 		this.planQuarter = quarter;
 		this.checkTargetPlanDeviation(quarter);
 		try {
 			final var plans = this.calculateChargingPlan(quarter, windows, energy);
-			this.plan = plans.plan();
+			final var plan = ChargingPlan.keepRunning(plans.plan(), running);
+			if (plan != plans.plan()) {
+				this.logInfo(this.log, "Charging plan made anew within the quarter-hour: "
+						+ "the running quarter-hour goes on with " + running.power() + " W");
+			}
+			this.plan = plan;
 			this.planStoredAtStartWh = energy == null ? 0 : energy.storedWh() + carriedBehindWh;
 			this.planUsableAtStartWh = energy == null ? 0 : energy.usableWh();
+			this.planWindowsAtStart = List.copyOf(windows);
 			this.planComputedAt = now;
 			// the same time axis in every mode: 24 hours from the current quarter-hour
-			this.displayPlan = plans.display().until(quarter.plus(DISPLAY_HORIZON));
+			this.displayPlan = (plans.display() == plans.plan() ? plan : plans.display())
+					.until(quarter.plus(DISPLAY_HORIZON));
 			this.displayPlanHypothetical = plans.hypothetical();
 			this.announceTargetPlan();
 			this.announcePlan();
@@ -2362,6 +2379,40 @@ public class ControllerEvcsPriceImpl extends AbstractOpenemsComponent
 	 */
 	protected static boolean isStorageBehindPlan(double expectedWh, double storedWh, double usableWh) {
 		return expectedWh - storedWh > usableWh * STORAGE_PATH_TOLERANCE;
+	}
+
+	/**
+	 * The usable capacity may differ by this part from the one the charging plan
+	 * was calculated with before the plan is made anew at once. A storage that
+	 * derives its capacity from the remaining charge and a SoC in whole percent
+	 * (Victron) reports a capacity that wobbles by a few percent all the time.
+	 */
+	protected static final double STORAGE_CAPACITY_TOLERANCE = 0.1;
+
+	/**
+	 * Decides whether the storage is another one than the charging plan was
+	 * calculated with, so that the plan has to be made anew at once: the SoC
+	 * windows differ (their number or a border), or the usable capacity differs by
+	 * more than the tolerance. Anything smaller reaches the plan of the next
+	 * quarter-hour.
+	 *
+	 * @param before         the {@link StorageWindow}s the plan was calculated with
+	 * @param now            the {@link StorageWindow}s now
+	 * @param usableBeforeWh the usable capacity the plan was calculated with in [Wh]
+	 * @param usableWh       the usable capacity now in [Wh]
+	 * @return true if the plan is to be made anew
+	 */
+	protected static boolean isStorageChanged(List<StorageWindow> before, List<StorageWindow> now,
+			double usableBeforeWh, double usableWh) {
+		if (before.size() != now.size()) {
+			return true;
+		}
+		for (var i = 0; i < now.size(); i++) {
+			if (before.get(i).minSoc() != now.get(i).minSoc() || before.get(i).maxSoc() != now.get(i).maxSoc()) {
+				return true;
+			}
+		}
+		return Math.abs(usableWh - usableBeforeWh) > usableBeforeWh * STORAGE_CAPACITY_TOLERANCE;
 	}
 
 	/**

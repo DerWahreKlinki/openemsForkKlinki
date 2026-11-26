@@ -1561,6 +1561,125 @@ public class ControllerEvcsPriceImplTest {
 	}
 
 	@Test
+	public void capacityWobbleKeepsPlanTest() throws Exception {
+		// A storage that derives its capacity from the remaining charge and a SoC in
+		// whole percent reports a capacity that wobbles by a percent or two. That is
+		// no other storage: the plan and its path stay. Only a capacity that differs
+		// by more than 10 % makes the plan anew at once
+		final var clock = createDummyClock();
+		prepareStoragePriceTest(clock, new ControllerEvcsPriceImpl(clock), true, true, STORAGE, null, 12000, 2000,
+				96, 600) //
+				.next(new TestCase("plan made at 50 % of 30 kWh") //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 30000) //
+						.input(ESS_SOC, 50) //
+						.input(ESS_DISCHARGE_POWER, 5140) //
+						.input(CONSUMPTION_ACTIVE_POWER, 5140) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 4140) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(PLAN_REASON, "FILL_UP") //
+						.output(STORAGE_BEHIND_PLAN, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				// 1 % more capacity: the path of the plan goes on, it expects 488 Wh more
+				// by now and the storage shows 150 Wh more -> 338 Wh behind. A plan made
+				// anew would start from the measured storage with nothing behind
+				.next(new TestCase("5 minutes later the capacity wobbles by 1 %: the plan stays") //
+						.timeleap(clock, 5, MINUTES) //
+						.input(ESS_CAPACITY, 30300) //
+						.output(PLAN_REASON, "FILL_UP") //
+						.output(STORAGE_BEHIND_PLAN, 338) //
+						.output(STORAGE_BUDGET_WITHHELD, false) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				.next(new TestCase("10 minutes later the capacity is 11 % higher: plan made anew") //
+						.timeleap(clock, 5, MINUTES) //
+						.input(ESS_CAPACITY, 33300) //
+						.output(STORAGE_BEHIND_PLAN, 0) //
+						.output(STORAGE_BUDGET_WITHHELD, false) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				.deactivate();
+	}
+
+	@Test
+	public void isStorageChangedTest() {
+		final var before = List.of(new ControllerEvcsPriceImpl.StorageWindow(8755, 54, 10, 97),
+				new ControllerEvcsPriceImpl.StorageWindow(28992, 70, 22, 85));
+		final var usable = ControllerEvcsPriceImpl.calculateStorageEnergy(before).usableWh();
+		// the capacity of the second storage wobbles: 600, 604, 605 Ah at 48 V
+		for (var capacity : new int[] { 28800, 28992, 29040 }) {
+			final var now = List.of(new ControllerEvcsPriceImpl.StorageWindow(8755, 53, 10, 97),
+					new ControllerEvcsPriceImpl.StorageWindow(capacity, 69, 22, 85));
+			assertFalse(ControllerEvcsPriceImpl.isStorageChanged(before, now, usable,
+					ControllerEvcsPriceImpl.calculateStorageEnergy(now).usableWh()), "capacity " + capacity);
+		}
+		// a border of a SoC window changed
+		final var border = List.of(new ControllerEvcsPriceImpl.StorageWindow(8755, 54, 10, 97),
+				new ControllerEvcsPriceImpl.StorageWindow(28992, 70, 23, 85));
+		assertTrue(ControllerEvcsPriceImpl.isStorageChanged(before, border, usable,
+				ControllerEvcsPriceImpl.calculateStorageEnergy(border).usableWh()));
+		// a window is missing or new, e.g. after a restart
+		final var one = List.of(before.get(0));
+		assertTrue(ControllerEvcsPriceImpl.isStorageChanged(before, one, usable,
+				ControllerEvcsPriceImpl.calculateStorageEnergy(one).usableWh()));
+		assertTrue(ControllerEvcsPriceImpl.isStorageChanged(List.of(), before, 0, usable));
+		// the capacity differs by more than 10 %
+		final var bigger = List.of(before.get(0), new ControllerEvcsPriceImpl.StorageWindow(34000, 70, 22, 85));
+		assertTrue(ControllerEvcsPriceImpl.isStorageChanged(before, bigger, usable,
+				ControllerEvcsPriceImpl.calculateStorageEnergy(bigger).usableWh()));
+	}
+
+	@Test
+	public void runningQuarterHourGoesOnTest() throws Exception {
+		// 1 kW PV covers the house, the price is 43.1 ct: the car can only charge on
+		// storage budget. The storage holds 84 % of 30 kWh, 1200 Wh above its target
+		// of 80 %: the plan gives the car one quarter-hour with 4140 W (1035 Wh).
+		// The plan is made anew within the quarter-hour, from the storage the car
+		// already took from: it counts the whole quarter-hour once more and would
+		// withdraw the budget. The quarter-hour that was promised goes on; the next
+		// one decides anew
+		final var clock = createDummyClock();
+		prepareStoragePriceTest(clock, new ControllerEvcsPriceImpl(clock), true, true, CAR, null, 1000, 1000, 96) //
+				.next(new TestCase("the plan gives the car this quarter-hour") //
+						.input(GRID_BUY_PRICE, 431.) //
+						.input(ESS_CAPACITY, 30000) //
+						.input(ESS_SOC, 84) //
+						.input(ESS_DISCHARGE_POWER, 5140) //
+						.input(CONSUMPTION_ACTIVE_POWER, 5140) //
+						.input(GRID_ACTIVE_POWER, 0) //
+						.input("evcs0", IS_CLUSTERED, false) //
+						.input("evcs0", STATUS, Status.CHARGING) //
+						.input("evcs0", ACTIVE_POWER, 4140) //
+						.input("evcs0", MINIMUM_HARDWARE_POWER, 4140) //
+						.output(PLAN_REASON, "FILL_UP") //
+						.output(PLAN_ENERGY, 1035) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				// the capacity is another one (34 kWh, the plan is made anew at once):
+				// 82 % are 680 Wh above the target of 27200 Wh, less than a quarter-hour
+				.next(new TestCase("5 minutes later the plan is made anew: the quarter-hour goes on") //
+						.timeleap(clock, 5, MINUTES) //
+						.input(ESS_CAPACITY, 34000) //
+						.input(ESS_SOC, 82) //
+						.output(PLAN_REASON, "FILL_UP") //
+						.output(PLAN_ENERGY, 1035) //
+						.output(STORAGE_BUDGET_WITHHELD, false) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				.next(new TestCase("and on until its end") //
+						.timeleap(clock, 9, MINUTES) //
+						.input(ESS_SOC, 81) //
+						.output(PLAN_REASON, "FILL_UP") //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 4140)) //
+				// 81 % are 340 Wh above the target: no budget for another quarter-hour
+				.next(new TestCase("the next quarter-hour decides anew: no budget, stop") //
+						.timeleap(clock, 1, MINUTES) //
+						.output(PLAN_REASON, "TARGET") //
+						.output(PLAN_ENERGY, 0) //
+						.output("evcs0", SET_CHARGE_POWER_LIMIT, 0)) //
+				.deactivate();
+	}
+
+	@Test
 	public void storageBudgetWithheldBeforeTheStartTest() throws Exception {
 		// Before the start the storage share of the plan would carry the start (8
 		// ct); with the storage behind the path the budget is withheld and the car

@@ -372,6 +372,59 @@ public final class ChargingPlan {
 		return result;
 	}
 
+	/**
+	 * Keeps the running quarter-hour of the plan before in a plan made anew within
+	 * the same quarter-hour. A quarter-hour that charges with storage budget was
+	 * promised at its start and goes on to its end: the plan made anew starts from
+	 * the storage the running quarter-hour already took from and counts the whole
+	 * quarter-hour once more, so it would withdraw the budget and stop the car
+	 * after a few minutes. The next quarter-hour decides anew from the measured
+	 * storage.
+	 *
+	 * <p>
+	 * Only a budget the new plan withdraws is kept ({@link Reason#TARGET},
+	 * {@link Reason#TOO_EXPENSIVE}) and only while the Time-of-Use-Tariff controller
+	 * does the same with the storage as before; a car that was unplugged, a session
+	 * limit or the grid limit end the quarter-hour at once.
+	 *
+	 * @param plan    the plan made anew
+	 * @param running the running quarter-hour of the plan before; possibly null
+	 * @return the plan with the running quarter-hour kept; the plan itself if there
+	 *         is nothing to keep
+	 */
+	public static Result keepRunning(Result plan, Quarter running) {
+		if (running == null || running.power() <= 0 || running.storageBudget() <= 0) {
+			return plan;
+		}
+		final var quarters = plan.quarters();
+		for (var i = 0; i < quarters.size(); i++) {
+			final var q = quarters.get(i);
+			if (!q.time().isEqual(running.time())) {
+				continue;
+			}
+			if (q.power() > 0 || q.mode() != running.mode()
+					|| q.reason() != Reason.TARGET && q.reason() != Reason.TOO_EXPENSIVE) {
+				return plan;
+			}
+			final var kept = new ArrayList<>(quarters);
+			kept.set(i, running);
+			final var start = plan.start() == null || running.time().isBefore(plan.start()) //
+					? running.time()
+					: plan.start();
+			return new Result(kept, start, //
+					plan.energyWh() + quarterWh(running.power()), //
+					plan.fromPvWh() + quarterWh(running.fromPv()), //
+					plan.fromStorageWh() + quarterWh(running.fromStorage()), //
+					plan.fromGridWh() + quarterWh(running.fromGrid()), //
+					plan.storageAtPvEndWh(), plan.targetReached(), plan.targetStatus());
+		}
+		return plan;
+	}
+
+	private static int quarterWh(int power) {
+		return (int) Math.round(power / (double) QUARTERS_PER_HOUR);
+	}
+
 	/** Production below this share of the predicted peak does not count as PV. */
 	protected static final double PV_BLOCK_THRESHOLD = 0.03;
 

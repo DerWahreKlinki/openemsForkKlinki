@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.ZoneId;
@@ -652,5 +653,76 @@ public class ChargingPlanTest {
 		assertEquals(TargetStatus.PLANNED, r.targetStatus());
 		assertEquals(0, r.energyWh());
 		assertTrue(r.quarters().stream().allMatch(q -> q.reason() == Reason.NOT_PLUGGED));
+	}
+
+	/*
+	 * A dull morning: 1 kW PV covers the 1 kW of the house for two hours at 45 ct.
+	 * The car can only charge on storage budget.
+	 */
+	private static List<Input> dullMorning(StorageMode firstMode) {
+		final var result = new ArrayList<Input>();
+		for (var i = 0; i < 8; i++) {
+			result.add(new Input(START.plusMinutes(15L * i), 45., 1000, 1000,
+					i == 0 ? firstMode : StorageMode.BALANCING, 0));
+		}
+		return result;
+	}
+
+	@Test
+	public void keepRunningQuarterHour() {
+		// The storage holds 1200 Wh above its target: enough for one quarter-hour
+		// with 4140 W (1035 Wh), not for two
+		final var rules = rules(Priority.CAR);
+		final var inputs = dullMorning(StorageMode.BALANCING);
+		final var car = new Car(true, null);
+		final var before = ChargingPlan.calculate(rules, storage(TARGET + 1200), car, inputs);
+		final var running = before.quarters().get(0);
+		assertEquals(4140, running.power());
+		assertEquals(Reason.FILL_UP, running.reason());
+		assertEquals(4140, running.storageBudget());
+		assertEquals(1035, before.energyWh());
+
+		// Three minutes later the storage gave 200 Wh of it. The plan made anew counts
+		// the whole quarter-hour once more: 1000 Wh do not carry 1035 Wh
+		final var anew = ChargingPlan.calculate(rules, storage(TARGET + 1000), car, inputs);
+		assertEquals(0, anew.quarters().get(0).power());
+		assertEquals(Reason.TARGET, anew.quarters().get(0).reason());
+		assertEquals(0, anew.energyWh());
+
+		// the running quarter-hour goes on, the rest is the new plan
+		final var kept = ChargingPlan.keepRunning(anew, running);
+		assertEquals(running, kept.quarters().get(0));
+		assertEquals(anew.quarters().subList(1, 8), kept.quarters().subList(1, 8));
+		assertEquals(START, kept.start());
+		assertEquals(1035, kept.energyWh());
+		assertEquals(1035, kept.fromStorageWh());
+		assertEquals(0, kept.fromPvWh());
+		assertEquals(0, kept.fromGridWh());
+
+		// nothing to keep: no plan before, a quarter-hour that did not charge, a new
+		// plan that charges anyway
+		assertSame(anew, ChargingPlan.keepRunning(anew, null));
+		assertSame(anew, ChargingPlan.keepRunning(anew, anew.quarters().get(0)));
+		assertSame(before, ChargingPlan.keepRunning(before, running));
+		// another quarter-hour than the plan covers
+		assertSame(anew, ChargingPlan.keepRunning(anew, new Quarter(START.minusMinutes(15), running.price(),
+				running.production(), running.consumption(), running.mode(), running.power(), running.fromPv(),
+				running.fromStorage(), running.storageBudget(), running.fromGrid(), running.blendedPrice(),
+				running.reason(), running.storageWh(), running.storageLocked())));
+
+		// the car was unplugged: over at once
+		final var unplugged = ChargingPlan.calculate(rules, storage(TARGET + 1000), new Car(false, null), inputs);
+		assertEquals(Reason.NOT_PLUGGED, unplugged.quarters().get(0).reason());
+		assertSame(unplugged, ChargingPlan.keepRunning(unplugged, running));
+		// the session limit is reached: over at once
+		final var limit = ChargingPlan.calculate(rules, storage(TARGET + 1000), new Car(true, 0), inputs);
+		assertEquals(Reason.LIMIT, limit.quarters().get(0).reason());
+		assertSame(limit, ChargingPlan.keepRunning(limit, running));
+		// the Time-of-Use-Tariff controller does not let the storage discharge any
+		// more: over at once
+		final var delayed = ChargingPlan.calculate(rules, storage(TARGET + 1000), car,
+				dullMorning(StorageMode.NO_DISCHARGE));
+		assertEquals(0, delayed.quarters().get(0).power());
+		assertSame(delayed, ChargingPlan.keepRunning(delayed, running));
 	}
 }
